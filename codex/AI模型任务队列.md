@@ -2,7 +2,7 @@
 
 > 项目：基于大模型的个性化资源生成与学习多智能体系统开发
 > 队列位置：E:\软件杯\codex\AI模型任务队列.md
-> 当前模型批次：Sol（S-015 项目 Git 安全基线进行中）
+> 当前模型批次：Sol（S-015 已完成；下一项 T-029 需切换 Terra）
 > 最后审视日期：2026-07-14
 
 ## 一、使用规则
@@ -68,7 +68,7 @@
 | S-012 | P0 | 完成 | 诊断并收敛 T-028 Electron 测试模式退出残留 | T-028 当前实现 | 定位完整主应用调用 `process.exit(0)` 后进程树仍存活的根因，给出可回归修复或明确的运行时边界与验收方案 |
 | S-013 | P0 | 完成 | 复核前端、Electron 代理与 FastAPI 的接口契约 | 无 | 路径与方法清单、请求/响应/SSE 契约对比、前后端自动化测试结果及明确问题清单 |
 | S-014 | P0 | 完成 | 实现安装版安全模型配置闭环 | S-008、S-011、T-028 | 前端模型配置与连通性测试、Electron `safeStorage` 凭据保存、主进程启动注入、受控 IPC 路由及全新安装就绪验收 |
-| S-015 | P1 | 进行中 | 建立项目 Git 安全基线 | S-014 | 根目录单仓库、敏感/生成文件忽略规则、首个本地 main 基线提交及仓库状态验收 |
+| S-015 | P1 | 完成 | 建立项目 Git 安全基线 | S-014 | 根目录单仓库、敏感/生成文件忽略规则、首个本地 main 基线提交及仓库状态验收 |
 
 ## 五、Terra 队列
 
@@ -134,7 +134,7 @@
 
 ## 八、当前执行顺序
 
-Sol 批次已完成 S-008、S-009、S-010、S-011 和 S-014：生产安全边界、学习闭环、自适应建议、资源质量门槛、Electron IPC 契约及安装版安全模型配置闭环均已落地。S-014 已完成最终安装包与全新 userData 验收；INBOX-001 继续保留 `backend/competition`，用于测试、评测和重新打包复现。
+Sol 批次已完成 S-008、S-009、S-010、S-011、S-014 和 S-015：生产安全边界、学习闭环、自适应建议、资源质量门槛、Electron IPC 契约、安装版安全模型配置闭环及项目 Git 安全基线均已落地。INBOX-001 继续保留 `backend/competition`，用于测试、评测和重新打包复现，但该目录不会进入 Git。
 
 Terra 批次已完成 T-024 和 T-025：流式生成取消已绑定原始会话，高成本接口在桌面令牌保护模式下执行按客户端滑动窗口限流，诊断历史按首条学习目标、最近消息和字符上限裁剪。下一项就绪任务为 T-029（统一 FastAPI、Web 与 Electron 错误响应契约）。INBOX-002 当前使用 DeepSeek OpenAI 兼容配置与 deepseek-v4-pro；旧混元和 OpenAI Terra 联调记录仅供历史追溯。
 
@@ -152,10 +152,13 @@ S-013 已完成：前端实际使用的 13 组 HTTP/SSE 路径与 FastAPI 路由
 
 S-014 已完成：安装版首次无配置自动进入模型设置；测试成功后才可保存，主进程使用 Electron `safeStorage` 加密持久化并以环境变量注入后端，ready 失败恢复旧密文和旧后端；renderer 不接触桌面令牌、持久化密钥或配置路径。桌面与窄屏视觉已按 openhanako 参考验收，账号体系和桌宠仅保留模块化扩展边界。最终回归为后端 80 项、Electron Node 66 项、Vitest 23 项；Web/desktop/unpacked/NSIS 全部通过。当前 Sol 批次完成，下一项 T-029 属于 Terra。
 
+S-015 已完成：`E:\软件杯` 已初始化为本地 `main` 单仓库，根级 `.gitignore` 排除真实 `.env`、密钥文件、数据库、虚拟环境、依赖、构建/安装产物、桌面后端和临时 `.superpowers` 目录；`.gitattributes` 固定源码 LF、Windows 脚本 CRLF 和二进制文件属性。首个基线提交已创建，未连接远程仓库，也未写入永久 Git 身份配置。当前 Sol 批次完成，下一项仍为 Terra 的 T-029。
+
 ## 九、任务完成记录
 
 | 日期 | 任务 ID | 模型 | 修改文件 | 验证结果 |
 | --- | --- | --- | --- | --- |
+| 2026-07-14 | S-015 | Sol | .gitignore、.gitattributes、codex/AI模型任务队列.md、Git 仓库元数据 | 在 `E:\软件杯` 初始化 `main` 单仓库；候选集审计后提交 156 个源码、测试、文档及小型验收文件，无超过 10 MiB 文件；真实 `backend/.env`、`backend/competition`、`node_modules`、`dist`、`release`、`desktop-backend`、数据库、凭据文件和 `.superpowers` 临时目录均不在索引。密钥特征扫描无命中；后端快捷测试 80 passed，`npm run test` 为 Electron Node 66/66、Vitest 23/23。首个提交 `16619b1`（`chore: establish A3 project baseline`）使用一次性本地 Codex 署名，未配置远程。 |
 | 2026-07-14 | S-014 | Sol | a3-front/a3-front/electron/model-config.mjs、electron/model-config-controller.mjs 及测试、electron/main.mjs、electron/preload.mjs、electron/ipc-contract.mjs、electron/runtime.test.mjs、src/api/、src/stores/backend.ts、src/layouts/AppLayout.vue、src/views/ModelSettings.vue、src/views/SmartTutor.vue 及测试、README.md、src/api/README.md、docs/superpowers/specs/2026-07-14-secure-model-settings-design.md、docs/superpowers/plans/2026-07-14-secure-model-settings-plan.md、release/、codex/AI模型任务队列.md | 新增 `safeStorage` 密文存储、固定受信 IPC、启动注入、测试后保存、ready 回滚、首次引导与未配置发送锁定；自审补充损坏凭据结构化错误和测试期间表单修改竞态回归。`backend/quick_test.ps1` 80 passed；`npm run test` 为 Node 66/66、Vitest 23/23；`npm run build`、`npm run build:desktop`、`npm run desktop:pack`、`npm run desktop:dist` 均退出码 0。全新隔离 userData 的 unpacked 启动退出码 0，ready/stop/forced-exit 日志齐全，`backend/app.db` 位于隔离目录，无 `model-settings.enc`，残留进程 0。安装包 `release/智学协作台 Setup 0.0.0.exe` 为 103,725,300 bytes；视觉截图保留于 `codex/artifacts/S-014-model-settings-desktop.png` 和 `S-014-model-settings-narrow.png`。 |
 | 2026-07-14 | S-013 / INBOX-008 | Sol | codex/AI模型任务队列.md | 静态核对前端 API、Electron 路由白名单、FastAPI 路由及请求/响应/SSE 字段；`backend/quick_test.ps1` 80 passed，前端 `npm run test` 为 Node 49/49、Vitest 14/14。隔离数据目录启动打包后端：`/health/live` 200，`/health/ready` 503，`api_key_configured=false`；Node 直接验证 `PUT /api/settings/model` 与 `POST /api/settings/model/test` 均被 Electron 拒绝。确认核心学习主流程无路径/方法错位，安装版模型配置闭环与错误信封一致性分别转入 S-014、T-029。 |
 | 2026-07-14 | S-012 | Sol | a3-front/a3-front/electron/main.mjs、a3-front/a3-front/electron/runtime.test.mjs、codex/AI模型任务队列.md | 根据用户截图定位 `Object has been destroyed`：`closed` 回调在窗口已销毁后读取 `mainWindow.webContents`，异常中断 `process.exit(0)`；新增先红后绿回归并缓存创建时的 `webContents`。`node --test electron/runtime.test.mjs` 11/11 通过；开发 Electron 测试模式退出码 0，后端 ready/stop 日志完整且 Electron/Node/api.exe 无残留。 |
