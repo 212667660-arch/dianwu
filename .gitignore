@@ -43,6 +43,7 @@ backend/venv/
 **/.pytest_cache/
 
 # Local verification directories
+.worktrees/
 **/.superpowers/
 codex/s014-unpacked-*/
 codex/artifacts/.visual-qa-user-data/
