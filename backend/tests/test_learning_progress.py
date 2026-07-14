@@ -126,6 +126,7 @@ def test_question_attempt_is_scoped_to_session_and_invalidates_old_cache() -> No
             json={"answer": "1"},
         )
     assert response.status_code == 404
+    assert response.json()["code"] == "QUESTION_NOT_FOUND"
 
 
 def test_deleting_session_cascades_learning_records() -> None:

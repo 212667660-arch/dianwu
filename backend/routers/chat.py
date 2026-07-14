@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
+from backend.errors import ResourceNotFoundError
 from backend.models.schemas import ChatRequest, ChatResponse
 from backend.services.orchestrator import cancel_generation, handle_message, stream_message
 
@@ -44,5 +45,5 @@ async def cancel_generation_endpoint(
     session_id: Annotated[str, Query(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")],
 ) -> dict[str, object]:
     if not cancel_generation(generation_id, session_id):
-        raise HTTPException(status_code=404, detail="生成任务不存在、已结束或不属于该会话")
+        raise ResourceNotFoundError("GENERATION_NOT_FOUND", "生成任务不存在、已结束或不属于该会话。")
     return {"generation_id": generation_id, "cancelled": True}

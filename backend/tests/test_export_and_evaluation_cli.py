@@ -64,8 +64,10 @@ def test_resource_export_is_scoped_to_its_session() -> None:
         assert response.text == RESOURCE
         missing = client.get(f"/api/sessions/other/resources/{resource_id}/export")
         assert missing.status_code == 404
+        assert missing.json()["code"] == "LEARNING_RESOURCE_NOT_FOUND"
         invalid = client.get(f"/api/sessions/{session_id}/resources/{resource_id}/export?format=pdf")
         assert invalid.status_code == 422
+        assert invalid.json()["code"] == "REQUEST_VALIDATION_ERROR"
 
 
 def test_session_history_and_export_include_persisted_sources() -> None:

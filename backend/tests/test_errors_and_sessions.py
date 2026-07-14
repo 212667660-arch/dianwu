@@ -30,7 +30,14 @@ def test_app_error_uses_structured_non_200_response(monkeypatch) -> None:
 def test_unknown_session_history_returns_404() -> None:
     with TestClient(app) as client:
         response = client.get("/api/sessions/no_such_session")
-    assert_error(response, 404, "HTTP_NOT_FOUND")
+    assert_error(response, 404, "SESSION_NOT_FOUND")
+
+
+def test_unknown_generation_uses_generation_not_found_code(monkeypatch) -> None:
+    monkeypatch.setattr(chat, "cancel_generation", lambda *_args: False)
+    with TestClient(app) as client:
+        response = client.delete("/api/generations/missing?session_id=student_01")
+    assert_error(response, 404, "GENERATION_NOT_FOUND")
 
 
 def test_request_validation_uses_safe_envelope() -> None:

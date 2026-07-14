@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
+from backend.errors import ResourceNotFoundError
 from backend.models.schemas import (
     AnswerAttemptRequest,
     AnswerAttemptResponse,
@@ -38,7 +39,7 @@ async def submit_answer_attempt(
         request.idempotency_key,
     )
     if result is None:
-        raise HTTPException(status_code=404, detail="练习题不存在或不属于该会话")
+        raise ResourceNotFoundError("QUESTION_NOT_FOUND", "练习题不存在或不属于该会话。")
     attempt, question, point, duplicate = result
     return AnswerAttemptResponse(
         attempt_id=attempt.id,
@@ -61,7 +62,7 @@ async def submit_answer_attempt(
 async def get_learning_progress(session_id: SessionPath, db: Session = Depends(get_db)) -> ProgressResponse:
     snapshot = learning.progress_snapshot(db, session_id)
     if snapshot is None:
-        raise HTTPException(status_code=404, detail="会话不存在")
+        raise ResourceNotFoundError("SESSION_NOT_FOUND", "会话不存在。")
     return ProgressResponse.model_validate(snapshot)
 
 
@@ -69,7 +70,7 @@ async def get_learning_progress(session_id: SessionPath, db: Session = Depends(g
 async def get_next_learning_action(session_id: SessionPath, db: Session = Depends(get_db)) -> NextActionResponse:
     action = learning.next_action(db, session_id)
     if action is None:
-        raise HTTPException(status_code=404, detail="会话不存在")
+        raise ResourceNotFoundError("SESSION_NOT_FOUND", "会话不存在。")
     return NextActionResponse.model_validate(action)
 
 
@@ -80,7 +81,7 @@ async def get_review_tasks(
     db: Session = Depends(get_db),
 ) -> list[ReviewTaskResponse]:
     if repo.get_session(db, session_id) is None:
-        raise HTTPException(status_code=404, detail="会话不存在")
+        raise ResourceNotFoundError("SESSION_NOT_FOUND", "会话不存在。")
     return [ReviewTaskResponse.model_validate(item) for item in learning.pending_reviews(db, session_id, due_only)]
 
 
@@ -91,5 +92,5 @@ async def get_mistakes(
     db: Session = Depends(get_db),
 ) -> list[MistakeItemResponse]:
     if repo.get_session(db, session_id) is None:
-        raise HTTPException(status_code=404, detail="会话不存在")
+        raise ResourceNotFoundError("SESSION_NOT_FOUND", "会话不存在。")
     return [MistakeItemResponse.model_validate(item) for item in learning.mistake_items(db, session_id, limit)]

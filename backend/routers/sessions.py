@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, Path, Query
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
+from backend.errors import ResourceNotFoundError
 from backend.services import db as repo
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
@@ -30,7 +31,7 @@ def _resource_export_content(resource: repo.Resource) -> str:
 async def get_session_history(session_id: SessionPath, db: Session = Depends(get_db)) -> dict[str, object]:
     session = repo.get_session(db, session_id)
     if session is None:
-        raise HTTPException(status_code=404, detail="会话不存在")
+        raise ResourceNotFoundError("SESSION_NOT_FOUND", "会话不存在。")
     return {
         "session_id": session.session_id,
         "state": session.state,
@@ -73,7 +74,7 @@ async def rediagnose(session_id: SessionPath, db: Session = Depends(get_db)) -> 
 @router.delete("/{session_id}", status_code=204)
 async def delete_session(session_id: SessionPath, db: Session = Depends(get_db)) -> None:
     if not repo.delete_session(db, session_id):
-        raise HTTPException(status_code=404, detail="会话不存在")
+        raise ResourceNotFoundError("SESSION_NOT_FOUND", "会话不存在。")
 
 
 @router.get("/{session_id}/resources/{resource_id}/export")
@@ -85,9 +86,7 @@ async def export_resource(
 ) -> PlainTextResponse:
     resource = repo.get_resource(db, session_id, resource_id)
     if resource is None:
-        raise HTTPException(status_code=404, detail="学习资源不存在")
-    if format not in {"markdown", "txt"}:
-        raise HTTPException(status_code=422, detail="format 仅支持 markdown 或 txt")
+        raise ResourceNotFoundError("LEARNING_RESOURCE_NOT_FOUND", "学习资源不存在。")
     extension = "md" if format == "markdown" else "txt"
     filename = f"learning-resource-{resource.id}.{extension}"
     return PlainTextResponse(
