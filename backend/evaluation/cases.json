@@ -1,0 +1,69 @@
+[
+  {
+    "case_id": "math-basic-visual",
+    "kind": "profile",
+    "input": "我想学习一次函数，基础较弱，喜欢看图，希望掌握基础题。",
+    "expected": {
+      "subject": "数学",
+      "current_level": "基础",
+      "learning_style": "视觉型"
+    }
+  },
+  {
+    "case_id": "english-intermediate-readwrite",
+    "kind": "profile",
+    "input": "我准备学习英语时态，水平中等，喜欢通过文字总结，目标是提高写作准确性。",
+    "expected": {
+      "subject": "英语",
+      "current_level": "中等",
+      "learning_style": "读写型"
+    }
+  },
+  {
+    "case_id": "physics-entry-auditory",
+    "kind": "profile",
+    "input": "我刚开始学牛顿定律，更容易通过讲解理解，希望先掌握概念。",
+    "expected": {
+      "subject": "物理",
+      "current_level": "入门",
+      "learning_style": "听觉型"
+    }
+  },
+  {
+    "case_id": "programming-advanced-kinesthetic",
+    "kind": "profile",
+    "input": "我有编程基础，想深入理解 Python 异步编程，偏好边做边学。",
+    "expected": {
+      "subject": "编程",
+      "current_level": "熟练",
+      "learning_style": "动觉型"
+    }
+  },
+  {
+    "case_id": "math-resource-basic",
+    "kind": "resource",
+    "input": "请生成一次函数基础笔记和练习。",
+    "required_sections": [
+      "【学习笔记】",
+      "【分层练习:基础】"
+    ]
+  },
+  {
+    "case_id": "english-resource-improvement",
+    "kind": "resource",
+    "input": "请生成英语时态提高练习。",
+    "required_sections": [
+      "【学习笔记】",
+      "【分层练习:提高】"
+    ]
+  },
+  {
+    "case_id": "math-resource-note-required",
+    "kind": "resource",
+    "input": "请生成二次函数基础练习和简洁笔记。",
+    "required_sections": [
+      "【学习笔记】",
+      "【分层练习:基础】"
+    ]
+  }
+]

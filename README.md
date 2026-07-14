@@ -1,0 +1,185 @@
+# A3 基于大模型的个性化资源生成与学习多智能体系统
+
+## 项目简介
+
+本项目是一个面向学习场景的后端原型系统。系统通过“画像 Agent”和“资源生成 Agent”协作，先用多轮对话了解学习者，再生成结构化学习画像、学习笔记、分层练习题和解析。模型输出采用可读的纯文本协议，便于调试、校验和前端渲染。
+
+当前后端已完成核心 P0 能力：多轮诊断、画像生成、资源生成、协议校验、错误映射、SSE 流式输出、取消生成、会话历史和离线测试。
+
+学习资源生成后，系统会把练习题结构化保存并分配题目 ID。学生提交答案后，后端会更新知识点掌握度、错题记录和复习时间；后续资源生成会使用这些真实学习状态调整内容和难度。
+
+后端还会给出可解释的下一步学习动作：到期任务优先复习，其余按掌握度进入基础纠错、渐进练习、综合巩固或挑战迁移。生成资源会记录质量分和问题码，未达到最低质量门槛时自动请求模型修复一次。
+
+## 技术栈
+
+- Python 3.9+
+- FastAPI + Uvicorn
+- SQLAlchemy + SQLite
+- Pydantic Settings
+- 双网关模型层：OpenAI 兼容接口与 Anthropic Messages API
+- pytest
+
+## 目录结构
+
+| 目录 | 作用 |
+| --- | --- |
+| `backend/routers/` | HTTP、SSE 和会话管理路由 |
+| `backend/services/` | 编排器、模型网关、Agent 与数据库仓储 |
+| `backend/protocols/` | 诊断、画像、资源协议模型、解析和序列化 |
+| `backend/models/` | API 请求与响应模型 |
+| `backend/evaluation/` | 固定样例和效果评分工具 |
+| `backend/tests/` | 离线单元测试与接口测试 |
+| `codex/architecture/` | 架构设计与复审材料 |
+
+## 本地启动
+
+### 1. 安装依赖
+
+在项目根目录执行：
+
+```powershell
+cd E:\软件杯
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r backend\requirements.txt
+```
+
+### 2. 配置模型服务
+
+复制 `backend/.env.example` 为 `backend/.env`，选择一个网关：
+
+```dotenv
+# OpenAI 兼容网关：适用于 OpenAI、DeepSeek 和兼容 Chat Completions 的自定义服务
+MODEL_PROVIDER=openai
+MODEL_API_KEY=替换为实际密钥
+MODEL_BASE_URL=https://api.deepseek.com
+MODEL_NAME=deepseek-v4-pro
+
+# Anthropic Messages 网关：适用于 Anthropic 格式 API
+# MODEL_PROVIDER=anthropic
+# MODEL_API_KEY=替换为实际密钥
+# MODEL_BASE_URL=https://api.deepseek.com/anthropic
+# MODEL_NAME=deepseek-v4-pro
+# ANTHROPIC_VERSION=2023-06-01
+```
+
+`MODEL_BASE_URL` 和 `MODEL_NAME` 均可按用户所使用的平台自定义。`MODEL_PROVIDER=openai` 需要 Chat Completions 兼容接口；`MODEL_PROVIDER=anthropic` 使用 `/v1/messages` 和 Anthropic SSE 事件格式。
+
+不要把真实密钥写入代码、提交到版本库或发送到前端。
+
+开发模式默认使用 `APP_ENV=development`。配置 `DESKTOP_TOKEN` 后，所有 `/api/*` 接口和 `/health/ready` 都必须携带 `X-A3-Desktop-Token`；生产模式始终要求该令牌，缺失时会拒绝业务请求。Electron 正式版应由主进程每次启动生成短期令牌，并通过受保护通道传给后端，renderer 不持有令牌。
+
+生产模式不允许后端通过 `PUT /api/settings/model` 将 API Key 明文写入 `.env`；请使用 Electron `safeStorage` 或 Windows Credential Manager 保存密钥，再在启动时注入模型配置。生产模式仅接受 HTTPS 公网模型网关，默认拒绝 localhost、私网、链路本地地址和非标准端口。开发环境需要测试本地网关时，显式设置 `ALLOW_LOCAL_MODEL_GATEWAY=true`。
+
+配置 `DESKTOP_TOKEN` 或使用生产模式时，后端会对高成本接口执行滑动窗口限流：`API_RATE_LIMIT_PER_MINUTE=10` 控制对话、流式对话、画像与资源生成，`WEB_SEARCH_RATE_LIMIT_PER_MINUTE=30` 控制公开网络检索。达到上限时返回 `429 REQUEST_RATE_LIMITED` 和 `Retry-After` 响应头。诊断上下文默认保留首条学习目标和最近消息，边界可通过 `DIAGNOSIS_HISTORY_MESSAGE_LIMIT=12` 与 `DIAGNOSIS_HISTORY_MAX_CHARACTERS=48000` 调整。
+
+### 3. 启动服务
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+启动后访问：
+
+- 健康检查：`http://127.0.0.1:8000/health/live`
+- 就绪检查：`http://127.0.0.1:8000/health/ready`
+- Swagger：`http://127.0.0.1:8000/docs`
+- 功能测试台：`http://127.0.0.1:8000/test`
+
+### 4. 运行测试
+
+```powershell
+.\.venv\Scripts\python.exe -m compileall -q backend
+.\.venv\Scripts\python.exe -m pytest -q backend
+```
+
+当前离线测试覆盖诊断状态机、协议解析、错误响应、会话接口、流式事件、取消和评测工具。真实模型联调需要有效的 `MODEL_API_KEY`，不会在离线测试中自动发起。
+
+也可以直接双击运行 `backend\quick_test.bat`，自动完成语法检查和全部后端测试；双击 `backend\quick_package_test.bat` 可额外重建 `api.exe` 并执行启动自检。两个入口会优先使用项目内的 `backend\competition` Python 环境。
+
+## 核心流程
+
+1. 客户端向 `POST /api/chat` 或 `POST /api/chat/stream` 发送学习目标和回答。
+2. 画像 Agent 根据对话输出诊断决策；必要时继续追问，最多五轮。
+3. 画像 Agent 输出并校验 `learner-profile/v1`。
+4. 资源生成 Agent 根据画像输出 `learning-resource/v1`。
+5. 后端校验、规范化并持久化画像或资源。
+6. 客户端通过会话接口读取历史、资源和当前画像。
+
+## 常见问题
+
+- `503 model_not_configured`：检查 `backend/.env` 的 `MODEL_PROVIDER`、`MODEL_API_KEY`、`MODEL_BASE_URL` 和 `MODEL_NAME`。
+- `422`：检查消息是否为空、是否超过 8000 字，或 `session_id` 是否只包含字母、数字、下划线和连字符。
+- `502`：模型返回不符合协议，系统会尝试一次格式修复；仍失败时查看错误代码。
+- SSE 没有实时分片：确认客户端使用 `/api/chat/stream`，并关闭代理层缓冲。
+- 数据库位置：默认是 `backend/app.db`；桌面版应按架构文档迁移到 Electron userData 目录。
+
+## 资源缓存
+
+当同一会话、同一画像版本再次提交完全相同的资源请求时，后端会直接复用已校验并持久化的资源，避免重复调用模型。默认有效期为 24 小时，可在 `backend/.env` 设置：
+
+`RESOURCE_CACHE_TTL_SECONDS=86400`
+
+设置为 `0` 可以关闭缓存。普通 `POST /api/chat` 响应中的 `cached` 字段标识是否命中缓存；SSE 会额外发送 `cache` 事件。重新诊断会产生新的画像版本，不会误用旧资源。
+
+## 打包为 api.exe
+
+后端可独立打包为 Windows 可执行程序：
+
+```powershell
+.\backend\build_api.ps1 -Python .\backend\competition\Scripts\python.exe
+.\backend\verify_api_package.ps1
+```
+
+产物位于 `dist/api/api.exe`。运行后默认监听 `127.0.0.1:8000`；可用 `A3_PORT` 修改端口。打包版会将数据库和模型配置保存到 `%LOCALAPPDATA%\A3LearningAgent`，避免写入安装目录；也可通过 `A3_DATA_DIR` 指定自定义数据目录。
+
+## 离线评测
+
+固定样例、基线和可运行的评测命令位于 `backend/evaluation/`。评测命令读取 `case_id -> 模型输出文本` 的 JSON 文件，可用于保存真实模型结果并进行回归比较：
+
+```powershell
+.\backend\competition\Scripts\python.exe -m backend.evaluation.cli --outputs backend\evaluation\sample_outputs.json --baseline backend\evaluation\baseline.json --report backend\evaluation\latest-report.json
+```
+
+当样例缺失，或平均分/协议通过率低于基线时，命令会返回非零退出码。
+
+## 真实模型评测
+
+当本机模型配置有效时，可显式运行以下命令，对当前 `MODEL_PROVIDER` 和 `MODEL_NAME` 执行完整固定样例评测。它会保存模型原始协议输出、逐项耗时、失败代码和评分报告；该命令会实际调用模型服务。
+
+```powershell
+.\backend\competition\Scripts\python.exe -m backend.evaluation.live --report backend\evaluation\live-evaluation-report.json --outputs backend\evaluation\live-evaluation-outputs.json
+```
+
+模型未配置时命令会直接拒绝执行，不会尝试网络请求。每次运行还会向 `live-evaluation-history/` 写入带 UTC 时间戳的报告，自动与上一次报告比较；平均分下降超过 `--max-drop`（默认 3 分）、协议通过率下降或调用失败时，命令返回非零退出码。报告中的 `failure_summary` 会列出失败样例及原因。
+
+## 质量约束
+
+- 画像 Agent 会保留用户明确表达的当前水平、学科、学习风格和目标；当前水平不会被模型擅自升降级。
+- 资源协议要求同时含有非空学习笔记和分层练习，避免只给题目或空笔记的低质量输出。
+- 固定离线评测集现覆盖 7 个画像/资源样例，可用于提示词或模型切换后的回归检查。
+
+## 运行可靠性
+
+- 模型设置页可先调用 `POST /api/settings/model/test` 验证 API Key、模型名和网关连通性；检测不会保存候选配置。
+- 会话和资源导出路由会校验路径参数，避免非法会话 ID 或资源 ID 进入业务层。
+- 应用停止时会关闭模型客户端并清理内存中的生成取消标记、会话锁，适合桌面端反复启动和退出。
+- 生产模式下，除 `/health/live` 外的业务请求都由本地桌面令牌保护；令牌错误、缺失或非本机连接会返回 `DESKTOP_AUTH_REQUIRED`。
+- 取消流式任务必须同时提交生成 ID 与原始会话 ID；限流状态会在应用停止时清理，不会跨桌面端启动累积。
+
+## 在线检索
+
+后端支持查询公开网络资料，并将来源摘要作为资源生成的受限参考上下文。默认使用固定的搜狗、DuckDuckGo 与 Bing RSS 回退链路，不需要额外密钥，也不接受任意搜索服务 URL。
+
+- `POST /api/web/search`：直接返回标题、链接和摘要，网络不可用时返回 `503 WEB_SEARCH_UNAVAILABLE`。
+- `POST /api/resource`：默认启用在线检索，响应内的 `sources` 返回本次引用来源；检索失败时会自动以空来源继续生成，不影响已有学习流程。
+- 经由会话生成的资源会持久化本次检索的标题、链接和摘要；缓存命中、会话历史、普通对话响应和 SSE 的 `sources` 事件均返回同一份来源快照。导出 Markdown/TXT 时会在资源正文后附上“参考来源”部分。
+- 环境变量：`WEB_SEARCH_ENABLED`、`WEB_SEARCH_TIMEOUT_SECONDS`、`WEB_SEARCH_MAX_RESULTS`、`WEB_SEARCH_PROVIDERS=sogou,duckduckgo,bing`。
+
+已在开发机完成真实联机验证：中文查询“一次函数 数学 教学资料”返回 5 条相关公开来源。搜狗作为中文检索首选；DuckDuckGo 与 Bing 保留回退，且会过滤与完整查询无关的低质量结果。
+## 后续工作
+
+- 使用有效的用户自定义模型配置完成真实流式联调。
+- 编写 React 或 Vue 界面，并通过 Electron 打包桌面端。
+- 根据真实模型输出扩充评测集和评分基线。
+- 按 `codex/AI模型任务队列.md` 管理后续模型任务。

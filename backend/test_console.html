@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="application-name" content="A3 backend test console">
+    <title>A3 后端功能测试台</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --ink: #17212b;
+            --muted: #66727e;
+            --line: #d8e0e7;
+            --surface: #ffffff;
+            --surface-soft: #f5f8fa;
+            --accent: #0b6e69;
+            --accent-dark: #07524f;
+            --warning: #a95d00;
+            --danger: #b23a48;
+            --shadow: 0 10px 30px rgba(23, 33, 43, .08);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            color: var(--ink);
+            background: #edf2f4;
+            font: 14px/1.5 "Segoe UI", "Microsoft YaHei", sans-serif;
+        }
+        .shell { max-width: 1380px; margin: 0 auto; padding: 28px; }
+        header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 20px; }
+        h1, h2, p { margin: 0; }
+        h1 { font-size: 28px; letter-spacing: 0; }
+        h2 { font-size: 16px; margin-bottom: 16px; }
+        .subtitle { color: var(--muted); margin-top: 4px; }
+        .badge { border: 1px solid var(--line); background: var(--surface); padding: 7px 12px; border-radius: 6px; color: var(--muted); }
+        .badge.ok { color: var(--accent-dark); border-color: #8ac7c0; background: #effaf8; }
+        .badge.bad { color: var(--danger); border-color: #e5a8b0; background: #fff5f6; }
+        .toolbar, .panel { background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }
+        .toolbar { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) auto; align-items: end; gap: 12px; padding: 16px; margin-bottom: 18px; }
+        .grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr); gap: 18px; }
+        .panel { padding: 20px; min-width: 0; }
+        .log-panel { margin-top: 18px; }
+        label { display: grid; gap: 5px; color: var(--muted); font-size: 12px; }
+        input, textarea, pre { font: inherit; }
+        input, textarea { width: 100%; color: var(--ink); border: 1px solid var(--line); border-radius: 5px; background: #fff; padding: 9px 10px; }
+        input:focus, textarea:focus { outline: 2px solid rgba(11, 110, 105, .18); border-color: var(--accent); }
+        textarea { min-height: 124px; resize: vertical; }
+        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+        .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+        button { border: 1px solid var(--accent); border-radius: 5px; padding: 9px 13px; color: #fff; background: var(--accent); cursor: pointer; font: inherit; }
+        button:hover { background: var(--accent-dark); }
+        button.secondary { color: var(--accent-dark); background: #fff; }
+        button.warning { border-color: var(--warning); color: #fff; background: var(--warning); }
+        button.danger { border-color: var(--danger); color: #fff; background: var(--danger); }
+        button:disabled { opacity: .5; cursor: not-allowed; }
+        .state-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 16px; }
+        .state { background: var(--surface-soft); border: 1px solid var(--line); padding: 10px; min-height: 60px; }
+        .state small { display: block; color: var(--muted); }
+        .state strong { display: block; margin-top: 2px; overflow-wrap: anywhere; }
+        .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+        .output { margin-top: 14px; min-height: 120px; max-height: 340px; overflow: auto; white-space: pre-wrap; word-break: break-word; background: #101820; color: #d9f0eb; border-radius: 5px; padding: 12px; }
+        .log { max-height: 420px; overflow: auto; border-top: 1px solid var(--line); }
+        .log-row { display: grid; grid-template-columns: 92px 78px minmax(0, 1fr); gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); align-items: start; }
+        .log-row time, .log-row .event { color: var(--muted); font-size: 12px; }
+        .log-row pre { margin: 0; white-space: pre-wrap; word-break: break-word; color: var(--ink); }
+        .empty { color: var(--muted); padding: 18px 0; }
+        @media (max-width: 860px) {
+            .shell { padding: 16px; }
+            header { align-items: flex-start; flex-direction: column; gap: 10px; }
+            .toolbar, .grid { grid-template-columns: 1fr; }
+            .row { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+<main class="shell">
+    <header>
+        <div>
+            <h1>A3 后端功能测试台</h1>
+            <p class="subtitle">逐项验收后端接口、智能体流程与实时事件</p>
+        </div>
+        <div id="connectionBadge" class="badge">未检测</div>
+    </header>
+
+    <section class="toolbar" aria-label="连接设置">
+        <label>后端地址
+            <input id="baseUrl" value="http://127.0.0.1:8000" spellcheck="false">
+        </label>
+        <label>桌面令牌（生产/鉴权模式填写）
+            <input id="desktopToken" type="password" autocomplete="off" placeholder="不会保存到文件">
+        </label>
+        <div class="actions">
+            <button id="liveButton" class="secondary">检查存活</button>
+            <button id="readyButton" class="secondary">检查就绪</button>
+            <button id="settingsButton" class="secondary">读取模型状态</button>
+        </div>
+    </section>
+
+    <div class="grid">
+        <section class="panel">
+            <h2>对话与生成</h2>
+            <div class="row">
+                <label>会话 ID
+                    <input id="sessionId" value="demo_001" maxlength="64" spellcheck="false">
+                </label>
+                <label>当前生成 ID
+                    <input id="generationId" placeholder="流式事件会自动填入" spellcheck="false">
+                </label>
+            </div>
+            <label>消息
+                <textarea id="message">我想学习一次函数，请先了解我的基础，再生成学习资料。</textarea>
+            </label>
+            <div class="actions">
+                <button id="chatButton">普通对话</button>
+                <button id="streamButton">开始流式对话</button>
+                <button id="cancelButton" class="danger">取消当前生成</button>
+                <button id="sessionButton" class="secondary">读取会话</button>
+            </div>
+            <div class="state-grid">
+                <div class="state"><small>阶段</small><strong id="phaseValue">-</strong></div>
+                <div class="state"><small>会话状态</small><strong id="sessionState">-</strong></div>
+                <div class="state"><small>流式片段</small><strong id="deltaCount">0</strong></div>
+            </div>
+            <pre id="chatOutput" class="output">等待请求...</pre>
+        </section>
+
+        <section class="panel">
+            <h2>在线检索</h2>
+            <label>检索内容
+                <input id="searchQuery" value="一次函数 数学 教学资料">
+            </label>
+            <div class="actions">
+                <button id="searchButton">搜索公开资料</button>
+            </div>
+            <pre id="searchOutput" class="output">等待检索...</pre>
+            <p class="hint">此处验证公开搜索接口及来源结果，不会直接修改会话。</p>
+        </section>
+    </div>
+
+    <section class="panel" style="margin-top: 18px;">
+        <h2>学习闭环</h2>
+        <div class="row">
+            <label>练习题 ID
+                <input id="questionId" type="number" min="1" placeholder="读取会话后自动填入">
+            </label>
+            <label>作答内容
+                <input id="answerText" value="1">
+            </label>
+        </div>
+        <div class="row">
+            <label>已使用提示次数
+                <input id="hintCount" type="number" min="0" max="20" value="0">
+            </label>
+            <label>幂等键（可选）
+                <input id="attemptKey" placeholder="例如 attempt_001" spellcheck="false">
+            </label>
+        </div>
+        <div class="actions">
+            <button id="attemptButton">提交答案</button>
+            <button id="nextActionButton" class="secondary">查看下一步</button>
+            <button id="progressButton" class="secondary">查看掌握度</button>
+            <button id="reviewsButton" class="secondary">查看复习队列</button>
+            <button id="mistakesButton" class="secondary">查看错题</button>
+        </div>
+        <pre id="learningOutput" class="output">先生成学习资源并读取会话，题目 ID 会自动填入。</pre>
+    </section>
+
+    <section class="panel log-panel">
+        <div class="actions" style="justify-content: space-between; margin-top: 0;">
+            <h2 style="margin: 0;">请求日志</h2>
+            <button id="clearButton" class="secondary">清空日志</button>
+        </div>
+        <div id="log" class="log"><div class="empty">暂无请求记录</div></div>
+    </section>
+</main>
+
+<script>
+    const state = { stream: null, deltaCount: 0 };
+    const $ = (id) => document.getElementById(id);
+
+    function baseUrl() {
+        return $("baseUrl").value.trim().replace(/\/$/, "");
+    }
+
+    function apiHeaders(withJson = false) {
+        const headers = {};
+        const token = $("desktopToken").value.trim();
+        if (token) headers["X-A3-Desktop-Token"] = token;
+        if (withJson) headers["Content-Type"] = "application/json";
+        return headers;
+    }
+
+    function logEvent(event, payload) {
+        const log = $("log");
+        const empty = log.querySelector(".empty");
+        if (empty) empty.remove();
+        const row = document.createElement("div");
+        row.className = "log-row";
+        const time = document.createElement("time");
+        time.textContent = new Date().toLocaleTimeString();
+        const name = document.createElement("span");
+        name.className = "event";
+        name.textContent = event;
+        const content = document.createElement("pre");
+        content.textContent = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
+        row.append(time, name, content);
+        log.prepend(row);
+    }
+
+    async function readResponse(response) {
+        const text = await response.text();
+        let body = text;
+        try { body = text ? JSON.parse(text) : {}; } catch (_) { }
+        if (!response.ok) {
+            const error = new Error(typeof body === "object" ? (body.message || body.detail || response.statusText) : body);
+            error.body = body;
+            error.status = response.status;
+            throw error;
+        }
+        return body;
+    }
+
+    async function jsonRequest(path, options = {}) {
+        const response = await fetch(baseUrl() + path, {
+            ...options,
+            headers: { ...apiHeaders(Boolean(options.body)), ...(options.headers || {}) }
+        });
+        const body = await readResponse(response);
+        logEvent(`${options.method || "GET"} ${path}`, body);
+        return body;
+    }
+
+    function showError(label, error) {
+        const detail = error.body || error.message;
+        logEvent(label, detail);
+        $("chatOutput").textContent = typeof detail === "string" ? detail : JSON.stringify(detail, null, 2);
+    }
+
+    function updateConnection(text, ok) {
+        const badge = $("connectionBadge");
+        badge.textContent = text;
+        badge.className = `badge ${ok ? "ok" : "bad"}`;
+    }
+
+    function setChatOutput(value) {
+        $("chatOutput").textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+    }
+
+    function chatPayload() {
+        return {
+            session_id: $("sessionId").value.trim(),
+            message: $("message").value.trim()
+        };
+    }
+
+    async function checkLive() {
+        try {
+            const body = await jsonRequest("/health/live");
+            updateConnection(body.status === "live" ? "后端在线" : "状态异常", body.status === "live");
+        } catch (error) {
+            updateConnection("后端不可达", false);
+            showError("GET /health/live", error);
+        }
+    }
+
+    async function checkReady() {
+        try {
+            const body = await jsonRequest("/health/ready");
+            updateConnection(body.status === "ready" ? "模型已就绪" : "模型未就绪", body.status === "ready");
+        } catch (error) {
+            updateConnection("模型未就绪", false);
+            showError("GET /health/ready", error);
+        }
+    }
+
+    async function readSettings() {
+        try {
+            const body = await jsonRequest("/api/settings/model");
+            setChatOutput(body);
+        } catch (error) {
+            showError("GET /api/settings/model", error);
+        }
+    }
+
+    async function sendChat() {
+        const payload = chatPayload();
+        if (!payload.session_id || !payload.message) return showError("普通对话", "会话 ID 和消息不能为空");
+        try {
+            const body = await jsonRequest("/api/chat", { method: "POST", body: JSON.stringify(payload) });
+            $("phaseValue").textContent = body.phase || "-";
+            $("sessionState").textContent = body.state || "-";
+            setChatOutput(body);
+        } catch (error) {
+            showError("POST /api/chat", error);
+        }
+    }
+
+    function handleSseEvent(eventName, payload) {
+        let body = payload;
+        try { body = payload ? JSON.parse(payload) : {}; } catch (_) { }
+        if (body.generation_id) $("generationId").value = body.generation_id;
+        if (body.phase) $("phaseValue").textContent = body.phase;
+        if (body.state) $("sessionState").textContent = body.state;
+        if (eventName === "delta") {
+            state.deltaCount += 1;
+            $("deltaCount").textContent = String(state.deltaCount);
+            $("chatOutput").textContent += body.content || "";
+        } else {
+            logEvent(`SSE ${eventName}`, body);
+            if (eventName === "done" || eventName === "error") setChatOutput(body);
+        }
+    }
+
+    function consumeSseBlock(block) {
+        let eventName = "message";
+        const data = [];
+        for (const line of block.split(/\r?\n/)) {
+            if (line.startsWith("event:")) eventName = line.slice(6).trim();
+            if (line.startsWith("data:")) data.push(line.slice(5).trim());
+        }
+        if (data.length) handleSseEvent(eventName, data.join("\n"));
+    }
+
+    async function sendStream() {
+        const payload = chatPayload();
+        if (state.stream) return;
+        if (!payload.session_id || !payload.message) return showError("流式对话", "会话 ID 和消息不能为空");
+        state.deltaCount = 0;
+        $("deltaCount").textContent = "0";
+        $("chatOutput").textContent = "";
+        try {
+            const response = await fetch(baseUrl() + "/api/chat/stream", {
+                method: "POST",
+                headers: apiHeaders(true),
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) await readResponse(response);
+            state.stream = response;
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+            while (true) {
+                const part = await reader.read();
+                if (part.done) break;
+                buffer += decoder.decode(part.value, { stream: true });
+                const blocks = buffer.split(/\r?\n\r?\n/);
+                buffer = blocks.pop();
+                blocks.forEach(consumeSseBlock);
+            }
+            buffer += decoder.decode();
+            if (buffer.trim()) consumeSseBlock(buffer);
+            logEvent("SSE 连接结束", { generation_id: $("generationId").value || null });
+        } catch (error) {
+            showError("POST /api/chat/stream", error);
+        } finally {
+            state.stream = null;
+        }
+    }
+
+    async function cancelStream() {
+        const generationId = $("generationId").value.trim();
+        const sessionId = $("sessionId").value.trim();
+        if (!generationId || !sessionId) return showError("取消生成", "需要当前生成 ID 和会话 ID");
+        try {
+            const body = await jsonRequest(`/api/generations/${encodeURIComponent(generationId)}?session_id=${encodeURIComponent(sessionId)}`, { method: "DELETE" });
+            setChatOutput(body);
+        } catch (error) {
+            showError("DELETE /api/generations", error);
+        }
+    }
+
+    async function readSession() {
+        const sessionId = $("sessionId").value.trim();
+        if (!sessionId) return showError("读取会话", "会话 ID 不能为空");
+        try {
+            const body = await jsonRequest(`/api/sessions/${encodeURIComponent(sessionId)}`);
+            $("sessionState").textContent = body.state || "-";
+            const resources = body.resources || [];
+            const latestResource = resources.length ? resources[resources.length - 1] : null;
+            if (latestResource && latestResource.questions && latestResource.questions.length) {
+                $("questionId").value = latestResource.questions[0].id;
+            }
+            setChatOutput(body);
+        } catch (error) {
+            showError("GET /api/sessions", error);
+        }
+    }
+
+    async function searchWeb() {
+        const query = $("searchQuery").value.trim();
+        if (!query) return showError("在线检索", "检索内容不能为空");
+        try {
+            const body = await jsonRequest("/api/web/search", { method: "POST", body: JSON.stringify({ query }) });
+            $("searchOutput").textContent = JSON.stringify(body, null, 2);
+        } catch (error) {
+            const detail = error.body || error.message;
+            logEvent("POST /api/web/search", detail);
+            $("searchOutput").textContent = typeof detail === "string" ? detail : JSON.stringify(detail, null, 2);
+        }
+    }
+
+    function learningPath(suffix) {
+        const sessionId = $("sessionId").value.trim();
+        if (!sessionId) throw new Error("会话 ID 不能为空");
+        return `/api/sessions/${encodeURIComponent(sessionId)}${suffix}`;
+    }
+
+    function setLearningOutput(value) {
+        $("learningOutput").textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+    }
+
+    async function submitAttempt() {
+        try {
+            const questionId = $("questionId").value.trim();
+            const answer = $("answerText").value.trim();
+            if (!questionId || !answer) throw new Error("练习题 ID 和作答内容不能为空");
+            const payload = {
+                answer,
+                hint_count: Number($("hintCount").value || 0)
+            };
+            const key = $("attemptKey").value.trim();
+            if (key) payload.idempotency_key = key;
+            const body = await jsonRequest(learningPath(`/questions/${encodeURIComponent(questionId)}/attempts`), {
+                method: "POST",
+                body: JSON.stringify(payload)
+            });
+            setLearningOutput(body);
+        } catch (error) {
+            const detail = error.body || error.message;
+            logEvent("提交答案", detail);
+            setLearningOutput(detail);
+        }
+    }
+
+    async function readProgress() {
+        try { setLearningOutput(await jsonRequest(learningPath("/progress"))); }
+        catch (error) { setLearningOutput(error.body || error.message); }
+    }
+
+    async function readNextAction() {
+        try { setLearningOutput(await jsonRequest(learningPath("/next-action"))); }
+        catch (error) { setLearningOutput(error.body || error.message); }
+    }
+
+    async function readReviews() {
+        try { setLearningOutput(await jsonRequest(learningPath("/reviews"))); }
+        catch (error) { setLearningOutput(error.body || error.message); }
+    }
+
+    async function readMistakes() {
+        try { setLearningOutput(await jsonRequest(learningPath("/mistakes"))); }
+        catch (error) { setLearningOutput(error.body || error.message); }
+    }
+
+    $("liveButton").addEventListener("click", checkLive);
+    $("readyButton").addEventListener("click", checkReady);
+    $("settingsButton").addEventListener("click", readSettings);
+    $("chatButton").addEventListener("click", sendChat);
+    $("streamButton").addEventListener("click", sendStream);
+    $("cancelButton").addEventListener("click", cancelStream);
+    $("sessionButton").addEventListener("click", readSession);
+    $("searchButton").addEventListener("click", searchWeb);
+    $("attemptButton").addEventListener("click", submitAttempt);
+    $("nextActionButton").addEventListener("click", readNextAction);
+    $("progressButton").addEventListener("click", readProgress);
+    $("reviewsButton").addEventListener("click", readReviews);
+    $("mistakesButton").addEventListener("click", readMistakes);
+    $("clearButton").addEventListener("click", () => { $("log").innerHTML = '<div class="empty">暂无请求记录</div>'; });
+    checkLive();
+</script>
+</body>
+</html>

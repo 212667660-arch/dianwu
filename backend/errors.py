@@ -1,0 +1,109 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+
+@dataclass
+class AppError(Exception):
+    code: str
+    public_message: str
+    http_status: int
+    retryable: bool = False
+    phase: str | None = None
+    details_safe: dict[str, Any] | None = None
+
+
+class ConfigurationError(AppError):
+    def __init__(self, message: str = "模型服务尚未配置。") -> None:
+        super().__init__("CONFIGURATION_ERROR", message, 503)
+
+
+class DomainStateError(AppError):
+    def __init__(self, message: str, code: str = "DOMAIN_STATE_ERROR") -> None:
+        super().__init__(code, message, 409)
+
+
+class ModelSettingsAccessError(AppError):
+    def __init__(self) -> None:
+        super().__init__("MODEL_SETTINGS_ACCESS_DENIED", "本地模型配置接口未授权。", 403)
+
+
+class DesktopAuthRequiredError(AppError):
+    def __init__(self) -> None:
+        super().__init__("DESKTOP_AUTH_REQUIRED", "本地桌面请求未通过授权。", 401)
+
+
+class ModelSettingsValidationError(AppError):
+    def __init__(self, message: str = "模型网关地址无效。") -> None:
+        super().__init__("MODEL_SETTINGS_INVALID", message, 422)
+
+
+class ModelCredentialStoreRequiredError(AppError):
+    def __init__(self) -> None:
+        super().__init__("MODEL_CREDENTIAL_STORE_REQUIRED", "生产模式不允许后端明文保存模型密钥，请通过桌面安全存储配置。", 409)
+
+
+class UnexpectedBackendError(AppError):
+    def __init__(self) -> None:
+        super().__init__("BACKEND_UNEXPECTED_ERROR", "服务处理请求时出现未预期错误，请稍后重试。", 500, retryable=True)
+
+
+class RequestRateLimitedError(AppError):
+    def __init__(self) -> None:
+        super().__init__("REQUEST_RATE_LIMITED", "请求过于频繁，请稍后重试。", 429, retryable=True)
+
+
+class ModelAuthenticationError(AppError):
+    def __init__(self) -> None:
+        super().__init__("MODEL_AUTHENTICATION_ERROR", "模型服务认证失败，请检查配置。", 503)
+
+
+class ModelRateLimitError(AppError):
+    def __init__(self) -> None:
+        super().__init__("MODEL_RATE_LIMITED", "模型服务繁忙，请稍后重试。", 429, retryable=True)
+
+
+class ModelTimeoutError(AppError):
+    def __init__(self) -> None:
+        super().__init__("MODEL_TIMEOUT", "模型响应超时，请稍后重试。", 504, retryable=True)
+
+
+class ModelUnavailableError(AppError):
+    def __init__(self) -> None:
+        super().__init__("MODEL_UNAVAILABLE", "模型服务暂时不可用，请稍后重试。", 503, retryable=True)
+
+
+class WebSearchUnavailableError(AppError):
+    def __init__(self) -> None:
+        super().__init__("WEB_SEARCH_UNAVAILABLE", "在线检索服务暂时不可用，请检查网络后重试。", 503, retryable=True)
+
+
+class ModelBadResponseError(AppError):
+    def __init__(self, message: str = "模型返回内容无效。", code: str = "MODEL_BAD_RESPONSE") -> None:
+        super().__init__(code, message, 502)
+
+
+class ModelAccessError(AppError):
+    def __init__(self, message: str = "当前密钥没有访问该模型的权限。") -> None:
+        super().__init__("MODEL_ACCESS_DENIED", message, 403)
+
+
+class ModelNotFoundError(AppError):
+    def __init__(self, message: str = "指定的模型不存在或不可用。") -> None:
+        super().__init__("MODEL_NOT_FOUND", message, 404)
+
+
+class ProtocolValidationError(AppError):
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(code, message, 502)
+
+
+class PersistenceError(AppError):
+    def __init__(self) -> None:
+        super().__init__("PERSISTENCE_ERROR", "本地数据保存失败，请稍后重试。", 500, retryable=True)
+
+
+class ClientCancelledError(AppError):
+    def __init__(self) -> None:
+        super().__init__("CLIENT_CANCELLED", "生成已取消。", 499)

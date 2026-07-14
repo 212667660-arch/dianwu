@@ -1,0 +1,73 @@
+{
+  "name": "a3-front",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "electron/main.mjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "build:desktop": "vue-tsc -b && vite build --base=./",
+    "preview": "vite preview",
+    "test": "node --test electron/runtime.test.mjs electron/backend-lifecycle.test.mjs electron/ipc-contract.test.mjs electron/backend-proxy.test.mjs electron/model-config.test.mjs electron/model-config-controller.test.mjs && vitest run",
+    "desktop:dev": "npm run build:desktop && electron .",
+    "desktop:pack": "npm run build:desktop && electron-builder --dir",
+    "desktop:dist": "npm run build:desktop && electron-builder --win nsis"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
+    "axios": "^1.18.1",
+    "element-plus": "^2.14.3",
+    "pinia": "^3.0.4",
+    "sass": "1.83.4",
+    "vue": "^3.5.39",
+    "vue-router": "^4.6.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.2",
+    "@vitejs/plugin-vue": "^5.2.4",
+    "@vue/test-utils": "^2.4.6",
+    "@vue/tsconfig": "^0.9.1",
+    "electron": "32.3.3",
+    "electron-builder": "25.1.8",
+    "jsdom": "^25.0.1",
+    "typescript": "~6.0.2",
+    "unplugin-vue-components": "^0.28.0",
+    "vite": "^6.1.0",
+    "vitest": "^3.2.4",
+    "vue-tsc": "^3.3.5"
+  },
+  "build": {
+    "appId": "com.a3.learning.agent",
+    "productName": "智学协作台",
+    "electronDist": "node_modules/electron/dist",
+    "electronLanguages": [
+      "zh-CN",
+      "en-US"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "electron/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "desktop-backend",
+        "to": "backend"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

@@ -1,0 +1,18 @@
+* text=auto eol=lf
+
+# Keep scripts predictable across Windows and Unix tooling.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.sh text eol=lf
+
+# Binary project artifacts.
+*.docx binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.exe binary
+*.dll binary
+*.pyd binary

@@ -1,0 +1,282 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+import uuid
+from collections.abc import AsyncIterator
+
+from sqlalchemy.orm import Session
+
+from backend.config import get_settings
+from backend.errors import AppError, ClientCancelledError, DomainStateError, ProtocolValidationError, UnexpectedBackendError
+from backend.protocols import parse_profile, parse_resource, serialize_profile, serialize_resource
+from backend.services import db as repo
+from backend.services import learning, profile_agent, resource_agent
+from backend.services.llm_service import ModelGateway
+from backend.services.profile_agent import build_profile_messages, generate_diagnosis_decision, generate_profile
+from backend.services.resource_agent import build_resource_messages, generate_resources
+from backend.services.resource_quality import validate_resource_quality
+from backend.services.web_search import search_web_optional
+
+_REDIAGNOSE_HINTS = ("重新诊断", "重新生成画像", "换画像", "重新分析我")
+_FIRST_FOLLOW_UP = "为了更准确地帮你制定学习计划，你目前最容易在哪一步出错？"
+_gateway = ModelGateway()
+_generation_cancel_events: dict[str, asyncio.Event] = {}
+_generation_sessions: dict[str, str] = {}
+_workflow_locks: dict[str, asyncio.Lock] = {}
+
+
+def _workflow_lock(session_id: str) -> asyncio.Lock:
+    """Serialize stateful work for one session within this API process."""
+    lock = _workflow_locks.get(session_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _workflow_locks[session_id] = lock
+    return lock
+
+
+async def close_runtime() -> None:
+    _generation_cancel_events.clear()
+    _generation_sessions.clear()
+    _workflow_locks.clear()
+    repo.clear_runtime_state()
+    await asyncio.gather(_gateway.aclose(), profile_agent.close_runtime(), resource_agent.close_runtime())
+
+
+def cancel_generation(generation_id: str, session_id: str) -> bool:
+    if _generation_sessions.get(generation_id) != session_id:
+        return False
+    event = _generation_cancel_events.get(generation_id)
+    if event is None:
+        return False
+    event.set()
+    return True
+
+
+class ChatResult:
+    def __init__(
+        self,
+        reply: str,
+        phase: str,
+        state: str,
+        profile_version: int = 0,
+        cached: bool = False,
+        sources: list[dict[str, str]] | None = None,
+    ) -> None:
+        self.reply = reply
+        self.phase = phase
+        self.state = state
+        self.profile_version = profile_version
+        self.cached = cached
+        self.sources = sources or []
+
+
+def _is_rediagnose(message: str) -> bool:
+    return any(hint in message for hint in _REDIAGNOSE_HINTS)
+
+
+def _needs_forced_follow_up(session, decision) -> bool:
+    return session.diagnosis_turns == 0 and decision.status == "COMPLETE"
+
+
+def _history_texts(db: Session, session_id: str) -> list[str]:
+    settings = get_settings()
+    return repo.history_texts(
+        db,
+        session_id,
+        maximum_messages=settings.diagnosis_history_message_limit,
+        maximum_characters=settings.diagnosis_history_max_characters,
+    )
+
+
+async def _generate_adaptive_resource(
+    db: Session,
+    session_id: str,
+    profile_text: str,
+    message: str,
+    sources: list[dict[str, str]],
+) -> str:
+    return await generate_resources(
+        profile_text,
+        message,
+        sources,
+        learning_context=learning.learning_context(db, session_id),
+    )
+
+
+async def _diagnosis_reply(db: Session, session, session_id: str):
+    decision = await generate_diagnosis_decision(_history_texts(db, session_id), session.diagnosis_turns + 1)
+    if _needs_forced_follow_up(session, decision):
+        repo.record_diagnosis_snapshot(db, session, decision.model_dump_json(), ["当前水平", "薄弱知识点"], decision.confidence)
+        return False, _FIRST_FOLLOW_UP
+    if decision.status == "CONTINUE" and session.diagnosis_turns < 4:
+        repo.record_diagnosis_snapshot(db, session, decision.model_dump_json(), decision.missing_fields, decision.confidence)
+        return False, decision.next_question
+    return True, ""
+
+
+async def handle_message(db: Session, session_id: str, message: str) -> ChatResult:
+    async with _workflow_lock(session_id):
+        return await _handle_message(db, session_id, message)
+
+
+async def _handle_message(db: Session, session_id: str, message: str) -> ChatResult:
+    repo.append_message(db, session_id, "user", message)
+    session = repo.get_or_create_session(db, session_id)
+    if _is_rediagnose(message):
+        repo.restart_diagnosis(db, session)
+
+    try:
+        if session.state in {repo.SessionState.NEW.value, repo.SessionState.DIAGNOSING.value}:
+            if session.state == repo.SessionState.NEW.value:
+                repo.set_state(db, session, repo.SessionState.DIAGNOSING)
+            complete, reply = await _diagnosis_reply(db, session, session_id)
+            if not complete:
+                repo.append_message(db, session_id, "assistant", reply)
+                return ChatResult(reply, "diagnosis", session.state, session.profile_version)
+            repo.set_state(db, session, repo.SessionState.PROFILE_READY)
+            profile_text = await generate_profile(_history_texts(db, session_id), session.profile_version + 1)
+            version = repo.save_profile(db, session, profile_text)
+            repo.append_message(db, session_id, "assistant", profile_text)
+            return ChatResult(profile_text, "profile", session.state, version)
+
+        if session.state == repo.SessionState.PROFILED.value:
+            if not session.profile_text:
+                raise DomainStateError("会话画像缺失，请重新诊断。", "PROFILE_MISSING")
+            cached = repo.find_cached_resource(db, session, message, get_settings().resource_cache_ttl_seconds)
+            if cached is not None:
+                repo.append_message(db, session_id, "assistant", cached.content)
+                return ChatResult(cached.content, "resource", session.state, session.profile_version, cached=True, sources=repo.resource_sources(cached))
+            repo.begin_generation(db, session)
+            sources = await search_web_optional(message)
+            source_payload = [item.model_dump() for item in sources]
+            resource_text = await _generate_adaptive_resource(db, session_id, session.profile_text, message, source_payload)
+            resource = parse_resource(resource_text)
+            repo.complete_generation(db, session, resource.topic, message, resource_text, session.profile_version, source_payload)
+            repo.append_message(db, session_id, "assistant", resource_text)
+            return ChatResult(resource_text, "resource", session.state, session.profile_version, sources=source_payload)
+
+        if session.state == repo.SessionState.GENERATING.value:
+            raise DomainStateError("当前会话正在生成学习资源，请等待完成。", "GENERATION_IN_PROGRESS")
+        raise DomainStateError("会话当前不可处理，请重新诊断。", "SESSION_NOT_READY")
+    except AppError as exc:
+        repo.fail_to_stable_state(db, session, exc.code)
+        raise
+
+
+async def stream_message(db: Session, session_id: str, message: str, is_disconnected) -> AsyncIterator[dict[str, object]]:
+    async with _workflow_lock(session_id):
+        async for event in _stream_message(db, session_id, message, is_disconnected):
+            yield event
+
+
+async def _stream_message(db: Session, session_id: str, message: str, is_disconnected) -> AsyncIterator[dict[str, object]]:
+    request_id = uuid.uuid4().hex
+    generation_id = uuid.uuid4().hex
+    cancel_event = asyncio.Event()
+    _generation_cancel_events[generation_id] = cancel_event
+    _generation_sessions[generation_id] = session_id
+    session = None
+
+    try:
+        repo.append_message(db, session_id, "user", message)
+        session = repo.get_or_create_session(db, session_id)
+        if _is_rediagnose(message):
+            repo.restart_diagnosis(db, session)
+        if session.state in {repo.SessionState.NEW.value, repo.SessionState.DIAGNOSING.value}:
+            if session.state == repo.SessionState.NEW.value:
+                repo.set_state(db, session, repo.SessionState.DIAGNOSING)
+            yield {"event": "phase", "request_id": request_id, "generation_id": generation_id, "phase": "diagnosis"}
+            complete, reply = await _diagnosis_reply(db, session, session_id)
+            if not complete:
+                repo.append_message(db, session_id, "assistant", reply)
+                yield {"event": "delta", "request_id": request_id, "content": reply, "provisional": False}
+                yield {"event": "done", "request_id": request_id, "status": "completed", "state": session.state}
+                return
+            repo.set_state(db, session, repo.SessionState.PROFILE_READY)
+            yield {"event": "phase", "request_id": request_id, "generation_id": generation_id, "phase": "profile"}
+            raw = ""
+            async for delta in _gateway.stream(build_profile_messages(_history_texts(db, session_id), session.profile_version + 1), temperature=0.2):
+                if cancel_event.is_set() or await is_disconnected():
+                    raise ClientCancelledError()
+                raw += delta
+                yield {"event": "delta", "request_id": request_id, "content": delta, "provisional": True}
+            try:
+                canonical = serialize_profile(parse_profile(raw))
+                repaired = False
+                error_code = None
+            except ProtocolValidationError as exc:
+                canonical = await generate_profile(_history_texts(db, session_id), session.profile_version + 1)
+                repaired = True
+                error_code = exc.code
+            yield {"event": "validation", "request_id": request_id, "valid": True, "repair_attempted": repaired, "error_code": error_code}
+            if canonical.strip() != raw.strip():
+                yield {"event": "replace", "request_id": request_id, "content": canonical}
+            version = repo.save_profile(db, session, canonical)
+            repo.append_message(db, session_id, "assistant", canonical)
+            yield {"event": "persisted", "request_id": request_id, "profile_version": version}
+            yield {"event": "done", "request_id": request_id, "status": "completed", "state": session.state}
+            return
+
+        if session.state != repo.SessionState.PROFILED.value or not session.profile_text:
+            raise DomainStateError("会话尚未完成诊断，请先继续诊断。", "RESOURCE_NOT_READY")
+        cached = repo.find_cached_resource(db, session, message, get_settings().resource_cache_ttl_seconds)
+        if cached is not None:
+            yield {"event": "phase", "request_id": request_id, "generation_id": generation_id, "phase": "resource"}
+            yield {"event": "cache", "request_id": request_id, "hit": True, "resource_id": cached.id}
+            yield {"event": "sources", "request_id": request_id, "sources": repo.resource_sources(cached), "cached": True}
+            repo.append_message(db, session_id, "assistant", cached.content)
+            yield {"event": "delta", "request_id": request_id, "content": cached.content, "provisional": False}
+            yield {"event": "persisted", "request_id": request_id, "resource_id": cached.id, "cached": True}
+            yield {"event": "done", "request_id": request_id, "status": "completed", "state": session.state, "cached": True}
+            return
+        repo.begin_generation(db, session)
+        yield {"event": "phase", "request_id": request_id, "generation_id": generation_id, "phase": "resource"}
+        raw = ""
+        sources = await search_web_optional(message)
+        source_payload = [item.model_dump() for item in sources]
+        yield {"event": "sources", "request_id": request_id, "sources": source_payload, "cached": False}
+        learning_context = learning.learning_context(db, session_id)
+        async for delta in _gateway.stream(build_resource_messages(session.profile_text, message, source_payload, learning_context), temperature=0.4):
+            if cancel_event.is_set() or await is_disconnected():
+                raise ClientCancelledError()
+            raw += delta
+            yield {"event": "delta", "request_id": request_id, "content": delta, "provisional": True}
+        try:
+            resource = parse_resource(raw)
+            validate_resource_quality(resource)
+            canonical = serialize_resource(resource)
+            repaired = False
+            error_code = None
+        except ProtocolValidationError as exc:
+            canonical = await _generate_adaptive_resource(db, session_id, session.profile_text, message, source_payload)
+            resource = parse_resource(canonical)
+            repaired = True
+            error_code = exc.code
+        yield {"event": "validation", "request_id": request_id, "valid": True, "repair_attempted": repaired, "error_code": error_code}
+        if canonical.strip() != raw.strip():
+            yield {"event": "replace", "request_id": request_id, "content": canonical}
+        stored = repo.complete_generation(db, session, resource.topic, message, canonical, session.profile_version, source_payload)
+        repo.append_message(db, session_id, "assistant", canonical)
+        yield {"event": "persisted", "request_id": request_id, "resource_id": stored.id}
+        yield {"event": "done", "request_id": request_id, "status": "completed", "state": session.state}
+    except ClientCancelledError as exc:
+        if session is not None:
+            repo.fail_to_stable_state(db, session, exc.code)
+        yield {"event": "error", "request_id": request_id, "code": exc.code, "message": exc.public_message, "retryable": False}
+        yield {"event": "done", "request_id": request_id, "status": "cancelled", "state": session.state if session is not None else "UNKNOWN"}
+    except AppError as exc:
+        if session is not None:
+            repo.fail_to_stable_state(db, session, exc.code)
+        yield {"event": "error", "request_id": request_id, "code": exc.code, "message": exc.public_message, "retryable": exc.retryable}
+        yield {"event": "done", "request_id": request_id, "status": "failed", "state": session.state if session is not None else "UNKNOWN"}
+    except Exception:
+        logging.getLogger("backend").exception("unexpected_sse_error request_id=%s", request_id)
+        error = UnexpectedBackendError()
+        if session is not None:
+            repo.fail_to_stable_state(db, session, error.code)
+        yield {"event": "error", "request_id": request_id, "code": error.code, "message": error.public_message, "retryable": error.retryable}
+        yield {"event": "done", "request_id": request_id, "status": "failed", "state": session.state if session is not None else "UNKNOWN"}
+    finally:
+        _generation_cancel_events.pop(generation_id, None)
+        _generation_sessions.pop(generation_id, None)
