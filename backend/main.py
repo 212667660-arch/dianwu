@@ -7,13 +7,24 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from backend.config import get_settings
 from backend.database import init_db
-from backend.errors import AppError, DesktopAuthRequiredError, RequestRateLimitedError
+from backend.errors import (
+    AppError,
+    DesktopAuthRequiredError,
+    HttpMethodNotAllowedError,
+    HttpNotFoundError,
+    ModelNotReadyError,
+    RequestRateLimitedError,
+    RequestValidationAppError,
+    UnexpectedBackendError,
+)
 from backend.services.orchestrator import close_runtime
 from backend.services.rate_limit import rate_limiter
 from backend.services.security import desktop_token_required, is_local_client, require_desktop_token, should_protect_path
@@ -46,6 +57,41 @@ def _rate_limit_identity(request: Request) -> str:
     return f"local:{request.client.host if request.client else 'unknown'}"
 
 
+def request_id_for(request: Request) -> str:
+    existing = getattr(request.state, "error_request_id", None)
+    if isinstance(existing, str) and existing:
+        return existing
+    request_id = request.headers.get("X-Request-ID") or uuid4().hex
+    request.state.error_request_id = request_id
+    return request_id
+
+
+def error_response(request: Request, error: AppError, *, headers: dict[str, str] | None = None) -> JSONResponse:
+    request_id = request_id_for(request)
+    response_headers = {"X-Request-ID": request_id, **(headers or {})}
+    return JSONResponse(
+        status_code=error.http_status,
+        content={
+            "code": error.code,
+            "message": error.public_message,
+            "retryable": error.retryable,
+            "request_id": request_id,
+        },
+        headers=response_headers,
+    )
+
+
+def log_error(request: Request, error: AppError) -> None:
+    request_id = request_id_for(request)
+    logging.getLogger("backend").warning(
+        "request_id=%s code=%s method=%s path=%s",
+        request_id,
+        error.code,
+        request.method,
+        request.url.path,
+    )
+
+
 class DesktopAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         settings = get_settings()
@@ -59,23 +105,14 @@ class DesktopAuthMiddleware(BaseHTTPMiddleware):
                     settings,
                 )
             except DesktopAuthRequiredError as exc:
-                request_id = request.headers.get("X-Request-ID") or uuid4().hex
-                return JSONResponse(
-                    status_code=exc.http_status,
-                    content={"code": exc.code, "message": exc.public_message, "retryable": exc.retryable, "request_id": request_id},
-                )
+                return error_response(request, exc)
         if desktop_token_required(settings):
             maximum = _rate_limit_for_path(request.url.path, settings)
             if maximum is not None:
                 retry_after = rate_limiter.check(_rate_limit_identity(request), maximum)
                 if retry_after is not None:
                     error = RequestRateLimitedError()
-                    request_id = request.headers.get("X-Request-ID") or uuid4().hex
-                    return JSONResponse(
-                        status_code=error.http_status,
-                        content={"code": error.code, "message": error.public_message, "retryable": error.retryable, "request_id": request_id},
-                        headers={"Retry-After": str(retry_after)},
-                    )
+                    return error_response(request, error, headers={"Retry-After": str(retry_after)})
         return await call_next(request)
 
 
@@ -110,9 +147,36 @@ app.include_router(web.router)
 
 @app.exception_handler(AppError)
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
-    request_id = request.headers.get("X-Request-ID") or uuid4().hex
-    logging.getLogger("backend").warning("request_id=%s code=%s path=%s", request_id, exc.code, request.url.path)
-    return JSONResponse(status_code=exc.http_status, content={"code": exc.code, "message": exc.public_message, "retryable": exc.retryable, "request_id": request_id})
+    log_error(request, exc)
+    return error_response(request, exc)
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_handler(request: Request, _exc: RequestValidationError) -> JSONResponse:
+    error = RequestValidationAppError()
+    log_error(request, error)
+    return error_response(request, error)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    if exc.status_code == 404:
+        error = HttpNotFoundError()
+    elif exc.status_code == 405:
+        error = HttpMethodNotAllowedError()
+    elif exc.status_code == 422:
+        error = RequestValidationAppError()
+    else:
+        error = AppError("HTTP_REQUEST_ERROR", "请求无法处理。", exc.status_code, retryable=exc.status_code >= 500)
+    log_error(request, error)
+    return error_response(request, error)
+
+
+@app.exception_handler(Exception)
+async def unexpected_exception_handler(request: Request, _exc: Exception) -> JSONResponse:
+    error = UnexpectedBackendError()
+    log_error(request, error)
+    return error_response(request, error)
 
 
 @app.get("/")
@@ -133,5 +197,5 @@ async def live() -> dict[str, str]:
 @app.get("/health/ready")
 async def ready() -> JSONResponse:
     if not get_settings().is_model_configured:
-        return JSONResponse(status_code=503, content={"status": "not_ready", "reason": "model_not_configured"})
+        raise ModelNotReadyError()
     return JSONResponse(status_code=200, content={"status": "ready"})

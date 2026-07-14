@@ -24,6 +24,31 @@ class DomainStateError(AppError):
         super().__init__(code, message, 409)
 
 
+class ResourceNotFoundError(AppError):
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(code, message, 404)
+
+
+class RequestValidationAppError(AppError):
+    def __init__(self) -> None:
+        super().__init__("REQUEST_VALIDATION_ERROR", "请求参数无效。", 422)
+
+
+class ModelNotReadyError(AppError):
+    def __init__(self) -> None:
+        super().__init__("MODEL_NOT_READY", "模型服务尚未配置。", 503)
+
+
+class HttpNotFoundError(AppError):
+    def __init__(self) -> None:
+        super().__init__("HTTP_NOT_FOUND", "请求的接口不存在。", 404)
+
+
+class HttpMethodNotAllowedError(AppError):
+    def __init__(self) -> None:
+        super().__init__("HTTP_METHOD_NOT_ALLOWED", "当前请求方法不受支持。", 405)
+
+
 class ModelSettingsAccessError(AppError):
     def __init__(self) -> None:
         super().__init__("MODEL_SETTINGS_ACCESS_DENIED", "本地模型配置接口未授权。", 403)
