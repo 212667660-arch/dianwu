@@ -14,6 +14,13 @@ export interface DesktopError {
   requestId?: string
 }
 
+export interface BackendErrorEnvelope {
+  code: string
+  message: string
+  retryable: boolean
+  request_id?: string
+}
+
 export type DesktopResponse =
   | { ok: true; status: number; data: unknown }
   | { ok: false; status: number; error: DesktopError }
@@ -33,26 +40,40 @@ export interface DesktopBridge {
   onBackendExit(listener: (payload: { code: number | null }) => void): () => void
 }
 
-export class DesktopApiError extends Error {
-  readonly status: number
-  readonly code: string
-  readonly retryable: boolean
-  readonly requestId?: string
-
+export class BackendApiError extends Error {
   constructor(
-    status: number,
-    code: string,
+    readonly status: number,
+    readonly code: string,
     message: string,
-    retryable = false,
-    requestId?: string,
+    readonly retryable = false,
+    readonly requestId?: string,
   ) {
     super(message)
-    this.name = 'DesktopApiError'
-    this.status = status
-    this.code = code
-    this.retryable = retryable
-    this.requestId = requestId
+    this.name = 'BackendApiError'
   }
+}
+
+export { BackendApiError as DesktopApiError }
+
+export function backendApiErrorFromEnvelope(status: number, value: unknown): BackendApiError {
+  if (isBackendErrorEnvelope(value)) {
+    return new BackendApiError(status, value.code, value.message, value.retryable, value.request_id)
+  }
+  return new BackendApiError(
+    status,
+    'BACKEND_HTTP_ERROR',
+    '服务请求未成功，请稍后重试。',
+    status >= 500,
+  )
+}
+
+export function backendUnavailableError(): BackendApiError {
+  return new BackendApiError(
+    503,
+    'BACKEND_UNAVAILABLE',
+    '服务暂时不可用，请稍后重试。',
+    true,
+  )
 }
 
 export interface BackendTransport {
@@ -62,11 +83,24 @@ export interface BackendTransport {
 
 export async function desktopEnvelope<T>(response: DesktopResponse): Promise<T> {
   if (response.ok) return response.data as T
-  throw new DesktopApiError(
+  throw new BackendApiError(
     response.status,
     response.error.code,
     response.error.message,
     response.error.retryable,
     response.error.requestId,
+  )
+}
+
+function isBackendErrorEnvelope(value: unknown): value is BackendErrorEnvelope {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
+  const candidate = value as Partial<BackendErrorEnvelope>
+  return (
+    typeof candidate.code === 'string'
+    && candidate.code.length > 0
+    && typeof candidate.message === 'string'
+    && candidate.message.length > 0
+    && typeof candidate.retryable === 'boolean'
+    && (candidate.request_id === undefined || typeof candidate.request_id === 'string')
   )
 }

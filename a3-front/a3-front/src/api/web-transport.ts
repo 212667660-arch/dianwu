@@ -1,7 +1,13 @@
-import axios, { AxiosError } from 'axios'
+import axios, { type AxiosInstance } from 'axios'
 
 import type { StreamEvent } from './types'
-import type { BackendTransport, TransportRequest } from './transport'
+import {
+  BackendApiError,
+  backendApiErrorFromEnvelope,
+  backendUnavailableError,
+  type BackendTransport,
+  type TransportRequest,
+} from './transport'
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
 
@@ -9,27 +15,47 @@ const http = axios.create({
   baseURL: apiBaseUrl,
   timeout: 65_000,
   headers: { 'Content-Type': 'application/json' },
+  validateStatus: () => true,
 })
 
-export function createWebTransport(): BackendTransport {
+interface WebTransportOptions {
+  httpClient?: Pick<AxiosInstance, 'request'>
+  fetchImpl?: typeof fetch
+}
+
+export function createWebTransport({ httpClient = http, fetchImpl = fetch }: WebTransportOptions = {}): BackendTransport {
   return {
     async request<T>(input: TransportRequest) {
-      const response = await http.request<T>({
-        method: input.method,
-        url: input.path,
-        params: input.query,
-        data: input.body,
-      })
-      return response.data
+      try {
+        const response = await httpClient.request<T>({
+          method: input.method,
+          url: input.path,
+          params: input.query,
+          data: input.body,
+        })
+        if (response.status < 200 || response.status >= 300) {
+          throw backendApiErrorFromEnvelope(response.status, response.data)
+        }
+        return response.data
+      } catch (error) {
+        if (error instanceof BackendApiError) throw error
+        throw backendUnavailableError()
+      }
     },
     async stream(input: TransportRequest, onEvent: (event: StreamEvent) => void, signal?: AbortSignal) {
       const query = input.query ? `?${new URLSearchParams(serializeQuery(input.query)).toString()}` : ''
-      const response = await fetch(`${apiBaseUrl}${input.path}${query}`, {
-        method: input.method,
-        headers: input.body === undefined ? undefined : { 'Content-Type': 'application/json' },
-        body: input.body === undefined ? undefined : JSON.stringify(input.body),
-        signal,
-      })
+      let response: Response
+      try {
+        response = await fetchImpl(`${apiBaseUrl}${input.path}${query}`, {
+          method: input.method,
+          headers: input.body === undefined ? undefined : { 'Content-Type': 'application/json' },
+          body: input.body === undefined ? undefined : JSON.stringify(input.body),
+          signal,
+        })
+      } catch (error) {
+        if (isAbortError(error)) throw error
+        throw backendUnavailableError()
+      }
       if (!response.ok) throw await parseError(response)
       if (!response.body) throw new Error('浏览器不支持流式响应')
       await readSseBody(response.body, onEvent)
@@ -42,14 +68,13 @@ function serializeQuery(query: NonNullable<TransportRequest['query']>) {
 }
 
 async function parseError(response: Response): Promise<Error> {
-  let message = `${response.status} ${response.statusText}`
+  let body: unknown = null
   try {
-    const body = await response.json() as { message?: string; detail?: string }
-    message = body.message || body.detail || message
+    body = await response.json()
   } catch {
-    // Preserve the HTTP status when the backend did not return JSON.
+    // Non-JSON error bodies are intentionally not exposed to the renderer.
   }
-  return new Error(message)
+  return backendApiErrorFromEnvelope(response.status, body)
 }
 
 export function parseSseBlock(block: string): StreamEvent | null {
@@ -97,9 +122,10 @@ export async function readSseBody(body: ReadableStream<Uint8Array>, onEvent: (ev
 }
 
 export function errorMessage(error: unknown): string {
-  if (error instanceof AxiosError) {
-    const data = error.response?.data as { message?: string; detail?: string } | undefined
-    return data?.message || data?.detail || error.message
-  }
-  return error instanceof Error ? error.message : '请求失败，请稍后重试'
+  if (error instanceof BackendApiError) return error.message
+  return '请求失败，请稍后重试'
+}
+
+function isAbortError(error: unknown): boolean {
+  return (error as { name?: unknown } | undefined)?.name === 'AbortError'
 }

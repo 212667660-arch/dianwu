@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { createDesktopTransport } from './desktop-transport'
-import { DesktopApiError, type DesktopBridge, type DesktopStreamMessage } from './transport'
+import { BackendApiError, DesktopApiError, type DesktopBridge, type DesktopStreamMessage } from './transport'
 
 function fakeBridge() {
   let listener: ((message: DesktopStreamMessage) => void) | undefined
@@ -30,11 +30,13 @@ describe('Desktop transport', () => {
       status: 503,
       error: { code: 'DESKTOP_BACKEND_UNAVAILABLE', message: '本地学习服务暂时不可用。', retryable: true },
     })
-    await expect(transport.request({ method: 'GET', path: '/health/ready' })).rejects.toMatchObject({
-      name: 'DesktopApiError',
+    const failure = transport.request({ method: 'GET', path: '/health/ready' })
+    await expect(failure).rejects.toMatchObject({
+      name: 'BackendApiError',
       code: 'DESKTOP_BACKEND_UNAVAILABLE',
       retryable: true,
     })
+    await expect(failure).rejects.toBeInstanceOf(BackendApiError)
   })
 
   it('subscribes before starting, forwards only its own stream, and cancels its own stream', async () => {
