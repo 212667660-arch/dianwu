@@ -39,7 +39,21 @@ def should_protect_path(path: str, settings: Settings | object | None = None) ->
         return False
     if path == "/health/ready":
         return desktop_token_required(current)
+    if path.startswith("/internal/"):
+        return True
     return path.startswith("/api/") and desktop_token_required(current)
+
+
+def require_internal_desktop_token(provided_token: str | None, client_host: str | None, settings: Settings | object | None = None) -> None:
+    current = settings or get_settings()
+    expected_token = str(getattr(current, "desktop_token", "")).strip()
+    if (
+        not is_local_client(client_host)
+        or not expected_token
+        or not provided_token
+        or not secrets.compare_digest(provided_token, expected_token)
+    ):
+        raise DesktopAuthRequiredError()
 
 
 def _is_private_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:

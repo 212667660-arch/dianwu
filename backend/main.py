@@ -32,8 +32,9 @@ from backend.errors import (
 )
 from backend.services.orchestrator import close_runtime
 from backend.services.rate_limit import rate_limiter
-from backend.services.security import desktop_token_required, is_local_client, require_desktop_token, should_protect_path
-from backend.routers import chat, knowledge, learning, model_settings, profile, resource, sessions, web
+from backend.services.model_runtime import legacy_snapshot_from_settings, model_runtime_router
+from backend.services.security import desktop_token_required, is_local_client, is_production, require_desktop_token, require_internal_desktop_token, should_protect_path
+from backend.routers import chat, knowledge, learning, model_runtime, model_settings, profile, resource, sessions, web
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
@@ -50,6 +51,9 @@ _HIGH_COST_RATE_LIMIT_PATHS = {
 _REQUEST_BODY_LIMITS = {
     "/api/knowledge/imports": 512 * 1024,
     "/api/knowledge/search": 64 * 1024,
+    "/internal/model-runtime/bootstrap": 128 * 1024,
+    "/internal/model-runtime/test": 128 * 1024,
+    "/internal/model-runtime/snapshot": 128 * 1024,
 }
 
 
@@ -106,7 +110,16 @@ def log_error(request: Request, error: AppError) -> None:
 class DesktopAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         settings = get_settings()
-        if request.method != "OPTIONS" and should_protect_path(request.url.path, settings):
+        if request.method != "OPTIONS" and request.url.path.startswith("/internal/"):
+            try:
+                require_internal_desktop_token(
+                    request.headers.get("X-A3-Desktop-Token"),
+                    request.client.host if request.client else None,
+                    settings,
+                )
+            except DesktopAuthRequiredError as exc:
+                return error_response(request, exc)
+        elif request.method != "OPTIONS" and should_protect_path(request.url.path, settings):
             try:
                 if not is_local_client(request.client.host if request.client else None):
                     raise DesktopAuthRequiredError()
@@ -168,6 +181,9 @@ async def lifespan(_: FastAPI):
     rate_limiter.clear()
     init_db()
     recover_interrupted_import_jobs()
+    settings = get_settings()
+    if not is_production(settings) and not settings.desktop_token and settings.is_model_configured:
+        await model_runtime_router.apply_snapshot(legacy_snapshot_from_settings(settings))
     try:
         yield
     finally:
@@ -194,6 +210,7 @@ app.include_router(resource.router)
 app.include_router(sessions.router)
 app.include_router(learning.router)
 app.include_router(model_settings.router)
+app.include_router(model_runtime.router)
 app.include_router(web.router)
 
 
@@ -248,6 +265,6 @@ async def live() -> dict[str, str]:
 
 @app.get("/health/ready")
 async def ready() -> JSONResponse:
-    if not get_settings().is_model_configured:
+    if not model_runtime_router.is_ready:
         raise ModelNotReadyError()
     return JSONResponse(status_code=200, content={"status": "ready"})

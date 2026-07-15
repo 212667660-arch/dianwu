@@ -351,3 +351,24 @@ class ModelRuntimeSnapshotInput(BaseModel):
         if any(profile_id not in profiles_by_id for profile_id in self.fallback_profile_ids):
             raise ValueError("备用配置不存在")
         return self
+
+
+class ModelRuntimeProfileStatusResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    profile_id: str
+    enabled: bool
+    needs_attention: bool
+    circuit_state: Literal["closed", "open", "half_open"]
+    cooldown_until: float
+    consecutive_failures: int = Field(ge=0)
+
+
+class ModelRuntimeStatusResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    ready: bool
+    default_profile_id: str | None
+    auto_failover: bool
+    fallback_profile_ids: tuple[str, ...]
+    profiles: tuple[ModelRuntimeProfileStatusResponse, ...]

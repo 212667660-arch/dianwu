@@ -16,7 +16,7 @@ from backend.errors import (
     ModelProfileNotFoundError,
     ModelRuntimeApplyFailedError,
 )
-from backend.models.schemas import ModelDefinition, ModelProfileSecret, ModelRuntimeSnapshotInput
+from backend.models.schemas import ModelConnectionTestResponse, ModelDefinition, ModelProfileSecret, ModelRuntimeSnapshotInput
 from backend.services.llm_service import ModelGateway
 from backend.services.model_capabilities import ReasoningEffort, effective_effort, reasoning_payload
 from backend.services.model_resilience import AttemptBudget, CircuitBreaker, RetryClass, classify_error
@@ -149,6 +149,29 @@ class ModelRuntimeRouter:
         if previous.active_requests == 0:
             await self._close_snapshot(previous)
         return self.status()
+
+    async def test_profile(self, profile: ModelProfileSecret) -> ModelConnectionTestResponse:
+        started = self._clock()
+        gateway = self._gateway_factory(profile)
+        model = self._model_for(profile, profile.default_model_id)
+        try:
+            await gateway.complete(
+                [{"role": "user", "content": "Reply with OK."}],
+                0.0,
+                model_name=model.provider_model_name,
+                reasoning={},
+                max_output_tokens=512,
+            )
+        finally:
+            close = getattr(gateway, "aclose", None)
+            if close is not None:
+                await close()
+        return ModelConnectionTestResponse(
+            provider=profile.provider,
+            model_name=model.provider_model_name,
+            status="connected",
+            latency_ms=max(0, round((self._clock() - started) * 1000)),
+        )
 
     def status(self) -> RuntimeStatus:
         snapshot = self._snapshot
@@ -370,6 +393,15 @@ class ModelRuntimeRouter:
         async with self._swap_lock:
             snapshot = self._snapshot
             snapshot.retired = True
+            self._snapshot = _RuntimeSnapshot(
+                value=ModelRuntimeSnapshotInput(
+                    default_profile_id=None,
+                    auto_failover=True,
+                    fallback_profile_ids=[],
+                    profiles=[],
+                ),
+                profiles={},
+            )
         if snapshot.active_requests == 0:
             await self._close_snapshot(snapshot)
 
@@ -393,3 +425,34 @@ class ModelRuntimeRouter:
 
 
 model_runtime_router = ModelRuntimeRouter()
+
+
+def legacy_snapshot_from_settings(settings: Settings) -> ModelRuntimeSnapshotInput:
+    if not settings.is_model_configured:
+        return ModelRuntimeSnapshotInput()
+    model = ModelDefinition(
+        id="legacy-model",
+        provider_model_name=settings.resolved_model_name,
+        label=settings.resolved_model_name,
+        max_output_tokens=4096,
+        supported_reasoning_efforts=["auto", "off"],
+        reasoning_adapter="none",
+    )
+    profile = ModelProfileSecret(
+        id="legacy-development",
+        label="开发环境模型",
+        enabled=True,
+        provider=settings.resolved_provider,
+        base_url=settings.resolved_base_url,
+        api_key=settings.resolved_api_key,
+        anthropic_version=settings.anthropic_version,
+        request_timeout_seconds=settings.request_timeout_seconds,
+        default_model_id=model.id,
+        models=[model],
+    )
+    return ModelRuntimeSnapshotInput(
+        default_profile_id=profile.id,
+        auto_failover=False,
+        fallback_profile_ids=[],
+        profiles=[profile],
+    )

@@ -198,6 +198,11 @@ test('rejects external paths, traversal, unknown routes, headers, and oversized 
     'DESKTOP_REQUEST_DENIED',
   )
   expectRejected(
+    { method: 'GET', path: '/internal/model-runtime/status' },
+    undefined,
+    'DESKTOP_REQUEST_DENIED',
+  )
+  expectRejected(
     { method: 'POST', path: '/api/chat', headers: { authorization: 'secret' } },
     undefined,
     'DESKTOP_REQUEST_DENIED',
