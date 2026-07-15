@@ -18,7 +18,7 @@ from backend.knowledge.context import (
 from backend.protocols import parse_profile, parse_resource, serialize_profile, serialize_resource
 from backend.services import db as repo
 from backend.services import learning
-from backend.services.model_runtime import RuntimeSelection, model_runtime_router
+from backend.services.model_runtime import RoutedStreamEvent, RuntimeSelection, model_runtime_router
 from backend.services.profile_agent import build_profile_messages, generate_diagnosis_decision, generate_profile
 from backend.services.resource_agent import build_resource_messages, generate_resources
 from backend.services.resource_quality import validate_resource_quality
@@ -60,12 +60,44 @@ def _selected_complete(selection: RuntimeSelection):
 
 
 class _RuntimeStreamAdapter:
-    async def stream(self, messages, temperature=0.2):
-        async for delta in model_runtime_router.stream_text(RuntimeSelection(), messages, temperature):
-            yield delta
+    async def stream(self, messages, temperature=0.2, *, selection=None):
+        async for event in model_runtime_router.stream(selection or RuntimeSelection(), messages, temperature):
+            yield event
 
 
 _gateway = _RuntimeStreamAdapter()
+
+
+async def _stream_items(gateway, selection, messages, temperature):
+    if isinstance(gateway, _RuntimeStreamAdapter):
+        async for item in gateway.stream(messages, temperature, selection=selection):
+            yield item
+        return
+    async for item in gateway.stream(messages, temperature):
+        yield item
+
+
+def _stream_meta_payload(event: RoutedStreamEvent, request_id: str) -> dict[str, object]:
+    return {
+        "event": "meta",
+        "request_id": request_id,
+        "profile_id": event.profile_id,
+        "model_id": event.model_id,
+        "requested_reasoning_effort": event.requested_reasoning_effort,
+        "effective_reasoning_effort": event.effective_reasoning_effort,
+        "failover_used": event.failover_used,
+    }
+
+
+def _stream_interrupted_payload(event: RoutedStreamEvent, request_id: str) -> dict[str, object]:
+    return {
+        "event": "interrupted",
+        "request_id": request_id,
+        "code": event.code or "MODEL_STREAM_INTERRUPTED",
+        "profile_id": event.profile_id,
+        "model_id": event.model_id,
+        "can_continue_with_backup": event.can_continue_with_backup,
+    }
 
 
 def cancel_generation(generation_id: str, session_id: str) -> bool:
@@ -313,9 +345,22 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
             repo.set_state(db, session, repo.SessionState.PROFILE_READY)
             yield {"event": "phase", "request_id": request_id, "generation_id": generation_id, "phase": "profile"}
             raw = ""
-            async for delta in _gateway.stream(build_profile_messages(_history_texts(db, session_id), session.profile_version + 1), temperature=0.2):
+            selection = _runtime_selection(db, session_id)
+            async for item in _stream_items(_gateway, selection, build_profile_messages(_history_texts(db, session_id), session.profile_version + 1), 0.2):
                 if cancel_event.is_set() or await is_disconnected():
                     raise ClientCancelledError()
+                if isinstance(item, RoutedStreamEvent):
+                    if item.event == "meta":
+                        yield _stream_meta_payload(item, request_id)
+                        continue
+                    if item.event == "interrupted":
+                        repo.fail_to_stable_state(db, session, item.code or "MODEL_STREAM_INTERRUPTED")
+                        yield _stream_interrupted_payload(item, request_id)
+                        yield {"event": "done", "request_id": request_id, "status": "interrupted", "state": session.state}
+                        return
+                    delta = item.content or ""
+                else:
+                    delta = item
                 raw += delta
                 yield {"event": "delta", "request_id": request_id, "content": delta, "provisional": True}
             try:
@@ -369,7 +414,10 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
         yield {"event": "sources", "request_id": request_id, "sources": source_payload, "cached": False}
         yield {"event": "knowledge_sources", "request_id": request_id, "sources": knowledge_sources, "cached": False}
         learning_context = learning.learning_context(db, session_id)
-        async for delta in _gateway.stream(
+        selection = _runtime_selection(db, session_id)
+        async for item in _stream_items(
+            _gateway,
+            selection,
             build_resource_messages(
                 session.profile_text,
                 message,
@@ -377,10 +425,22 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
                 learning_context,
                 knowledge_context.prompt,
             ),
-            temperature=0.4,
+            0.4,
         ):
             if cancel_event.is_set() or await is_disconnected():
                 raise ClientCancelledError()
+            if isinstance(item, RoutedStreamEvent):
+                if item.event == "meta":
+                    yield _stream_meta_payload(item, request_id)
+                    continue
+                if item.event == "interrupted":
+                    repo.fail_to_stable_state(db, session, item.code or "MODEL_STREAM_INTERRUPTED")
+                    yield _stream_interrupted_payload(item, request_id)
+                    yield {"event": "done", "request_id": request_id, "status": "interrupted", "state": session.state}
+                    return
+                delta = item.content or ""
+            else:
+                delta = item
             raw += delta
             yield {"event": "delta", "request_id": request_id, "content": delta, "provisional": True}
         try:

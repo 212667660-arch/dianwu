@@ -42,6 +42,19 @@ class RoutedCompletion:
 
 
 @dataclass(frozen=True)
+class RoutedStreamEvent:
+    event: Literal["meta", "delta", "interrupted"]
+    profile_id: str | None = None
+    model_id: str | None = None
+    requested_reasoning_effort: ReasoningEffort | None = None
+    effective_reasoning_effort: ReasoningEffort | None = None
+    failover_used: bool = False
+    content: str | None = None
+    code: str | None = None
+    can_continue_with_backup: bool = False
+
+
+@dataclass(frozen=True)
 class RuntimeProfileStatus:
     profile_id: str
     enabled: bool
@@ -271,7 +284,7 @@ class ModelRuntimeRouter:
                 )
         raise ModelFailoverExhaustedError()
 
-    async def stream_text(
+    async def stream(
         self,
         selection: RuntimeSelection,
         messages: list[dict[str, str]],
@@ -279,23 +292,79 @@ class ModelRuntimeRouter:
     ):
         async with self._lease() as snapshot:
             candidates = self._candidate_ids(snapshot, selection)
-            for profile_id in candidates:
+            first_profile_id = candidates[0]
+            primary = snapshot.profiles.get(first_profile_id)
+            if primary is None:
+                raise ModelProfileNotFoundError()
+            budget = AttemptBudget(deadline=self._clock() + primary.definition.request_timeout_seconds)
+            for index, profile_id in enumerate(candidates):
                 runtime_profile = snapshot.profiles.get(profile_id)
                 if runtime_profile is None or not runtime_profile.definition.enabled:
                     continue
+                if not runtime_profile.breaker.allow_request():
+                    continue
+                if not budget.consume(profile_id, self._clock()):
+                    break
                 model = self._model_for(runtime_profile.definition, selection.model_id)
                 effective = effective_effort(selection.reasoning_effort, model.supported_reasoning_efforts)
                 reasoning = reasoning_payload(model.reasoning_adapter, effective)
-                async for delta in runtime_profile.gateway.stream(
-                    messages,
-                    temperature,
-                    model_name=model.provider_model_name,
-                    reasoning=reasoning,
-                    max_output_tokens=model.max_output_tokens,
-                ):
-                    yield delta
-                return
+                emitted = False
+                try:
+                    async for delta in runtime_profile.gateway.stream(
+                        messages,
+                        temperature,
+                        model_name=model.provider_model_name,
+                        reasoning=reasoning,
+                        max_output_tokens=model.max_output_tokens,
+                    ):
+                        if not emitted:
+                            emitted = True
+                            yield RoutedStreamEvent(
+                                event="meta",
+                                profile_id=profile_id,
+                                model_id=model.id,
+                                requested_reasoning_effort=selection.reasoning_effort,
+                                effective_reasoning_effort=effective,
+                                failover_used=profile_id != first_profile_id,
+                            )
+                        yield RoutedStreamEvent(event="delta", content=delta)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    retry_class = classify_error(exc)
+                    runtime_profile.breaker.record_failure(retry_class)
+                    if isinstance(exc, (ModelAuthenticationError, ModelAccessError)):
+                        runtime_profile.needs_attention = True
+                    if emitted and retry_class is RetryClass.RETRYABLE:
+                        yield RoutedStreamEvent(
+                            event="interrupted",
+                            profile_id=profile_id,
+                            model_id=model.id,
+                            requested_reasoning_effort=selection.reasoning_effort,
+                            effective_reasoning_effort=effective,
+                            failover_used=profile_id != first_profile_id,
+                            code="MODEL_STREAM_INTERRUPTED",
+                            can_continue_with_backup=index + 1 < len(candidates),
+                        )
+                        return
+                    if retry_class is RetryClass.TERMINAL:
+                        raise
+                    continue
+                if emitted:
+                    runtime_profile.breaker.record_success()
+                    runtime_profile.needs_attention = False
+                    return
         raise ModelFailoverExhaustedError()
+
+    async def stream_text(
+        self,
+        selection: RuntimeSelection,
+        messages: list[dict[str, str]],
+        temperature: float = 0.2,
+    ):
+        async for event in self.stream(selection, messages, temperature):
+            if event.event == "delta" and event.content:
+                yield event.content
 
     async def close(self) -> None:
         async with self._swap_lock:

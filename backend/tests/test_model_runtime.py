@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from backend.errors import ModelAuthenticationError, ModelRuntimeApplyFailedError, ModelTimeoutError
+from backend.errors import ModelAuthenticationError, ModelRuntimeApplyFailedError, ModelTimeoutError, ModelUnavailableError
 from backend.models.schemas import ModelDefinition, ModelProfileSecret, ModelRuntimeSnapshotInput
 from backend.services.model_runtime import ModelRuntimeRouter, RuntimeSelection
 from backend.tests.fake_model_gateway import ScriptedGateway
@@ -151,4 +151,45 @@ def test_failed_candidate_snapshot_keeps_existing_runtime_active() -> None:
             await router.apply_snapshot(snapshot(profile("replacement")))
         assert "test-secret-key" not in str(exc_info.value)
         assert (await router.complete(selection(), [{"role": "user", "content": "hello"}], 0.2)).text == "still-active"
+    asyncio.run(exercise())
+
+
+def test_zero_output_stream_failure_switches_before_emitting_one_backup_meta() -> None:
+    async def exercise() -> None:
+        gateways = {
+            "primary": ScriptedGateway(streams=[[ModelUnavailableError()]]),
+            "backup": ScriptedGateway(streams=[["A", "B"]]),
+        }
+        router = ModelRuntimeRouter(gateway_factory=lambda value: gateways[value.id])
+        await router.apply_snapshot(snapshot(profile("primary"), profile("backup")))
+        events = [event async for event in router.stream(
+            selection(),
+            [{"role": "user", "content": "hello"}],
+            0.2,
+        )]
+        assert [event.event for event in events] == ["meta", "delta", "delta"]
+        assert events[0].profile_id == "backup"
+        assert events[0].failover_used is True
+        assert [event.content for event in events[1:]] == ["A", "B"]
+    asyncio.run(exercise())
+
+
+def test_stream_failure_after_output_is_interrupted_without_backup_text() -> None:
+    async def exercise() -> None:
+        gateways = {
+            "primary": ScriptedGateway(streams=[["partial", ModelUnavailableError()]]),
+            "backup": ScriptedGateway(streams=[["must-not-run"]]),
+        }
+        router = ModelRuntimeRouter(gateway_factory=lambda value: gateways[value.id])
+        await router.apply_snapshot(snapshot(profile("primary"), profile("backup")))
+        events = [event async for event in router.stream(
+            selection(),
+            [{"role": "user", "content": "hello"}],
+            0.2,
+        )]
+        assert [event.event for event in events] == ["meta", "delta", "interrupted"]
+        assert events[1].content == "partial"
+        assert events[2].code == "MODEL_STREAM_INTERRUPTED"
+        assert events[2].can_continue_with_backup is True
+        assert gateways["backup"].calls == []
     asyncio.run(exercise())

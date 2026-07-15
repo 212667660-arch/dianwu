@@ -9,6 +9,7 @@ from backend.knowledge.search import KnowledgeSearchRepository
 from backend.protocols import DiagnosisDecision
 from backend.services import db as repo
 from backend.services import orchestrator
+from backend.services.model_runtime import RoutedStreamEvent
 
 
 PROFILE = """【协议:learner-profile/v1】
@@ -224,6 +225,65 @@ def test_resource_stream_emits_knowledge_sources_before_first_delta(monkeypatch)
         assert "Users" not in str(source)
         assert "file://" not in str(source)
         assert events[-1]["status"] == "completed"
+    finally:
+        db.close()
+
+
+def test_runtime_stream_interruption_preserves_delta_and_emits_metadata(monkeypatch) -> None:
+    class InterruptedGateway:
+        async def stream(self, messages, temperature=0.4):
+            yield RoutedStreamEvent(
+                event="meta",
+                profile_id="backup",
+                model_id="model-b",
+                requested_reasoning_effort="high",
+                effective_reasoning_effort="medium",
+                failover_used=True,
+            )
+            yield RoutedStreamEvent(event="delta", content="partial")
+            yield RoutedStreamEvent(
+                event="interrupted",
+                profile_id="backup",
+                model_id="model-b",
+                code="MODEL_STREAM_INTERRUPTED",
+                can_continue_with_backup=True,
+            )
+
+    async def connected():
+        return False
+
+    async def no_web(_message: str):
+        return []
+
+    init_db()
+    session_id = f"runtime-interrupted-{uuid.uuid4().hex}"
+    db = SessionLocal()
+    try:
+        session = repo.get_or_create_session(db, session_id)
+        session.state = repo.SessionState.PROFILED.value
+        session.last_stable_state = repo.SessionState.PROFILED.value
+        session.profile_text = PROFILE
+        session.profile_version = 1
+        repo.commit(db)
+        monkeypatch.setattr(orchestrator, "search_web_optional", no_web)
+        monkeypatch.setattr(orchestrator, "_gateway", InterruptedGateway())
+
+        events = asyncio.run(_collect(orchestrator.stream_message(
+            db,
+            session_id,
+            "继续学习",
+            connected,
+        )))
+
+        meta = next(event for event in events if event["event"] == "meta")
+        assert meta["profile_id"] == "backup"
+        assert meta["failover_used"] is True
+        assert any(event["event"] == "delta" and event["content"] == "partial" for event in events)
+        interrupted = next(event for event in events if event["event"] == "interrupted")
+        assert interrupted["can_continue_with_backup"] is True
+        assert not any(event["event"] == "replace" for event in events)
+        assert events[-1]["event"] == "done"
+        assert events[-1]["status"] == "interrupted"
     finally:
         db.close()
 
