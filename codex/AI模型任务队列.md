@@ -2,7 +2,7 @@
 
 > 项目：基于大模型的个性化资源生成与学习多智能体系统开发
 > 队列位置：E:\软件杯\codex\AI模型任务队列.md
-> 当前模型批次：Sol（T-035 进行中；后续未完成任务默认由 Sol 执行）
+> 当前模型批次：Sol（T-035 Task 12 发布收尾进行中；Task 1–11 已完成；后续未完成任务默认由 Sol 执行）
 > 最后审视日期：2026-07-15
 
 ## 一、使用规则
@@ -75,7 +75,7 @@
 | S-018 | P0 | 完成 | 设计本地知识库、文件导入、解析、索引与学习流程接入 | 现有 FastAPI/SQLite/Electron、安全边界、用户新增需求 | 支持格式与限额、文件存储和解析隔离、文本切片/检索、引用溯源、会话/资源接入、删除与重建、接口/UI、测试和打包方案 |
 | S-019 | P1 | 就绪 | 设计可扩展桌宠、用户形象导入、学习进度感知与语音鼓励 | S-009、S-010、T-030、用户新增需求 | 原创/授权形象包规则、用户素材安全导入、透明窗口和扩展协议、进度事件、鼓励策略、TTS/音频隐私、资源占用和桌面验收方案 |
 | T-033 | P0 | 就绪 | 实现多 API 配置、高可用切换、模型选择与推理强度控制 | S-017 | 多配置增删改查和加密保存、手动切换与自动故障转移、低延迟连接复用、模型/推理强度 UI、后端兼容层、真实桌面稳定性与回归测试 |
-| T-035 | P0 | 进行中 | 实现本地知识库与安全文件导入 | S-018 | 文件选择/拖放、格式与大小校验、解析任务、SQLite 元数据和本地索引、检索引用、学习助手接入、删除/重建、自动化与桌面打包验收 |
+| T-035 | P0 | 进行中 | 实现本地知识库与安全文件导入 | S-018 | 文件选择/拖放、格式与大小校验、解析任务、SQLite 元数据和本地索引、检索引用、学习助手接入、删除/重建、自动化与桌面打包验收；Task 11 `fdfcc04` 已完成，当前执行 Task 12 发布收尾 |
 | T-036 | P1 | 阻塞 | 实现桌宠形象包、用户上传、进度事件与语音鼓励 | S-019 | 原创默认形象、授权检查、用户素材导入、透明桌面窗口、状态动画、学习进度触发、语音开关与隐私、资源限制、自动化与桌面验收 |
 
 ## 五、Terra 队列
@@ -148,6 +148,8 @@
 
 Sol 已开始执行 T-035：知识库采用 Electron 本地对象导入、隔离 parser worker、SQLite FTS5 必选索引、可选本地 OCR/语义包、学习空间集合绑定、可追溯引用和不可信资料防护。实施计划拆为 12 个 TDD 任务并在隔离工作树执行。用户已明确不考虑模型成本，后续未完成任务默认由 Sol 设计、实现和验证。
 
+T-035 Task 11 已提交 `fdfcc04`：新增暖色三栏知识库、响应式集合/详情抽屉、桌面导入与进度终态刷新、集合 CRUD、文档只读预览/重建/删除、学习空间集合绑定、两种隐私模式和本地引用跳转。审查补齐集合切换原子性、迟到响应隔离、引用精确定位和真实 API 错误提示；renderer 未引入对象路径、原始文件路径或桌面令牌。完整 `npm run test` 为 Electron Node 81 passed、Vitest 56 passed；`npm run build:desktop` 通过，主包 343.92 kB、知识库页面 12.97 kB，无 500 kB 警告。当前进入 Task 12 发布收尾。
+
 T-033 已迁移到 Sol 队列，待 T-035 当前批次完成后再执行；S-019/T-036 保留其依赖状态。INBOX-002 当前使用 DeepSeek OpenAI 兼容配置与 deepseek-v4-pro；旧混元和 OpenAI Terra 联调记录仅供历史追溯。
 
 Luna 批次已完成并通过复审。README、API 示例、协议说明、评测样例和开发总结已同步当前代码。L-007、L-008、L-009 已完成：快捷测试入口和浏览器测试台均已通过自动化测试、浏览器检查及打包启动自检；竞品对照和后端优化方案已形成。S-009 已就绪，等待切换 Sol 后实施跨模块学习闭环代码。
@@ -176,6 +178,7 @@ S-016 已完成：本仓库提交身份已设置为 `Wei kb <212667660@qq.com>`�
 
 | 日期 | 任务 ID | 模型 | 修改文件 | 验证结果 |
 | --- | --- | --- | --- | --- |
+| 2026-07-15 | T-035 Task 11 | Sol | a3-front/a3-front/src/views/KnowledgeLibrary.vue 及测试、src/components/knowledge/ 及测试、src/views/SmartTutor.vue 及测试、src/router/index.ts、src/layouts/AppLayout.vue、src/components/workspace/ConversationRail.vue、src/styles/global.scss、src/api/types.ts | 提交 `fdfcc04`；实现 openhanako 风格暖色三栏本地知识库与窄屏双抽屉，集合切换按集合加载且忽略迟到响应，桌面导入进度终态刷新，学习助手支持集合绑定、local_search_only 与 allow_model_context 隐私模式，并将本地引用路由到知识库 inspector 后按安全 locator 打开只读副本。路径/令牌扫描只命中否定测试；`git diff --check` 通过；`npm run test` 为 Electron Node 81 passed、Vitest 56 passed；`npm run build:desktop` 通过，最大主包 343.92 kB。 |
 | 2026-07-15 | S-018 | Sol | a3-front/a3-front/docs/superpowers/specs/2026-07-15-local-knowledge-base-design.md、docs/superpowers/plans/2026-07-15-local-knowledge-base-plan.md、codex/AI模型任务队列.md | 采用 Electron userData 本地对象存储、SHA-256 去重、隔离 parser worker、七格式限制、SQLite FTS5 + CJK token、可选 OCR/NumPy 语义包、RRF、学习空间集合绑定、隐私模式和可追溯引用。实施计划拆为 12 个 TDD 任务、79 个步骤和 12 个提交点；占位符、类型、路径、限额、稳定错误码、24 小时孤立清理、PyInstaller 与桌面发布门槛均完成自审；T-035 已解除阻塞。按用户要求 S-019/T-036 保持不变，本轮不设计桌宠。 |
 | 2026-07-15 | S-017 | Sol | a3-front/a3-front/docs/superpowers/specs/2026-07-15-multi-api-stability-design.md、docs/superpowers/plans/2026-07-15-multi-api-stability-plan.md、codex/AI模型任务队列.md | 用户确认稳定优先、手动主配置 + 自动备用切换、全局默认 + 学习空间覆盖、流式已输出后不静默换模型，并授权后续设计直接采纳。设计采用 Electron `safeStorage` 版本 2 保险库 + 后端原子内存路由器，规定可重试错误、3 次/2 配置总预算、熔断冷却、密钥边界、模型能力声明、推理档位映射、兼容迁移和发布门槛。实施计划拆为 13 个 TDD 任务、91 个步骤和 13 个提交点；占位符、矛盾、类型一致性和需求覆盖自审通过，T-033 已解除阻塞。 |
 | 2026-07-15 | T-034 | Terra | codex/AI模型任务队列.md；本地桌面运行日志与临时基线脚本（未落盘） | 使用正确项目配置连续执行后端真实调用 5 次，5/5 成功，延迟 1065–2108 ms、P50 1329 ms、P95 2108 ms；同一客户端首次 2004 ms、空闲 7 秒后 1002 ms、立即复用 1125 ms，无空闲重连退化。Electron → safeStorage → IPC → FastAPI → DeepSeek 全链路连续测试 3 次，3/3 成功，接口延迟 1230–1775 ms、端到端 1429–1947 ms。日志无认证、连接、超时或 SDK 重试错误；确认 OpenAI 客户端复用、默认 2 次重试和 60 秒超时生效。累计 11 次真实调用全部成功，未发现可复现连接 Bug，参数优化留给 S-017 稳定优先架构。 |
