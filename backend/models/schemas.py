@@ -372,3 +372,27 @@ class ModelRuntimeStatusResponse(BaseModel):
     auto_failover: bool
     fallback_profile_ids: tuple[str, ...]
     profiles: tuple[ModelRuntimeProfileStatusResponse, ...]
+
+
+class SessionModelPreferenceUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profile_mode: Literal["auto", "manual"] = "auto"
+    preferred_profile_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    model_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9._:-]{1,128}$")
+    reasoning_effort: ReasoningEffort = "auto"
+    failover_override: Literal["inherit", "on", "off"] = "inherit"
+
+    @model_validator(mode="after")
+    def validate_manual_profile(self) -> "SessionModelPreferenceUpdate":
+        if self.profile_mode == "manual" and self.preferred_profile_id is None:
+            raise ValueError("手动模式必须指定模型配置")
+        if self.profile_mode == "auto" and self.preferred_profile_id is not None:
+            raise ValueError("自动模式不能指定模型配置")
+        return self
+
+
+class SessionModelPreferenceResponse(SessionModelPreferenceUpdate):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    session_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")

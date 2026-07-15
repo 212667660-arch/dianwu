@@ -34,7 +34,7 @@ from backend.services.orchestrator import close_runtime
 from backend.services.rate_limit import rate_limiter
 from backend.services.model_runtime import legacy_snapshot_from_settings, model_runtime_router
 from backend.services.security import desktop_token_required, is_local_client, is_production, require_desktop_token, require_internal_desktop_token, should_protect_path
-from backend.routers import chat, knowledge, learning, model_runtime, model_settings, profile, resource, sessions, web
+from backend.routers import chat, knowledge, learning, model_preferences, model_runtime, model_settings, profile, resource, sessions, web
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
@@ -211,6 +211,7 @@ app.include_router(sessions.router)
 app.include_router(learning.router)
 app.include_router(model_settings.router)
 app.include_router(model_runtime.router)
+app.include_router(model_preferences.router)
 app.include_router(web.router)
 
 

@@ -166,6 +166,8 @@ T-033 Task 5 已完成：流式请求在首个有效 delta 前允许切换备用
 
 T-033 Task 6 已完成：新增隐藏的 `/internal/model-runtime/bootstrap|test|snapshot|status` 控制面，强制 loopback、非空桌面令牌、严格字段和 128 KiB 请求限制；renderer IPC 明确拒绝 `/internal/*`。`/health/ready` 改由运行时快照决定，开发无桌面令牌时兼容旧单配置内存 bootstrap，production 只等待 Electron 注入；后端聚焦 19 passed，Electron 契约 17 passed。
 
+T-033 Task 7 已完成：新增 `session_model_preferences` 一对一持久化、默认继承、严格 profile/model/reasoning/failover 枚举接口和会话删除级联。偏好只保存脱敏 ID，不因配置暂时不存在而丢失；普通与流式编排在每次请求开始读取一次学习空间偏好并映射为同一 `RuntimeSelection`。相关回归 21 passed。
+
 Luna 批次已完成并通过复审。README、API 示例、协议说明、评测样例和开发总结已同步当前代码。L-007、L-008、L-009 已完成：快捷测试入口和浏览器测试台均已通过自动化测试、浏览器检查及打包启动自检；竞品对照和后端优化方案已形成。S-009 已就绪，等待切换 Sol 后实施跨模块学习闭环代码。
 
 INBOX-002 已联调：后端已支持用户自定义 OpenAI 兼容或 Anthropic 网关。DeepSeek OpenAI 兼容路径已完成真实普通调用、SSE 分片与协议联调；后续可转入前端或 Electron 集成阶段。

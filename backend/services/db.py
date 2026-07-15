@@ -71,6 +71,21 @@ class ChatSession(Base):
     resources = relationship("Resource", back_populates="session", cascade="all, delete-orphan", order_by="Resource.id")
     diagnosis_snapshots = relationship("DiagnosisSnapshot", back_populates="session", cascade="all, delete-orphan", order_by="DiagnosisSnapshot.turn")
     knowledge_points = relationship("KnowledgePoint", back_populates="session", cascade="all, delete-orphan", order_by="KnowledgePoint.id")
+    model_preference = relationship("SessionModelPreference", back_populates="session", cascade="all, delete-orphan", uselist=False)
+
+
+class SessionModelPreference(Base):
+    __tablename__ = "session_model_preferences"
+
+    session_id = Column(String(64), ForeignKey("chat_sessions.session_id", ondelete="CASCADE"), primary_key=True)
+    profile_mode = Column(String(16), nullable=False, default="auto")
+    preferred_profile_id = Column(String(64), nullable=True)
+    model_id = Column(String(128), nullable=True)
+    reasoning_effort = Column(String(16), nullable=False, default="auto")
+    failover_override = Column(String(16), nullable=False, default="inherit")
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    session = relationship("ChatSession", back_populates="model_preference")
 
 
 class Message(Base):
@@ -233,6 +248,45 @@ def get_or_create_session(db: Session, session_id: str) -> ChatSession:
             _commit(db)
             db.refresh(session)
         return session
+
+
+def get_model_preference(db: Session, session_id: str) -> SessionModelPreference:
+    if get_session(db, session_id) is None:
+        raise DomainStateError("会话不存在。", "SESSION_NOT_FOUND")
+    value = db.get(SessionModelPreference, session_id)
+    return value or SessionModelPreference(
+        session_id=session_id,
+        profile_mode="auto",
+        preferred_profile_id=None,
+        model_id=None,
+        reasoning_effort="auto",
+        failover_override="inherit",
+    )
+
+
+def upsert_model_preference(
+    db: Session,
+    session_id: str,
+    *,
+    profile_mode: str,
+    preferred_profile_id: str | None,
+    model_id: str | None,
+    reasoning_effort: str,
+    failover_override: str,
+) -> SessionModelPreference:
+    get_or_create_session(db, session_id)
+    value = db.get(SessionModelPreference, session_id)
+    if value is None:
+        value = SessionModelPreference(session_id=session_id)
+        db.add(value)
+    value.profile_mode = profile_mode
+    value.preferred_profile_id = preferred_profile_id
+    value.model_id = model_id
+    value.reasoning_effort = reasoning_effort
+    value.failover_override = failover_override
+    _commit(db)
+    db.refresh(value)
+    return value
 
 
 def _get_or_create_knowledge_point(db: Session, session_id: str, name: str, subject: str = "") -> KnowledgePoint:

@@ -48,8 +48,20 @@ async def close_runtime() -> None:
     await model_runtime_router.close()
 
 
-def _runtime_selection(_db: Session, _session_id: str) -> RuntimeSelection:
-    return RuntimeSelection()
+def _runtime_selection(db: Session, session_id: str) -> RuntimeSelection:
+    preference = repo.get_model_preference(db, session_id)
+    failover = {
+        "inherit": None,
+        "on": True,
+        "off": False,
+    }[preference.failover_override or "inherit"]
+    return RuntimeSelection(
+        profile_mode=preference.profile_mode or "auto",
+        preferred_profile_id=preference.preferred_profile_id,
+        model_id=preference.model_id,
+        reasoning_effort=preference.reasoning_effort or "auto",
+        failover_enabled=failover,
+    )
 
 
 def _selected_complete(selection: RuntimeSelection):
