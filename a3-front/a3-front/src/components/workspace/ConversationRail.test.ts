@@ -5,7 +5,7 @@ import ConversationRail from './ConversationRail.vue'
 describe('ConversationRail', () => {
   it('shows the active space and emits a new-session action', async () => {
     const wrapper = mount(ConversationRail, {
-      props: { sessionLabel: '一次函数 · 第 2 次学习', activePath: '/tutor' },
+      props: { sessionLabel: '一次函数 · 第 2 次学习', sessionId: 'session-old', activePath: '/tutor' },
       global: {
         stubs: {
           RouterLink: { template: '<a><slot /></a>' },
@@ -17,5 +17,9 @@ describe('ConversationRail', () => {
     expect(wrapper.text()).toContain('一次函数 · 第 2 次学习')
     await wrapper.get('[aria-label="新学习会话"]').trigger('click')
     expect(wrapper.emitted('new-session')).toHaveLength(1)
+    expect(wrapper.text()).toContain('模型设置')
+    await wrapper.get('[aria-label="会话 ID"]').setValue('session-new')
+    await wrapper.get('[aria-label="切换会话"]').trigger('click')
+    expect(wrapper.emitted('switch-session')?.[0]).toEqual(['session-new'])
   })
 })

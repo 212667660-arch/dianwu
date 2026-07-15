@@ -84,7 +84,7 @@ const knowledgePoints = computed(() => backend.progress?.knowledge_points || [])
 const recentResources = computed(() => [...backend.resources].slice(-4).reverse())
 
 function startSuggested() {
-  router.push({ path: '/tutor', query: { prompt: backend.nextAction?.suggested_request || '' } })
+  router.push({ path: '/tutor', query: { prompt: backend.nextAction?.suggested_request || '', at: Date.now().toString(36) } })
 }
 </script>
 

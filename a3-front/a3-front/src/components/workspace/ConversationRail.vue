@@ -16,6 +16,10 @@
       </div>
       <span class="session-dot" :class="{ online: sessionState }" />
     </div>
+    <div class="session-switcher">
+      <input v-model="sessionDraft" maxlength="64" aria-label="会话 ID" />
+      <button type="button" aria-label="切换会话" @click="$emit('switch-session', sessionDraft)">↻</button>
+    </div>
 
     <nav class="rail-nav" aria-label="学习空间导航">
       <RouterLink v-for="item in spaces" :key="item.path" :to="item.path" class="rail-item" :class="{ active: activePath === item.path }">
@@ -37,21 +41,30 @@
 </template>
 
 <script setup lang="ts">
-import { ChatDotRound, Clock, Collection, FolderOpened, Notebook, Plus, UserFilled } from '@element-plus/icons-vue'
+import { ref, watch } from 'vue'
+import { ChatDotRound, Clock, Collection, FolderOpened, Notebook, Plus, Setting, UserFilled } from '@element-plus/icons-vue'
 
-defineProps<{
+const props = defineProps<{
   sessionLabel?: string
   sessionState?: string
+  sessionId?: string
   activePath?: string
 }>()
 
-defineEmits<{ (event: 'new-session'): void }>()
+defineEmits<{
+  (event: 'new-session'): void
+  (event: 'switch-session', sessionId: string): void
+}>()
+
+const sessionDraft = ref(props.sessionId || '')
+watch(() => props.sessionId, value => { sessionDraft.value = value || '' })
 
 const spaces = [
   { path: '/tutor', label: '学习助手', icon: ChatDotRound },
   { path: '/dashboard', label: '我的进度', icon: Collection },
   { path: '/learning-path', label: '学习路径', icon: FolderOpened },
   { path: '/assessment', label: '练习与复习', icon: Notebook },
+  { path: '/model-settings', label: '模型设置', icon: Setting },
 ]
 </script>
 
@@ -70,6 +83,10 @@ const spaces = [
 .session-copy span { margin-top: 3px; color: var(--muted); font-size: 10px; }
 .session-dot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: #d9cec0; }
 .session-dot.online { background: #83aaa0; }
+.session-switcher { display: grid; grid-template-columns: minmax(0, 1fr) 30px; gap: 6px; margin-top: 7px; }
+.session-switcher input { min-width: 0; height: 30px; padding: 0 9px; color: #75695d; background: rgba(255, 252, 246, .6); border: 1px solid #e8ddd0; border-radius: 9px; outline: 0; font-size: 10px; }
+.session-switcher input:focus { border-color: #9db6b5; box-shadow: 0 0 0 2px rgba(107, 151, 155, .08); }
+.session-switcher button { color: #729292; background: #edf4f1; border: 1px solid #dce9e4; border-radius: 9px; cursor: pointer; }
 .rail-nav { display: grid; gap: 4px; margin-top: 20px; }
 .rail-item { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 11px; color: #7c7063; text-decoration: none; border-radius: 11px; transition: color .18s, background .18s, transform .18s; }
 .rail-item:hover { color: var(--ink); background: rgba(255, 252, 246, .75); transform: translateX(1px); }

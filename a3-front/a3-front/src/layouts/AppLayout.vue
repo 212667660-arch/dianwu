@@ -15,17 +15,17 @@
       </div>
     </header>
     <div class="workspace">
-      <ConversationRail :session-label="sessionLabel" :session-state="stateLabel" :active-path="route.path" @new-session="startNewSession" />
+      <ConversationRail :session-label="sessionLabel" :session-state="stateLabel" :session-id="backend.sessionId" :active-path="route.path" @new-session="startNewSession" @switch-session="switchSession" />
       <main class="main-content"><RouterView /></main>
-      <DeskPanel :next-action="backend.nextAction" :mastery="mastery" :resource-count="backend.resources.length" :sources="deskSources" @use-suggestion="useSuggestion" />
+      <DeskPanel :next-action="backend.nextAction" :mastery="mastery" :resource-count="backend.resources.length" :sources="deskSources" :note="deskNote" @update:note="deskNote = $event" @use-suggestion="useSuggestion" />
     </div>
-    <el-drawer v-model="drawerOpen" direction="ltr" size="280px" :with-header="false"><ConversationRail :session-label="sessionLabel" :session-state="stateLabel" :active-path="route.path" @new-session="startNewSession" /></el-drawer>
-    <el-drawer v-model="deskDrawerOpen" direction="rtl" size="310px" :with-header="false"><DeskPanel :next-action="backend.nextAction" :mastery="mastery" :resource-count="backend.resources.length" :sources="deskSources" @use-suggestion="useSuggestion" /></el-drawer>
+    <el-drawer v-model="drawerOpen" direction="ltr" size="280px" title="学习空间"><ConversationRail :session-label="sessionLabel" :session-state="stateLabel" :session-id="backend.sessionId" :active-path="route.path" @new-session="startNewSession" @switch-session="switchSession" /></el-drawer>
+    <el-drawer v-model="deskDrawerOpen" direction="rtl" size="310px" title="书桌"><DeskPanel :next-action="backend.nextAction" :mastery="mastery" :resource-count="backend.resources.length" :sources="deskSources" :note="deskNote" @update:note="deskNote = $event" @use-suggestion="useSuggestion" /></el-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Menu, Notebook, Reading, Refresh } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import ConversationRail from '@/components/workspace/ConversationRail.vue'
@@ -37,6 +37,7 @@ const route = useRoute()
 const drawerOpen = ref(false)
 const deskDrawerOpen = ref(false)
 const sessionDraft = ref(backend.sessionId)
+const deskNote = ref(localStorage.getItem('a3-companion-note') || '')
 const stateLabel = computed(() => backend.session?.state || '尚未开始')
 const sessionLabel = computed(() => {
   const firstUserMessage = backend.session?.messages.find(message => message.role === 'user')?.content?.trim()
@@ -49,10 +50,12 @@ const mastery = computed(() => {
   return points.reduce((sum, point) => sum + point.mastery_score, 0) / points.length
 })
 const deskSources = computed(() => backend.resources.at(-1)?.sources || [])
+watch(deskNote, value => localStorage.setItem('a3-companion-note', value.slice(0, 120)))
 let disposeBackendExit: (() => void) | undefined
 async function applySession() { backend.setSessionId(sessionDraft.value); sessionDraft.value = backend.sessionId; await backend.refreshAll() }
+async function switchSession(value: string) { backend.setSessionId(value); sessionDraft.value = backend.sessionId; drawerOpen.value = false; await backend.refreshAll() }
 async function startNewSession() { backend.setSessionId(`student_${Date.now().toString(36)}`); sessionDraft.value = backend.sessionId; drawerOpen.value = false; await backend.refreshAll(); await router.push('/tutor') }
-function useSuggestion(prompt: string) { drawerOpen.value = false; deskDrawerOpen.value = false; router.push({ path: '/tutor', query: { prompt } }) }
+function useSuggestion(prompt: string) { drawerOpen.value = false; deskDrawerOpen.value = false; router.push({ path: '/tutor', query: { prompt, at: Date.now().toString(36) } }) }
 onMounted(async () => {
   disposeBackendExit = window.a3Desktop?.onBackendExit?.(() => { backend.live = false; backend.ready = false; backend.lastError = '本地学习服务已停止，请重启桌面应用。' })
   await backend.refreshAll()

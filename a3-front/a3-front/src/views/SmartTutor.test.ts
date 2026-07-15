@@ -42,6 +42,7 @@ describe('SmartTutor failure recovery', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     storeMock.modelConfigured = true
+    storeMock.sessionId = 'test-session'
     storeMock.refreshSession.mockResolvedValue(undefined)
     apiMock.streamChat.mockImplementation(async (_sessionId, _message, onEvent) => {
       onEvent({ event: 'error', code: 'FIELD_REQUIRED', message: '模型输出缺少必填字段，请重试。' })
@@ -87,6 +88,7 @@ describe('SmartTutor failure recovery', () => {
     await flushPromises()
     const cancel = wrapper.findAll('button').find(button => button.text() === '取消')
     expect(cancel).toBeDefined()
+    storeMock.sessionId = 'new-session'
     await cancel!.trigger('click')
     await flushPromises()
 
@@ -124,5 +126,17 @@ describe('SmartTutor failure recovery', () => {
     expect(starter).toBeDefined()
     await starter!.trigger('click')
     expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toContain('一次函数')
+  })
+
+  it('updates the composer when a suggestion changes on the reused tutor route', async () => {
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/tutor', component: SmartTutor }] })
+    await router.push('/tutor')
+    await router.isReady()
+    const wrapper = mount(SmartTutor, { global: { plugins: [router], stubs } })
+
+    await router.push({ path: '/tutor', query: { prompt: '复习一次函数斜率' } })
+    await flushPromises()
+
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('复习一次函数斜率')
   })
 })

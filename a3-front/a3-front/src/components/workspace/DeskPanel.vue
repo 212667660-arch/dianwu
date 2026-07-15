@@ -13,8 +13,8 @@
 
     <section class="desk-card desk-card-note">
       <div class="desk-card-heading"><span>便签</span><el-icon><EditPen /></el-icon></div>
-      <textarea v-model="note" maxlength="120" aria-label="学习便签" placeholder="写下一句想提醒自己的话…" />
-      <small>{{ note.length }}/120</small>
+      <textarea v-model="noteModel" maxlength="120" aria-label="学习便签" placeholder="写下一句想提醒自己的话…" />
+      <small>{{ noteModel.length }}/120</small>
     </section>
 
     <section v-if="nextAction" class="desk-card desk-card-action">
@@ -35,7 +35,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { ArrowRight, EditPen } from '@element-plus/icons-vue'
 import type { NextAction, SourceItem } from '@/api'
 
@@ -44,15 +44,19 @@ const props = defineProps<{
   mastery?: number
   resourceCount?: number
   sources?: SourceItem[]
+  note?: string
 }>()
 
-defineEmits<{ (event: 'use-suggestion', prompt: string): void }>()
+const emit = defineEmits<{
+  (event: 'use-suggestion', prompt: string): void
+  (event: 'update:note', value: string): void
+}>()
 
-const note = ref('')
+const noteModel = computed({
+  get: () => props.note || '',
+  set: value => emit('update:note', value.slice(0, 120)),
+})
 const todayLabel = computed(() => new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric' }).format(new Date()))
-
-onMounted(() => { note.value = localStorage.getItem('a3-companion-note') || '' })
-watch(note, value => localStorage.setItem('a3-companion-note', value.slice(0, 120)))
 </script>
 
 <style scoped lang="scss">

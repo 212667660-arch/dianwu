@@ -57,7 +57,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Close, Promotion } from '@element-plus/icons-vue'
@@ -71,6 +71,7 @@ const editor = ref('')
 const useStream = ref(true)
 const generating = ref(false)
 const generationId = ref('')
+const activeSessionId = ref('')
 const activePhase = ref('诊断')
 const streamText = ref('')
 const pendingUser = ref('')
@@ -114,19 +115,21 @@ async function send() {
   streamError.value = ''
   failedMessage.value = ''
   generationId.value = ''
+  const requestSessionId = backend.sessionId
+  activeSessionId.value = requestSessionId
   sources.value = []
   controller = new AbortController()
   await scrollBottom()
   try {
     if (useStream.value) {
-      await backendApi.streamChat(backend.sessionId, message, handleEvent, controller.signal)
+      await backendApi.streamChat(requestSessionId, message, handleEvent, controller.signal)
     } else {
-      const response = await backendApi.chat(backend.sessionId, message)
+      const response = await backendApi.chat(requestSessionId, message)
       streamText.value = response.reply
       sources.value = response.sources
       activePhase.value = response.phase === 'profile' ? '画像' : response.phase === 'resource' ? '资源' : '诊断'
     }
-    await backend.refreshSession()
+    if (backend.sessionId === requestSessionId) await backend.refreshSession()
     if (streamError.value) { failedMessage.value = message; pendingUser.value = '' }
     else { pendingUser.value = ''; streamText.value = '' }
   } catch (error) {
@@ -140,6 +143,7 @@ async function send() {
     generating.value = false
     controller = null
     generationId.value = ''
+    activeSessionId.value = ''
     await scrollBottom()
   }
 }
@@ -150,12 +154,18 @@ function isCancellationError(error: unknown) {
 
 async function cancel() {
   if (!generationId.value) { controller?.abort(); return }
-  try { await backendApi.cancelGeneration(generationId.value, backend.sessionId); ElMessage.info('已请求取消生成') }
+  try { await backendApi.cancelGeneration(generationId.value, activeSessionId.value || backend.sessionId); ElMessage.info('已请求取消生成') }
   catch (error) { ElMessage.error(errorMessage(error)) }
   finally { controller?.abort() }
 }
 
-onMounted(() => { const prompt = typeof route.query.prompt === 'string' ? route.query.prompt : ''; if (prompt) editor.value = prompt })
+watch(() => route.fullPath, () => {
+  const prompt = typeof route.query.prompt === 'string' ? route.query.prompt : ''
+  if (prompt) editor.value = prompt
+}, { immediate: true })
+watch(() => backend.sessionId, currentSessionId => {
+  if (generating.value && activeSessionId.value && currentSessionId !== activeSessionId.value) void cancel()
+})
 onBeforeUnmount(() => controller?.abort())
 </script>
 
