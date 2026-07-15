@@ -4,7 +4,9 @@ import re
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from backend.services.model_capabilities import ReasoningAdapter, ReasoningEffort
 
 SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
@@ -243,3 +245,109 @@ class ModelConnectionTestResponse(BaseModel):
     model_name: str
     status: Literal["connected"]
     latency_ms: int = Field(ge=0)
+
+
+class ModelDefinition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(pattern=r"^[A-Za-z0-9._:-]{1,128}$")
+    provider_model_name: str = Field(min_length=1, max_length=128)
+    label: str = Field(min_length=1, max_length=128)
+    max_output_tokens: int = Field(default=4096, ge=512, le=32768)
+    supported_reasoning_efforts: list[ReasoningEffort] = Field(
+        min_length=1,
+        max_length=6,
+    )
+    reasoning_adapter: ReasoningAdapter
+
+    @field_validator("provider_model_name", "label")
+    @classmethod
+    def validate_model_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value or any(character in value for character in "\0\r\n"):
+            raise ValueError("模型字段包含不允许的控制字符")
+        return value
+
+    @field_validator("supported_reasoning_efforts")
+    @classmethod
+    def validate_reasoning_efforts(
+        cls,
+        value: list[ReasoningEffort],
+    ) -> list[ReasoningEffort]:
+        if "auto" not in value:
+            raise ValueError("模型能力必须包含 auto 推理档位")
+        if len(value) != len(set(value)):
+            raise ValueError("模型推理档位不能重复")
+        return value
+
+
+class ModelProfileSecret(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    label: str = Field(min_length=1, max_length=64)
+    enabled: bool = True
+    provider: Literal["openai", "anthropic"]
+    base_url: str = Field(min_length=8, max_length=512)
+    api_key: str = Field(min_length=1, max_length=512, repr=False)
+    anthropic_version: str = Field(default="2023-06-01", min_length=1, max_length=32)
+    request_timeout_seconds: float = Field(default=60, ge=5, le=300)
+    default_model_id: str = Field(min_length=1, max_length=128)
+    models: list[ModelDefinition] = Field(min_length=1, max_length=64)
+
+    @field_validator(
+        "label",
+        "base_url",
+        "api_key",
+        "anthropic_version",
+        "default_model_id",
+    )
+    @classmethod
+    def validate_profile_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value or any(character in value for character in "\0\r\n"):
+            raise ValueError("模型配置包含不允许的控制字符")
+        return value
+
+    @model_validator(mode="after")
+    def validate_models(self) -> "ModelProfileSecret":
+        model_ids = [model.id for model in self.models]
+        if len(model_ids) != len(set(model_ids)):
+            raise ValueError("同一配置中的模型 ID 不能重复")
+        if self.default_model_id not in model_ids:
+            raise ValueError("默认模型必须存在于模型列表中")
+        return self
+
+
+class ModelRuntimeSnapshotInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    default_profile_id: str | None = Field(default=None, min_length=1, max_length=64)
+    auto_failover: bool = True
+    fallback_profile_ids: list[str] = Field(default_factory=list, max_length=16)
+    profiles: list[ModelProfileSecret] = Field(default_factory=list, max_length=16)
+
+    @model_validator(mode="after")
+    def validate_snapshot(self) -> "ModelRuntimeSnapshotInput":
+        profile_ids = [profile.id for profile in self.profiles]
+        if len(profile_ids) != len(set(profile_ids)):
+            raise ValueError("配置 ID 不能重复")
+        if not self.profiles:
+            if self.default_profile_id is not None or self.fallback_profile_ids:
+                raise ValueError("空配置快照不能指定默认或备用配置")
+            return self
+        if self.default_profile_id is None:
+            raise ValueError("非空配置快照必须指定默认配置")
+        profiles_by_id = {profile.id: profile for profile in self.profiles}
+        default_profile = profiles_by_id.get(self.default_profile_id)
+        if default_profile is None:
+            raise ValueError("默认配置不存在")
+        if not default_profile.enabled:
+            raise ValueError("默认配置必须启用")
+        if len(self.fallback_profile_ids) != len(set(self.fallback_profile_ids)):
+            raise ValueError("备用配置 ID 不能重复")
+        if self.default_profile_id in self.fallback_profile_ids:
+            raise ValueError("默认配置不能重复出现在备用列表中")
+        if any(profile_id not in profiles_by_id for profile_id in self.fallback_profile_ids):
+            raise ValueError("备用配置不存在")
+        return self
