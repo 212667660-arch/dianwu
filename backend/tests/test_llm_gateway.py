@@ -3,7 +3,7 @@ import asyncio
 import pytest
 import httpx
 
-from backend.errors import ModelAccessError, ModelAuthenticationError, ModelNotFoundError
+from backend.errors import ModelAccessError, ModelAuthenticationError, ModelBadResponseError, ModelNotFoundError
 from openai import NotFoundError, PermissionDeniedError
 
 from backend.config import Settings
@@ -201,3 +201,105 @@ def test_openai_stream_permission_and_not_found_errors_are_safe(monkeypatch) -> 
     monkeypatch.setattr(gateway, "_openai_client_or_raise", lambda: MissingClient())
     with pytest.raises(ModelNotFoundError):
         asyncio.run(first_delta())
+
+
+def test_openai_payload_uses_selected_model_and_reasoning_without_mutating_messages() -> None:
+    gateway = ModelGateway(Settings(
+        model_provider="openai",
+        model_api_key="test-key",
+        model_base_url="https://example.test/v1",
+        model_name="default-model",
+    ))
+    messages = [{"role": "user", "content": "hello"}]
+
+    payload = gateway._openai_payload(
+        messages,
+        0.2,
+        "reasoning-model",
+        {"reasoning_effort": "high"},
+    )
+
+    assert payload == {
+        "model": "reasoning-model",
+        "messages": [{"role": "user", "content": "hello"}],
+        "reasoning_effort": "high",
+    }
+    assert messages == [{"role": "user", "content": "hello"}]
+
+
+def test_anthropic_thinking_payload_omits_temperature_and_expands_token_budget() -> None:
+    gateway = ModelGateway(Settings(
+        model_provider="anthropic",
+        model_api_key="test-key",
+        model_base_url="https://example.test/anthropic",
+        model_name="default-model",
+    ))
+    payload = gateway._anthropic_payload(
+        [{"role": "user", "content": "hello"}],
+        0.3,
+        "thinking-model",
+        {"thinking": {"type": "enabled", "budget_tokens": 8192}},
+        4096,
+    )
+
+    assert payload["model"] == "thinking-model"
+    assert payload["thinking"] == {"type": "enabled", "budget_tokens": 8192}
+    assert payload["max_tokens"] == 10240
+    assert "temperature" not in payload
+
+
+def test_plain_payloads_keep_temperature_and_reject_arbitrary_reasoning_fields() -> None:
+    gateway = ModelGateway(Settings(
+        model_provider="openai",
+        model_api_key="test-key",
+        model_base_url="https://example.test/v1",
+        model_name="default-model",
+    ))
+    payload = gateway._openai_payload(
+        [{"role": "user", "content": "hello"}],
+        0.4,
+        "plain-model",
+        {},
+    )
+    assert payload["temperature"] == 0.4
+    with pytest.raises(ModelBadResponseError):
+        gateway._openai_payload(
+            [{"role": "user", "content": "hello"}],
+            0.4,
+            "plain-model",
+            {"temperature": 2},
+        )
+
+
+def test_openai_client_reuses_signature_disables_sdk_retries_and_resets_on_close(monkeypatch) -> None:
+    created = []
+
+    class FakeClient:
+        def __init__(self, **kwargs) -> None:
+            self.kwargs = kwargs
+            self.closed = False
+            created.append(self)
+
+        async def close(self) -> None:
+            self.closed = True
+
+    gateway = ModelGateway(Settings(
+        model_provider="openai",
+        model_api_key="test-secret-key",
+        model_base_url="https://example.test/v1",
+        model_name="default-model",
+        request_timeout_seconds=30,
+    ))
+    monkeypatch.setattr("backend.services.llm_service.AsyncOpenAI", FakeClient)
+    monkeypatch.setattr(gateway, "_validate_settings", lambda: None)
+    monkeypatch.setattr(gateway, "_new_http_client", lambda: object())
+
+    first = gateway._openai_client_or_raise()
+    second = gateway._openai_client_or_raise()
+
+    assert first is second
+    assert created[0].kwargs["max_retries"] == 0
+    assert "test-secret-key" not in repr(created[0].kwargs.keys())
+    asyncio.run(gateway.aclose())
+    assert created[0].closed is True
+    assert gateway._client_signature is None

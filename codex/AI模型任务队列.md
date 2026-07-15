@@ -158,6 +158,8 @@ T-033 Task 1 已完成：新增严格的多配置、模型能力和运行快照�
 
 T-033 Task 2 已完成：新增可重试/终止错误分类、默认 3 次/2 配置总尝试预算，以及 30/60/120/240/300 秒渐进冷却的 closed/open/half-open 熔断器；half-open 探测单飞，终止错误不污染普通熔断计数。补齐八个稳定运行时错误码，聚焦 pytest 30 passed。
 
+T-033 Task 3 已完成：`ModelGateway` 支持显式模型、白名单推理参数与最大输出 token；OpenAI `reasoning_effort` 和 Anthropic `thinking` 均与 `temperature` 正确互斥，Anthropic 保证输出 token 大于思考预算。OpenAI SDK 隐式重试设为 0，网关内部重复重试移除，连接池仍按 Key/base URL/超时签名复用；聚焦 pytest 15 passed。
+
 Luna 批次已完成并通过复审。README、API 示例、协议说明、评测样例和开发总结已同步当前代码。L-007、L-008、L-009 已完成：快捷测试入口和浏览器测试台均已通过自动化测试、浏览器检查及打包启动自检；竞品对照和后端优化方案已形成。S-009 已就绪，等待切换 Sol 后实施跨模块学习闭环代码。
 
 INBOX-002 已联调：后端已支持用户自定义 OpenAI 兼容或 Anthropic 网关。DeepSeek OpenAI 兼容路径已完成真实普通调用、SSE 分片与协议联调；后续可转入前端或 Electron 集成阶段。

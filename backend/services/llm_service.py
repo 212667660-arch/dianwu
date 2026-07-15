@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 from collections.abc import AsyncIterator
 
@@ -48,6 +47,7 @@ class ModelGateway:
                 api_key=self.settings.resolved_api_key,
                 base_url=self.settings.resolved_base_url,
                 http_client=self._new_http_client(),
+                max_retries=0,
             )
             self._client_signature = signature
         return self._openai_client
@@ -55,7 +55,56 @@ class ModelGateway:
     def _anthropic_url(self) -> str:
         return f"{self.settings.resolved_base_url.rstrip('/')}/v1/messages"
 
-    def _anthropic_payload(self, messages: list[dict[str, str]], temperature: float) -> dict[str, object]:
+    @staticmethod
+    def _validated_reasoning(reasoning: dict[str, object] | None) -> dict[str, object]:
+        value = dict(reasoning or {})
+        if not value:
+            return {}
+        if set(value) == {"reasoning_effort"} and value["reasoning_effort"] in {
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+        }:
+            return value
+        if set(value) == {"thinking"} and isinstance(value["thinking"], dict):
+            thinking = dict(value["thinking"])
+            if (
+                set(thinking) == {"type", "budget_tokens"}
+                and thinking["type"] == "enabled"
+                and isinstance(thinking["budget_tokens"], int)
+                and thinking["budget_tokens"] > 0
+            ):
+                return {"thinking": thinking}
+        raise ModelBadResponseError("模型推理参数无效。", "MODEL_REQUEST_INVALID")
+
+    def _openai_payload(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float,
+        model_name: str,
+        reasoning: dict[str, object] | None,
+    ) -> dict[str, object]:
+        selected_reasoning = self._validated_reasoning(reasoning)
+        if "thinking" in selected_reasoning:
+            raise ModelBadResponseError("OpenAI 网关不支持 Anthropic thinking 参数。", "MODEL_REQUEST_INVALID")
+        payload: dict[str, object] = {
+            "model": model_name,
+            "messages": [dict(message) for message in messages],
+        }
+        payload.update(selected_reasoning)
+        if "reasoning_effort" not in selected_reasoning:
+            payload["temperature"] = temperature
+        return payload
+
+    def _anthropic_payload(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float,
+        model_name: str | None = None,
+        reasoning: dict[str, object] | None = None,
+        max_output_tokens: int = 2048,
+    ) -> dict[str, object]:
         system_parts = [message["content"] for message in messages if message.get("role") == "system"]
         conversation = [
             {"role": message["role"], "content": message["content"]}
@@ -64,12 +113,20 @@ class ModelGateway:
         ]
         if not conversation:
             raise ModelBadResponseError("模型请求缺少用户消息。")
+        selected_reasoning = self._validated_reasoning(reasoning)
+        if "reasoning_effort" in selected_reasoning:
+            raise ModelBadResponseError("Anthropic 网关不支持 reasoning_effort 参数。", "MODEL_REQUEST_INVALID")
+        budget_tokens = 0
+        if "thinking" in selected_reasoning:
+            budget_tokens = int(selected_reasoning["thinking"]["budget_tokens"])
         payload: dict[str, object] = {
-            "model": self.settings.resolved_model_name,
-            "max_tokens": 2048,
-            "temperature": temperature,
+            "model": model_name or self.settings.resolved_model_name,
+            "max_tokens": max(max_output_tokens, budget_tokens + 2048),
             "messages": conversation,
         }
+        payload.update(selected_reasoning)
+        if "thinking" not in selected_reasoning:
+            payload["temperature"] = temperature
         if system_parts:
             payload["system"] = "\n\n".join(system_parts)
         return payload
@@ -109,39 +166,43 @@ class ModelGateway:
         if response.status_code >= 400:
             raise ModelBadResponseError("模型请求参数无效。")
 
-    async def complete(self, messages: list[dict[str, str]], temperature: float = 0.2) -> str:
-        for attempt in range(2):
-            try:
-                if self.settings.resolved_provider == "anthropic":
-                    return await self._complete_anthropic(messages, temperature)
-                if self.settings.resolved_provider == "openai":
-                    return await self._complete_openai(messages, temperature)
-                raise ConfigurationError("MODEL_PROVIDER 仅支持 openai 或 anthropic。")
-            except (ConfigurationError, ModelBadResponseError, ModelAuthenticationError, ModelAccessError, ModelNotFoundError):
-                raise
-            except ModelRateLimitError:
-                if attempt == 0:
-                    await asyncio.sleep(0.5)
-                    continue
-                raise
-            except ModelTimeoutError:
-                if attempt == 0:
-                    await asyncio.sleep(0.5)
-                    continue
-                raise
-            except ModelUnavailableError:
-                if attempt == 0:
-                    await asyncio.sleep(0.5)
-                    continue
-                raise
-
-    async def _complete_openai(self, messages: list[dict[str, str]], temperature: float) -> str:
-        try:
-            response = await self._openai_client_or_raise().chat.completions.create(
-                model=self.settings.resolved_model_name,
-                messages=messages,
-                temperature=temperature,
+    async def complete(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.2,
+        *,
+        model_name: str | None = None,
+        reasoning: dict[str, object] | None = None,
+        max_output_tokens: int = 4096,
+    ) -> str:
+        selected_model = model_name or self.settings.resolved_model_name
+        if self.settings.resolved_provider == "anthropic":
+            return await self._complete_anthropic(
+                messages,
+                temperature,
+                selected_model,
+                reasoning or {},
+                max_output_tokens,
             )
+        if self.settings.resolved_provider == "openai":
+            return await self._complete_openai(
+                messages,
+                temperature,
+                selected_model,
+                reasoning or {},
+            )
+        raise ConfigurationError("MODEL_PROVIDER 仅支持 openai 或 anthropic。")
+
+    async def _complete_openai(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float,
+        model_name: str,
+        reasoning: dict[str, object],
+    ) -> str:
+        try:
+            payload = self._openai_payload(messages, temperature, model_name, reasoning)
+            response = await self._openai_client_or_raise().chat.completions.create(**payload)
             content = response.choices[0].message.content or ""
             if not content.strip():
                 raise ModelBadResponseError("模型未返回有效文本。")
@@ -161,11 +222,28 @@ class ModelGateway:
         except (APIConnectionError, InternalServerError) as exc:
             raise ModelUnavailableError() from exc
 
-    async def _complete_anthropic(self, messages: list[dict[str, str]], temperature: float) -> str:
+    async def _complete_anthropic(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float,
+        model_name: str,
+        reasoning: dict[str, object],
+        max_output_tokens: int,
+    ) -> str:
         self._validate_settings()
         try:
             async with self._new_http_client() as client:
-                response = await client.post(self._anthropic_url(), headers=self._anthropic_headers(), json=self._anthropic_payload(messages, temperature))
+                response = await client.post(
+                    self._anthropic_url(),
+                    headers=self._anthropic_headers(),
+                    json=self._anthropic_payload(
+                        messages,
+                        temperature,
+                        model_name,
+                        reasoning,
+                        max_output_tokens,
+                    ),
+                )
         except httpx.TimeoutException as exc:
             raise ModelTimeoutError() from exc
         except httpx.HTTPError as exc:
@@ -179,20 +257,38 @@ class ModelGateway:
             raise ModelBadResponseError("模型未返回有效文本。")
         return content
 
-    async def stream(self, messages: list[dict[str, str]], temperature: float = 0.2) -> AsyncIterator[str]:
+    async def stream(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.2,
+        *,
+        model_name: str | None = None,
+        reasoning: dict[str, object] | None = None,
+        max_output_tokens: int = 4096,
+    ) -> AsyncIterator[str]:
+        selected_model = model_name or self.settings.resolved_model_name
+        selected_reasoning = reasoning or {}
         if self.settings.resolved_provider == "anthropic":
-            async for delta in self._stream_anthropic(messages, temperature):
+            async for delta in self._stream_anthropic(
+                messages,
+                temperature,
+                selected_model,
+                selected_reasoning,
+                max_output_tokens,
+            ):
                 yield delta
             return
         if self.settings.resolved_provider != "openai":
             raise ConfigurationError("MODEL_PROVIDER 仅支持 openai 或 anthropic。")
         try:
-            stream = await self._openai_client_or_raise().chat.completions.create(
-                model=self.settings.resolved_model_name,
-                messages=messages,
-                temperature=temperature,
-                stream=True,
+            payload = self._openai_payload(
+                messages,
+                temperature,
+                selected_model,
+                selected_reasoning,
             )
+            payload["stream"] = True
+            stream = await self._openai_client_or_raise().chat.completions.create(**payload)
             async for chunk in stream:
                 if chunk.choices:
                     content = chunk.choices[0].delta.content or ""
@@ -213,9 +309,22 @@ class ModelGateway:
         except BadRequestError as exc:
             raise ModelBadResponseError("模型请求参数无效。") from exc
 
-    async def _stream_anthropic(self, messages: list[dict[str, str]], temperature: float) -> AsyncIterator[str]:
+    async def _stream_anthropic(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float,
+        model_name: str,
+        reasoning: dict[str, object],
+        max_output_tokens: int,
+    ) -> AsyncIterator[str]:
         self._validate_settings()
-        payload = self._anthropic_payload(messages, temperature)
+        payload = self._anthropic_payload(
+            messages,
+            temperature,
+            model_name,
+            reasoning,
+            max_output_tokens,
+        )
         payload["stream"] = True
         try:
             async with self._new_http_client() as client:
