@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, safeStorage, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electron'
 import { spawn } from 'node:child_process'
 import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
@@ -7,7 +7,14 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { awaitBackendStartup, shouldNotifyBackendExit, stopBackendProcess } from './backend-lifecycle.mjs'
 import { createBackendProxy } from './backend-proxy.mjs'
-import { desktopError, isTrustedDesktopSender } from './ipc-contract.mjs'
+import {
+  desktopError,
+  isTrustedDesktopSender,
+  validateKnowledgeCollectionId,
+  validateKnowledgeDroppedPaths,
+  validateKnowledgeLocator,
+} from './ipc-contract.mjs'
+import { createKnowledgeImporter } from './knowledge-import.mjs'
 import { createModelConfigStore, modelEnvironment, sanitizeModelEnvironment } from './model-config.mjs'
 import { createBackendModelTester, createModelConfigController } from './model-config-controller.mjs'
 import { backendCommand, electronUserDataPath, navigationAction } from './runtime.mjs'
@@ -33,6 +40,7 @@ const modelConfigStore = createModelConfigStore({
   safeStorage,
   filePath: path.join(app.getPath('userData'), 'model-settings.enc'),
 })
+const knowledgeImporter = createKnowledgeImporter({ userDataDir: app.getPath('userData') })
 const testModelCandidate = createBackendModelTester({ getRuntime: () => backendRuntime })
 const modelConfigController = createModelConfigController({
   validateSender: event => Boolean(
@@ -255,6 +263,62 @@ function showStartupError(error) {
   window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html><meta charset="utf-8"><style>body{margin:0;padding:42px;background:#f5efe6;color:#40372f;font:16px 'Microsoft YaHei',sans-serif}h1{font-size:24px}.card{padding:28px;background:#fffaf4;border:1px solid #e4d8ca;border-radius:18px}p{line-height:1.7;color:#6f6254}</style><main class="card"><h1>智学协作台未能启动</h1><p>本地学习服务尚未就绪。请检查安装文件或稍后重试。</p><p>${detail}</p></main>` )}`)
 }
 
+function trustedKnowledgeSender(event) {
+  return Boolean(
+    backendRuntime
+    && isTrustedDesktopSender(event, mainWindow?.webContents, backendRuntime.indexUrl)
+  )
+}
+
+function safeKnowledgeFailure(error) {
+  const known = typeof error?.code === 'string' && error.code.startsWith('KNOWLEDGE_')
+  const code = known ? error.code : 'KNOWLEDGE_IMPORT_FAILED'
+  return {
+    ok: false,
+    error: desktopError(code, known && error instanceof Error ? error.message : '知识库导入失败。'),
+  }
+}
+
+async function chooseKnowledgeFiles(event, collectionId) {
+  if (!trustedKnowledgeSender(event)) {
+    return { ok: false, error: desktopError('DESKTOP_REQUEST_DENIED', '知识库导入请求来源不可信。') }
+  }
+  const validated = validateKnowledgeCollectionId(collectionId)
+  if (!validated.ok) return validated
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: '选择要放进知识库的资料',
+    properties: ['openFile', 'multiSelections'],
+    filters: [{
+      name: '学习资料',
+      extensions: ['pdf', 'docx', 'pptx', 'xlsx', 'txt', 'md', 'markdown', 'csv'],
+    }],
+  })
+  if (result.canceled) return { ok: true, value: { collectionId, files: [] } }
+  try {
+    const files = await knowledgeImporter.importPaths(result.filePaths)
+    return { ok: true, value: { collectionId, files } }
+  } catch (error) {
+    return safeKnowledgeFailure(error)
+  }
+}
+
+async function importDroppedKnowledgeFiles(event, input) {
+  if (!trustedKnowledgeSender(event)) {
+    return { ok: false, error: desktopError('DESKTOP_REQUEST_DENIED', '知识库导入请求来源不可信。') }
+  }
+  const validated = validateKnowledgeDroppedPaths(input)
+  if (!validated.ok) return validated
+  try {
+    const files = await knowledgeImporter.importPaths(validated.value.paths)
+    return {
+      ok: true,
+      value: { collectionId: validated.value.collectionId, files },
+    }
+  } catch (error) {
+    return safeKnowledgeFailure(error)
+  }
+}
+
 ipcMain.handle('a3:api-request', (event, input) => backendProxy?.request(event, input) ?? ({
   ok: false,
   status: 503,
@@ -262,6 +326,27 @@ ipcMain.handle('a3:api-request', (event, input) => backendProxy?.request(event, 
 }))
 ipcMain.handle('a3:model-config-test', (event, input) => modelConfigController.test(event, input))
 ipcMain.handle('a3:model-config-save', (event, input) => modelConfigController.save(event, input))
+ipcMain.handle('a3:knowledge-choose-files', chooseKnowledgeFiles)
+ipcMain.handle('a3:knowledge-import-dropped-files', importDroppedKnowledgeFiles)
+ipcMain.handle('a3:knowledge-reveal-source', async (event, documentId) => {
+  if (!trustedKnowledgeSender(event) || !Number.isSafeInteger(documentId) || documentId < 1) {
+    return { ok: false, error: desktopError('DESKTOP_REQUEST_DENIED', '知识库来源请求无效。') }
+  }
+  await fs.mkdir(knowledgeImporter.objectsRoot, { recursive: true })
+  const message = await shell.openPath(knowledgeImporter.objectsRoot)
+  return message ? { ok: false, error: desktopError('KNOWLEDGE_SOURCE_OPEN_FAILED', message) } : { ok: true }
+})
+ipcMain.handle('a3:knowledge-open-source', (event, input) => {
+  if (!trustedKnowledgeSender(event) || !input || !Number.isSafeInteger(input.documentId) || input.documentId < 1) {
+    return { ok: false, error: desktopError('DESKTOP_REQUEST_DENIED', '知识库来源请求无效。') }
+  }
+  const locator = validateKnowledgeLocator(input.locator)
+  if (!locator.ok) return locator
+  return {
+    ok: false,
+    error: desktopError('KNOWLEDGE_SOURCE_NOT_READY', '资料解析完成后才能打开引用位置。', true),
+  }
+})
 ipcMain.on('a3:stream-start', (event, streamId, input) => { void backendProxy?.startStream(event, streamId, input) })
 ipcMain.on('a3:stream-cancel', (event, streamId) => { backendProxy?.cancelStream(event, streamId) })
 

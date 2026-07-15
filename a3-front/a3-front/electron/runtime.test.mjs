@@ -136,7 +136,7 @@ test('preload and renderer client do not contain runtime token or backend addres
   assert.doesNotMatch(client, /desktopToken|window\.a3Desktop\?\.apiBaseUrl/)
 })
 
-test('preload exposes fixed request, stream, and model config bridge methods only', () => {
+test('preload exposes fixed request, stream, model config, and knowledge bridge methods only', () => {
   const preload = fs.readFileSync(path.join(projectDir, 'electron', 'preload.cjs'), 'utf8')
 
   for (const name of [
@@ -147,6 +147,11 @@ test('preload exposes fixed request, stream, and model config bridge methods onl
     'onBackendExit:',
     'modelConfigTest:',
     'modelConfigSave:',
+    'knowledgeChooseFiles:',
+    'knowledgeImportDroppedFiles:',
+    'knowledgeRevealSource:',
+    'knowledgeOpenSource:',
+    'knowledgeOnImportProgress:',
   ]) {
     assert.match(preload, new RegExp(name))
   }

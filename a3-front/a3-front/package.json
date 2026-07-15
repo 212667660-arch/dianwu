@@ -9,7 +9,7 @@
     "build": "vue-tsc -b && vite build",
     "build:desktop": "vue-tsc -b && vite build --base=./",
     "preview": "vite preview",
-    "test": "node --test electron/runtime.test.mjs electron/backend-lifecycle.test.mjs electron/ipc-contract.test.mjs electron/backend-proxy.test.mjs electron/model-config.test.mjs electron/model-config-controller.test.mjs && vitest run",
+    "test": "node --test electron/runtime.test.mjs electron/backend-lifecycle.test.mjs electron/ipc-contract.test.mjs electron/backend-proxy.test.mjs electron/model-config.test.mjs electron/model-config-controller.test.mjs electron/knowledge-import.test.mjs && vitest run",
     "desktop:dev": "npm run build:desktop && electron .",
     "desktop:pack": "npm run build:desktop && electron-builder --dir",
     "desktop:dist": "npm run build:desktop && electron-builder --win nsis"

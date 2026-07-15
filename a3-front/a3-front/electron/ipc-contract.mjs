@@ -14,6 +14,9 @@ const MODEL_CONFIG_FIELDS = new Set([
   'anthropic_version',
   'request_timeout_seconds',
 ])
+const KNOWLEDGE_DROPPED_FIELDS = new Set(['collectionId', 'paths'])
+const KNOWLEDGE_LOCATOR_FIELDS = new Set(['type', 'start', 'end', 'sheet_name'])
+const KNOWLEDGE_LOCATOR_TYPES = new Set(['page', 'slide', 'sheet_rows', 'paragraph'])
 
 export function desktopError(code, message, retryable = false, requestId) {
   return {
@@ -71,6 +74,62 @@ export function validateModelConfigInput(input) {
       request_timeout_seconds: timeout,
     },
   }
+}
+
+export function validateKnowledgeCollectionId(value) {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    return invalid('Knowledge collection ID is invalid.')
+  }
+  return { ok: true, value }
+}
+
+export function validateKnowledgeDroppedPaths(input) {
+  if (!isPlainObject(input)) return invalid('Knowledge drop input must be an object.')
+  for (const field of Object.keys(input)) {
+    if (!KNOWLEDGE_DROPPED_FIELDS.has(field)) {
+      return denied('Knowledge drop input contains an unsupported field.')
+    }
+  }
+  const collection = validateKnowledgeCollectionId(input.collectionId)
+  if (!collection.ok) return collection
+  if (!Array.isArray(input.paths) || input.paths.length < 1 || input.paths.length > 50) {
+    return invalid('Knowledge drop paths must contain 1 to 50 files.')
+  }
+  const paths = []
+  for (const value of input.paths) {
+    if (typeof value !== 'string' || value.length < 1 || value.length > 32_767 || /[\0\r\n]/.test(value)) {
+      return invalid('Knowledge drop path is invalid.')
+    }
+    paths.push(value)
+  }
+  return { ok: true, value: { collectionId: collection.value, paths } }
+}
+
+export function validateKnowledgeLocator(input) {
+  if (!isPlainObject(input)) return invalid('Knowledge locator must be an object.')
+  for (const field of Object.keys(input)) {
+    if (!KNOWLEDGE_LOCATOR_FIELDS.has(field)) {
+      return denied('Knowledge locator contains an unsupported field.')
+    }
+  }
+  if (
+    !KNOWLEDGE_LOCATOR_TYPES.has(input.type)
+    || !Number.isSafeInteger(input.start)
+    || !Number.isSafeInteger(input.end)
+    || input.start < 1
+    || input.end < input.start
+  ) {
+    return invalid('Knowledge locator range is invalid.')
+  }
+  const value = { type: input.type, start: input.start, end: input.end }
+  if (input.type === 'sheet_rows') {
+    const sheetName = normalizedString(input.sheet_name, 1, 128)
+    if (sheetName === null) return invalid('Sheet row locator requires a sheet name.')
+    value.sheet_name = sheetName
+  } else if (input.sheet_name !== undefined) {
+    return invalid('Only sheet row locators accept a sheet name.')
+  }
+  return { ok: true, value }
 }
 
 export function validateDesktopRequest(input, { stream = false } = {}) {

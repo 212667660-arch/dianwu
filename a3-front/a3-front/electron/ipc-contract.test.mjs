@@ -5,6 +5,9 @@ import {
   buildBackendUrl,
   desktopError,
   isTrustedDesktopSender,
+  validateKnowledgeCollectionId,
+  validateKnowledgeDroppedPaths,
+  validateKnowledgeLocator,
   validateModelConfigInput,
   validateDesktopRequest,
 } from './ipc-contract.mjs'
@@ -57,6 +60,54 @@ test('模型配置候选拒绝非法 provider、地址、超时和控制字符',
     const result = validateModelConfigInput(input)
     assert.equal(result.ok, false, JSON.stringify(result))
     assert.equal(result.error.code, 'DESKTOP_REQUEST_INVALID')
+  }
+})
+
+test('知识库固定 IPC 只接受集合 ID 和 preload 解析的有限路径批次', () => {
+  assert.deepEqual(validateKnowledgeCollectionId(7), { ok: true, value: 7 })
+  assert.equal(validateKnowledgeCollectionId(0).ok, false)
+  assert.equal(validateKnowledgeCollectionId('7').ok, false)
+
+  const accepted = validateKnowledgeDroppedPaths({
+    collectionId: 7,
+    paths: ['C:\\资料\\lesson.pdf', 'C:\\资料\\notes.md'],
+  })
+  assert.equal(accepted.ok, true, JSON.stringify(accepted))
+  assert.deepEqual(accepted.value, {
+    collectionId: 7,
+    paths: ['C:\\资料\\lesson.pdf', 'C:\\资料\\notes.md'],
+  })
+  for (const input of [
+    { collectionId: 7, paths: [] },
+    { collectionId: 7, paths: Array.from({ length: 51 }, () => 'C:\\资料\\lesson.pdf') },
+    { collectionId: 7, paths: ['bad\0path'] },
+    { collectionId: 7, paths: [7] },
+    { collectionId: 7, paths: ['C:\\资料\\lesson.pdf'], token: 'secret' },
+  ]) {
+    assert.equal(validateKnowledgeDroppedPaths(input).ok, false)
+  }
+})
+
+test('知识库定位只允许固定类型和正向范围', () => {
+  assert.deepEqual(
+    validateKnowledgeLocator({ type: 'page', start: 2, end: 3 }),
+    { ok: true, value: { type: 'page', start: 2, end: 3 } },
+  )
+  assert.deepEqual(
+    validateKnowledgeLocator({ type: 'sheet_rows', start: 4, end: 8, sheet_name: 'Sheet1' }),
+    {
+      ok: true,
+      value: { type: 'sheet_rows', start: 4, end: 8, sheet_name: 'Sheet1' },
+    },
+  )
+  for (const input of [
+    { type: 'file', start: 1, end: 1 },
+    { type: 'page', start: 0, end: 1 },
+    { type: 'page', start: 2, end: 1 },
+    { type: 'sheet_rows', start: 1, end: 2 },
+    { type: 'page', start: 1, end: 1, path: 'C:\\secret' },
+  ]) {
+    assert.equal(validateKnowledgeLocator(input).ok, false)
   }
 })
 
