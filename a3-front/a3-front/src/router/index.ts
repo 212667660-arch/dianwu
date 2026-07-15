@@ -1,5 +1,5 @@
 import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router'
-import { ChatDotRound, Connection, MapLocation, Odometer, Setting, TrendCharts, User } from '@element-plus/icons-vue'
+import { ChatDotRound, Collection, Connection, MapLocation, Odometer, Setting, TrendCharts, User } from '@element-plus/icons-vue'
 import AppLayout from '@/layouts/AppLayout.vue'
 import { routerHistoryMode } from './history'
 
@@ -44,6 +44,12 @@ const routes = [
         name: 'Assessment',
         component: () => import('@/views/Assessment.vue'),
         meta: { title: '练习评估', icon: TrendCharts },
+      },
+      {
+        path: '/knowledge',
+        name: 'KnowledgeLibrary',
+        component: () => import('@/views/KnowledgeLibrary.vue'),
+        meta: { title: '知识库', icon: Collection },
       },
       {
         path: '/model-settings',

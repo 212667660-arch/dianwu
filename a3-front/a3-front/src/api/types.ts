@@ -149,7 +149,7 @@ export interface StreamEvent {
   status?: string
   code?: string
   message?: string
-  sources?: SourceItem[]
+  sources?: Array<SourceItem | KnowledgeSource>
   knowledge_sources?: KnowledgeSource[]
   resource_id?: number
   profile_version?: number

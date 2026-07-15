@@ -35,6 +35,7 @@ button, input, textarea { font: inherit; }
 .session-input { width: 190px !important; }
 .workspace { min-height: calc(100vh - 68px); display: grid; grid-template-columns: 220px minmax(0, 1fr) 290px; }
 .main-content { min-width: 0; padding: 28px 30px 42px; overflow: auto; background: rgba(255, 252, 247, .76); }
+.main-content.knowledge-main { grid-column: 2 / -1; padding: 22px 24px 34px; }
 .el-drawer .conversation-rail { border-right: 0; }
 
 .page { max-width: 1200px; margin: 0 auto; }

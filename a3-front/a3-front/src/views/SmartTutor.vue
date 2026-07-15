@@ -1,6 +1,7 @@
 <template>
   <section class="page tutor-page">
     <div class="tutor-statusbar">
+      <button type="button" class="knowledge-space-button" data-testid="knowledge-space-button" @click="openKnowledgeSpace"><span>▤</span> 本空间资料 · {{ backend.boundKnowledgeCollectionIds.length }}</button>
       <span class="status-pill" :class="backend.ready ? 'good' : 'bad'">{{ backend.ready ? '模型就绪' : '模型未就绪' }}</span>
       <span class="status-pill">{{ phaseLabel }}</span>
     </div>
@@ -38,6 +39,7 @@
           <span>这次参考了</span>
           <a v-for="source in sources" :key="source.url" :href="source.url" target="_blank" rel="noreferrer">{{ source.title }}</a>
         </div>
+        <KnowledgeSourceList v-if="knowledgeSources.length" :sources="knowledgeSources" @open="openKnowledgeSource" />
       </div>
 
       <div class="composer-wrap">
@@ -53,19 +55,29 @@
         </div>
       </div>
     </article>
+    <div v-if="knowledgeSpaceOpen" class="knowledge-space-modal" role="dialog" aria-modal="true" aria-label="本空间资料">
+      <div class="knowledge-space-card"><header><div><span>LEARNING SPACE</span><h2>让哪些资料陪你学习？</h2></div><button type="button" aria-label="关闭本空间资料" @click="knowledgeSpaceOpen=false">×</button></header>
+        <p class="privacy-notice">选择“允许模型参考”时，命中的少量资料片段会发送给当前模型服务；原文件始终留在本机。</p>
+        <div class="binding-collections"><label v-for="collection in backend.knowledgeCollections" :key="collection.id"><input v-model="bindingIds" type="checkbox" :value="collection.id" :data-testid="`collection-check-${collection.id}`"><span><strong>{{ collection.name }}</strong><small>{{ collection.document_count || 0 }} 份资料</small></span></label><p v-if="!backend.knowledgeCollections.length">还没有资料集合，可以先去知识库建一座小书房。</p></div>
+        <fieldset><legend>隐私方式</legend><label><input v-model="bindingPrivacy" type="radio" value="allow_model_context" data-testid="privacy-allow-model">允许模型参考相关片段</label><label><input v-model="bindingPrivacy" type="radio" value="local_search_only" data-testid="privacy-local-only">仅本机检索，不发送片段</label></fieldset>
+        <footer><span>账号同步功能预留，当前只保存到这台设备。</span><button type="button" data-testid="save-knowledge-binding" @click="saveKnowledgeBinding">保存到本空间</button></footer>
+      </div>
+    </div>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Close, Promotion } from '@element-plus/icons-vue'
-import { backendApi, DesktopApiError, errorMessage, type SourceItem, type StreamEvent } from '@/api'
+import { backendApi, DesktopApiError, errorMessage, type KnowledgeSource, type SourceItem, type StreamEvent } from '@/api'
 import { useBackendStore } from '@/stores/backend'
+import KnowledgeSourceList from '@/components/knowledge/KnowledgeSourceList.vue'
 
 const backend = useBackendStore()
 const route = useRoute()
+const router = useRouter()
 const companionId = 'study-companion'
 const editor = ref('')
 const useStream = ref(true)
@@ -78,6 +90,10 @@ const pendingUser = ref('')
 const streamError = ref('')
 const failedMessage = ref('')
 const sources = ref<SourceItem[]>([])
+const knowledgeSources = ref<KnowledgeSource[]>([])
+const knowledgeSpaceOpen = ref(false)
+const bindingIds = ref<number[]>([])
+const bindingPrivacy = ref<'allow_model_context' | 'local_search_only'>('allow_model_context')
 const messageList = ref<HTMLElement>()
 let controller: AbortController | null = null
 
@@ -95,7 +111,8 @@ function handleEvent(event: StreamEvent) {
   if (event.phase) activePhase.value = event.phase === 'profile' ? '画像' : event.phase === 'resource' ? '资源' : '诊断'
   if (event.event === 'delta' && event.content) streamText.value += event.content
   if (event.event === 'replace' && event.content) streamText.value = event.content
-  if (event.event === 'sources') sources.value = event.sources || []
+  if (event.event === 'sources') sources.value = (event.sources || []).filter((item): item is SourceItem => 'url' in item)
+  if (event.event === 'knowledge_sources') knowledgeSources.value = (event.sources || []).filter((item): item is KnowledgeSource => 'reference_id' in item)
   if (event.event === 'error') {
     streamError.value = event.message || event.code || '生成失败，请检查后重试。'
     ElMessage.error(streamError.value)
@@ -118,6 +135,7 @@ async function send() {
   const requestSessionId = backend.sessionId
   activeSessionId.value = requestSessionId
   sources.value = []
+  knowledgeSources.value = []
   controller = new AbortController()
   await scrollBottom()
   try {
@@ -127,6 +145,7 @@ async function send() {
       const response = await backendApi.chat(requestSessionId, message)
       streamText.value = response.reply
       sources.value = response.sources
+      knowledgeSources.value = response.knowledge_sources || []
       activePhase.value = response.phase === 'profile' ? '画像' : response.phase === 'resource' ? '资源' : '诊断'
     }
     if (backend.sessionId === requestSessionId) await backend.refreshSession()
@@ -152,6 +171,10 @@ function isCancellationError(error: unknown) {
   return (error as Error | undefined)?.name === 'AbortError' || (error instanceof DesktopApiError && error.code === 'DESKTOP_STREAM_CANCELLED')
 }
 
+async function openKnowledgeSpace(){await backend.refreshKnowledge();bindingIds.value=[...backend.boundKnowledgeCollectionIds];bindingPrivacy.value=backend.knowledgePrivacyMode;knowledgeSpaceOpen.value=true}
+async function saveKnowledgeBinding(){try{await backend.saveSessionKnowledgeCollections(bindingIds.value,bindingPrivacy.value);knowledgeSpaceOpen.value=false;ElMessage.success('本空间资料已保存')}catch(error){ElMessage.error(errorMessage(error))}}
+async function openKnowledgeSource(source:KnowledgeSource){await router.push({path:'/knowledge',query:{document:String(source.document_id),type:source.locator.type,start:String(source.locator.start),end:String(source.locator.end),...(source.locator.sheet_name?{sheet:source.locator.sheet_name}:{})}})}
+
 async function cancel() {
   const cancelGenerationId = generationId.value
   const cancelSessionId = activeSessionId.value || backend.sessionId
@@ -170,6 +193,7 @@ watch(() => backend.sessionId, currentSessionId => {
   pendingUser.value = ''
   streamText.value = ''
   sources.value = []
+  knowledgeSources.value = []
   streamError.value = ''
   failedMessage.value = ''
   if (shouldCancel) {
@@ -183,6 +207,7 @@ onBeforeUnmount(() => controller?.abort())
 <style scoped lang="scss">
 .tutor-page { max-width: 940px; min-height: calc(100vh - 138px); }
 .tutor-statusbar { display: flex; justify-content: flex-end; gap: 7px; min-height: 28px; }
+.knowledge-space-button { margin-right: auto; min-height: 26px; padding: 3px 10px; color: #6e8f8e; background: #edf5f1; border: 1px solid #dbe9e3; border-radius: 999px; cursor: pointer; font-size: 10px; }
 .chat-panel { min-height: calc(100vh - 166px); display: flex; flex-direction: column; }
 .message-list { height: calc(100vh - 340px); min-height: 390px; overflow: auto; padding: 10px 28px 24px; scrollbar-width: thin; scrollbar-color: #ded5c9 transparent; }
 .welcome { max-width: 650px; margin: 38px auto 20px; text-align: center; }
@@ -218,6 +243,10 @@ onBeforeUnmount(() => controller?.abort())
 .composer-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 7px; }
 .composer-left { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; color: #a09284; font-size: 10px; }
 .stream-toggle { display: inline-flex; align-items: center; gap: 5px; }
+.knowledge-space-modal { position: fixed; z-index: 3000; inset: 0; display: grid; place-items: center; padding: 18px; background: rgba(54, 46, 38, .28); backdrop-filter: blur(4px); }
+.knowledge-space-card { width: min(520px, 100%); padding: 22px; background: #fffaf4; border: 1px solid #dfd2c4; border-radius: 18px; box-shadow: 0 24px 70px rgba(65, 49, 33, .18); }
+.knowledge-space-card header { display: flex; justify-content: space-between; gap: 16px; }.knowledge-space-card header span { color: #719592; font-size: 9px; letter-spacing: .16em; }.knowledge-space-card h2 { margin: 5px 0 0; font-family: Georgia, "Songti SC", serif; font-size: 20px; font-weight: 500; }.knowledge-space-card header button { color: #9b8c7e; background: transparent; border: 0; cursor: pointer; font-size: 20px; }
+.privacy-notice { padding: 10px 12px; color: #8b765e; background: #fff3df; border-radius: 9px; font-size: 10px; line-height: 1.7; }.binding-collections { display: grid; gap: 7px; max-height: 210px; margin: 14px 0; overflow: auto; }.binding-collections label { display: flex; align-items: center; gap: 9px; padding: 10px; border: 1px solid #e6dbce; border-radius: 10px; }.binding-collections strong,.binding-collections small { display: block; }.binding-collections strong { font-size: 11px; }.binding-collections small { margin-top: 3px; color: var(--muted); font-size: 9px; }.knowledge-space-card fieldset { display: grid; gap: 7px; padding: 12px; border: 1px solid #e5d9ca; border-radius: 10px; }.knowledge-space-card legend { color: #8c7f71; font-size: 10px; }.knowledge-space-card fieldset label { font-size: 10px; }.knowledge-space-card footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 15px; }.knowledge-space-card footer span { color: #a09284; font-size: 9px; }.knowledge-space-card footer button { min-height: 34px; padding: 0 14px; color: #fff; background: #668f93; border: 0; border-radius: 9px; cursor: pointer; }
 
 @media (max-width: 760px) {
   .tutor-page { min-height: calc(100vh - 90px); }

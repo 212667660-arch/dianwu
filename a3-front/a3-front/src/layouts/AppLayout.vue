@@ -16,8 +16,8 @@
     </header>
     <div class="workspace">
       <ConversationRail :session-label="sessionLabel" :session-state="stateLabel" :session-id="backend.sessionId" :active-path="route.path" @new-session="startNewSession" @switch-session="switchSession" />
-      <main class="main-content"><RouterView /></main>
-      <DeskPanel :next-action="backend.nextAction" :mastery="mastery" :resource-count="backend.resources.length" :sources="deskSources" :note="deskNote" @update:note="deskNote = $event" @use-suggestion="useSuggestion" />
+      <main class="main-content" :class="{ 'knowledge-main': route.path === '/knowledge' }"><RouterView /></main>
+      <DeskPanel v-if="route.path !== '/knowledge'" :next-action="backend.nextAction" :mastery="mastery" :resource-count="backend.resources.length" :sources="deskSources" :note="deskNote" @update:note="deskNote = $event" @use-suggestion="useSuggestion" />
     </div>
     <el-drawer v-model="drawerOpen" direction="ltr" size="280px" title="学习空间"><ConversationRail :session-label="sessionLabel" :session-state="stateLabel" :session-id="backend.sessionId" :active-path="route.path" @new-session="startNewSession" @switch-session="switchSession" /></el-drawer>
     <el-drawer v-model="deskDrawerOpen" direction="rtl" size="310px" title="书桌"><DeskPanel :next-action="backend.nextAction" :mastery="mastery" :resource-count="backend.resources.length" :sources="deskSources" :note="deskNote" @update:note="deskNote = $event" @use-suggestion="useSuggestion" /></el-drawer>

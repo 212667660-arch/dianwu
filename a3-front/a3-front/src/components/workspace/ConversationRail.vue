@@ -64,6 +64,7 @@ const spaces = [
   { path: '/dashboard', label: '我的进度', icon: Collection },
   { path: '/learning-path', label: '学习路径', icon: FolderOpened },
   { path: '/assessment', label: '练习与复习', icon: Notebook },
+  { path: '/knowledge', label: '本地知识库', icon: Collection },
   { path: '/model-settings', label: '模型设置', icon: Setting },
 ]
 </script>

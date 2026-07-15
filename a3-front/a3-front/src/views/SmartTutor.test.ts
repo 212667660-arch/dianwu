@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRouter, createMemoryHistory } from 'vue-router'
 
 const apiMock = vi.hoisted(() => ({
-  streamChat: vi.fn(), chat: vi.fn(), cancelGeneration: vi.fn(),
+  streamChat: vi.fn(), chat: vi.fn(), cancelGeneration: vi.fn(), openKnowledgeSource: vi.fn(),
 }))
 const DesktopApiErrorMock = vi.hoisted(() => class DesktopApiError extends Error {
   readonly status: number
@@ -19,6 +19,8 @@ const DesktopApiErrorMock = vi.hoisted(() => class DesktopApiError extends Error
 const storeMock = vi.hoisted(() => ({
   ready: true, modelConfigured: true, sessionId: 'test-session', session: null, progress: null, nextAction: null,
   refreshSession: vi.fn(),
+  knowledgeCollections: [{ id: 3, name: '高数' }], boundKnowledgeCollectionIds: [], knowledgePrivacyMode: 'allow_model_context',
+  refreshKnowledge: vi.fn(), saveSessionKnowledgeCollections: vi.fn(),
 }))
 const storeHarness = vi.hoisted(() => ({ current: null as null | typeof storeMock }))
 
@@ -33,7 +35,7 @@ vi.mock('@/stores/backend', async () => {
   storeHarness.current = store
   return { useBackendStore: () => store }
 })
-vi.mock('element-plus', () => ({ ElMessage: { error: vi.fn(), info: vi.fn() } }))
+vi.mock('element-plus', () => ({ ElMessage: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }))
 
 import SmartTutor from './SmartTutor.vue'
 
@@ -144,5 +146,55 @@ describe('SmartTutor failure recovery', () => {
     await flushPromises()
 
     expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('复习一次函数斜率')
+  })
+
+  it('saves local-only knowledge binding after showing the privacy notice', async () => {
+    backendStore.refreshKnowledge.mockResolvedValue(undefined)
+    backendStore.saveSessionKnowledgeCollections.mockResolvedValue(undefined)
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/tutor', component: SmartTutor }] })
+    await router.push('/tutor'); await router.isReady()
+    const wrapper = mount(SmartTutor, { global: { plugins: [router], stubs } })
+    await wrapper.get('[data-testid="knowledge-space-button"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="collection-check-3"]').setValue(true)
+    expect(wrapper.text()).toContain('少量资料片段会发送给当前模型服务')
+    await wrapper.get('[data-testid="privacy-local-only"]').setValue(true)
+    await wrapper.get('[data-testid="save-knowledge-binding"]').trigger('click')
+    expect(backendStore.saveSessionKnowledgeCollections).toHaveBeenCalledWith([3], 'local_search_only')
+  })
+
+  it('opens a local citation in the knowledge-library inspector', async () => {
+    apiMock.openKnowledgeSource.mockResolvedValue({ mode: 'readonly-copy' })
+    apiMock.streamChat.mockImplementation(async (_sessionId, _message, onEvent) => {
+      onEvent({
+        event: 'knowledge_sources',
+        sources: [{
+          reference_id: '资料1', document_id: 9, document_name: '极限讲义.pdf',
+          locator_label: '第 3 页', locator: { type: 'page', start: 3, end: 3 },
+          chunk_id: 11, retrieval_mode: 'keyword',
+        }],
+      })
+    })
+    const KnowledgeTarget = { template: '<div>知识库详情</div>' }
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/tutor', component: SmartTutor },
+        { path: '/knowledge', component: KnowledgeTarget },
+      ],
+    })
+    await router.push('/tutor')
+    await router.isReady()
+    const wrapper = mount(SmartTutor, { global: { plugins: [router], stubs } })
+    await wrapper.get('textarea').setValue('用本地讲义解释极限')
+    await wrapper.findAll('button').find(button => button.text() === '发送')!.trigger('click')
+    await flushPromises()
+
+    await wrapper.get('[aria-label="查看资料1：极限讲义.pdf 第3页"]').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe('/knowledge')
+    expect(router.currentRoute.value.query).toMatchObject({ document: '9', type: 'page', start: '3', end: '3' })
+    expect(apiMock.openKnowledgeSource).not.toHaveBeenCalled()
   })
 })
