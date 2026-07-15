@@ -2,7 +2,7 @@
 
 > 项目：基于大模型的个性化资源生成与学习多智能体系统开发
 > 队列位置：E:\软件杯\codex\AI模型任务队列.md
-> 当前模型批次：Terra（T-030 已完成，等待新增任务）
+> 当前模型批次：Terra（T-031 已完成，等待新增任务）
 > 最后审视日期：2026-07-14
 
 ## 一、使用规则
@@ -105,6 +105,7 @@
 | T-028 | P2 | 完成 | 接入 Electron 前端壳并打包验收 | T-026、用户确认桌面端范围、S-011 | 主进程、无令牌预加载 IPC、前端产物加载和安装包验收；以 openhanako 作为交互与视觉参考 |
 | T-029 | P1 | 完成 | 统一 FastAPI、Web 与 Electron 的错误响应契约 | S-013 | 404/422 与业务异常统一可解析错误信封，Web/Electron 显示一致且覆盖回归测试 |
 | T-030 | P1 | 完成 | 以 openhanako 为参考重做 A3 陪伴式学习工作台界面 | T-029、用户视觉确认 | 三栏工作台、欢迎式对话入口、书桌/便签信息面板、暖色浪漫视觉、账号与桌宠扩展边界；Vitest、Web/桌面构建和浏览器窄屏验收 |
+| T-031 | P0 | 完成 | 修复 Electron 沙箱预加载桥接缺失导致桌面后端误判离线 | T-030、体验测试截图 | 沙箱兼容 preload、桌面 IPC 桥接可用、模型设置与健康检查恢复、Electron/前端回归和真实窗口验收 |
 
 ## 六、Luna 队列
 
@@ -150,6 +151,8 @@ Terra 前端批次已完成 T-026 与 T-027：真实模型驱动的诊断、画�
 
 T-030 已完成：应用壳改为 openhanako 式三栏陪伴工作台，左侧为学习空间/对话导航，中间为欢迎式学习对话，右侧为今日书桌、学习便签、下一步与来源信息；暖色纸张、墨色文字、蓝绿与琥珀点缀已经统一。账号和桌宠仍未实现，但分别保留账号入口和桌宠插槽；现有 FastAPI、SSE、Electron IPC、模型设置自动引导和令牌隔离未改变。代码审查后补齐同路由建议更新、生成期间会话归属、模型设置入口、共享便签状态、移动端会话切换和抽屉可访问名称。桌面 1440×900 与窄屏 375×812 浏览器验收无横向滚动，完整 Electron Node 69 项、Vitest 33 项、Web 和桌面构建均通过。
 
+T-031 已完成：体验测试截图中的“服务离线”并非 `api.exe` 未启动，而是 `sandbox: true` 窗口加载 ESM `preload.mjs` 后没有暴露 `window.a3Desktop`，渲染器因此误退回 Web 传输。预加载改为沙箱兼容的 CommonJS `preload.cjs`，固定 IPC 能力和令牌隔离边界保持不变。真实桌面窗口重启后，Electron 日志确认渲染器依次访问 `/health/live`、`/health/ready`、`/api/settings/model` 并返回 200；完整 Electron Node 70 项、Vitest 33 项通过。
+
 T-028 已完成：Electron 主进程统一代理普通 HTTP/SSE 并独占动态后端地址和短期 token；preload 只暴露固定请求、流、取消和后端退出桥接；renderer 不接触 token。S-012 定位到退出残留的根因是 `closed` 回调读取已销毁 `BrowserWindow.webContents`，触发 `Object has been destroyed` 并中断退出；改为窗口创建时缓存 `webContents` 后，开发版和 unpacked 版测试模式均退出码 0 且无残留。完整 Node 49 项、Vitest 14 项、Web/桌面构建、unpacked、NSIS 与渲染器密钥扫描全部通过。发布包仍使用默认 Electron 图标且未配置代码签名/作者元数据，列为后续品牌与正式发行优化，不阻塞当前功能交付。
 
 S-013 已完成：前端实际使用的 13 组 HTTP/SSE 路径与 FastAPI 路由、Electron 白名单一致，后端快捷测试 80 项、Electron Node 49 项及 Vitest 14 项通过。专项复核同时确认两项交付缺口：全新安装版无模型密钥时 `/health/ready` 返回 503，而前端与 Electron 未开放配置保存/连通性测试，生产后端也禁止明文 `.env` 落盘；FastAPI 的 `detail` 错误与业务 `{code,message}` 错误在 Web/Electron 的解析不一致。前者登记 S-014，后者登记 T-029。
@@ -164,6 +167,7 @@ S-016 已完成：本仓库提交身份已设置为 `Wei kb <212667660@qq.com>`�
 
 | 日期 | 任务 ID | 模型 | 修改文件 | 验证结果 |
 | --- | --- | --- | --- | --- |
+| 2026-07-15 | T-031 | Terra | a3-front/a3-front/electron/main.mjs、electron/preload.cjs（替代 preload.mjs）、electron/runtime.test.mjs、codex/AI模型任务队列.md | 修复 Electron 沙箱不加载 ESM preload 导致 `window.a3Desktop` 缺失、渲染器误走 Web 传输并显示“服务离线”。新增 CommonJS preload 回归；`npm run test` 为 Electron Node 70 passed、Vitest 33 passed。真实窗口日志确认 `/health/live`、`/health/ready`、`/api/settings/model` 均经 IPC 代理访问并返回 200，应用保持运行供用户继续测试。 |
 | 2026-07-15 | T-030 | Terra | a3-front/a3-front/src/components/workspace/ConversationRail.vue、DeskPanel.vue 及测试；src/layouts/AppLayout.vue 与测试；src/views/SmartTutor.vue 与测试；src/views/Dashboard.vue；src/styles/global.scss；设计与实施计划；codex/AI模型任务队列.md | 以 openhanako 为参考完成暖色三栏陪伴式工作台，保留真实后端、SSE、模型安全流程，并预留账号和桌宠扩展边界。TDD 新增 5 项前端行为回归；代码审查问题已收敛，包括同路由建议更新、生成取消会话归属、模型设置入口、双书桌共享便签、移动会话切换和抽屉名称。`npm run test` 为 Electron Node 69 passed、Vitest 33 passed；`npm run build` 与 `npm run build:desktop` 退出码 0。浏览器 1440×900 确认左右栏分别 220/290 px，375×812 确认左右栏收起、菜单和输入区可见且无横向滚动。 |
 | 2026-07-15 | T-029 | Terra | backend/main.py、backend/errors.py、backend/routers/chat.py、backend/routers/sessions.py、backend/routers/learning.py、backend/tests/error_assertions.py 及错误回归；a3-front/a3-front/electron/backend-proxy.mjs、electron/backend-proxy.test.mjs、src/api/transport.ts、src/api/desktop-transport.ts、src/api/desktop-transport.test.ts、README 文档 | 统一 `code/message/retryable/request_id` 错误信封，覆盖 FastAPI 404/405/422/500/503、业务资源 404、非法 CORS 预检和非 JSON 错误，同时保留合法 3xx 跳转；Electron SSE 建流失败保留 404/422/503 状态，Web/Electron 均转换为 `BackendApiError`。完整后端 `compileall` 与 pytest 87 passed（工作区独立 basetemp），Electron Node 69 passed，Vitest 28 passed，`npm run build` 与 `npm run build:desktop` 均退出码 0。 |
 | 2026-07-14 | S-016 | Sol | .git/config、codex/AI模型任务队列.md、GitHub `212667660-arch/a3-learning-agents` | 设置仓库级提交身份 `Wei kb <212667660@qq.com>`；确认 `origin` 为 GitHub 私有仓库，`git push -u origin main` 退出码 0并建立上游；GitHub 页面显示 `main`、2 commits 和项目文件。完成记录提交后再次推送，并使用 `git fetch`、`git rev-parse HEAD`、`git rev-parse origin/main`、`git ls-remote origin refs/heads/main` 验证三方哈希一致；工作区保持干净。 |

@@ -121,7 +121,7 @@ test('web builds keep root asset URLs while Electron builds resolve relative ass
 })
 
 test('preload does not expose the removed external-link IPC capability', () => {
-  const preload = fs.readFileSync(path.join(projectDir, 'electron', 'preload.mjs'), 'utf8')
+  const preload = fs.readFileSync(path.join(projectDir, 'electron', 'preload.cjs'), 'utf8')
   const client = fs.readFileSync(path.join(projectDir, 'src', 'api', 'client.ts'), 'utf8')
 
   assert.doesNotMatch(preload, /a3:open-external|openExternal/)
@@ -129,7 +129,7 @@ test('preload does not expose the removed external-link IPC capability', () => {
 })
 
 test('preload and renderer client do not contain runtime token or backend address injection', () => {
-  const preload = fs.readFileSync(path.join(projectDir, 'electron', 'preload.mjs'), 'utf8')
+  const preload = fs.readFileSync(path.join(projectDir, 'electron', 'preload.cjs'), 'utf8')
   const client = fs.readFileSync(path.join(projectDir, 'src', 'api', 'client.ts'), 'utf8')
 
   assert.doesNotMatch(preload, /desktopToken|apiBaseUrl|a3:runtime-info/)
@@ -137,7 +137,7 @@ test('preload and renderer client do not contain runtime token or backend addres
 })
 
 test('preload exposes fixed request, stream, and model config bridge methods only', () => {
-  const preload = fs.readFileSync(path.join(projectDir, 'electron', 'preload.mjs'), 'utf8')
+  const preload = fs.readFileSync(path.join(projectDir, 'electron', 'preload.cjs'), 'utf8')
 
   for (const name of [
     'request:',
@@ -152,6 +152,12 @@ test('preload exposes fixed request, stream, and model config bridge methods onl
   }
   assert.doesNotMatch(preload, /(?:^|[,{]\s*)ipcRenderer\s*:/m)
   assert.doesNotMatch(preload, /openExternal/)
+})
+
+test('sandboxed renderer uses a CommonJS preload bridge', () => {
+  const main = fs.readFileSync(path.join(projectDir, 'electron', 'main.mjs'), 'utf8')
+
+  assert.match(main, /preload:\s*path\.join\(mainDir, 'preload\.cjs'\)/)
 })
 
 test('main process owns encrypted model config, startup injection, and fixed config IPC', () => {
@@ -169,7 +175,7 @@ test('main process owns encrypted model config, startup injection, and fixed con
 
 test('renderer, preload, and desktop bundle do not receive token or backend address injection', () => {
   const rendererFiles = [
-    path.join(projectDir, 'electron', 'preload.mjs'),
+    path.join(projectDir, 'electron', 'preload.cjs'),
     path.join(projectDir, 'src', 'api', 'backend.ts'),
     path.join(projectDir, 'src', 'api', 'client.ts'),
     path.join(projectDir, 'src', 'api', 'desktop-transport.ts'),
@@ -179,7 +185,7 @@ test('renderer, preload, and desktop bundle do not receive token or backend addr
     const source = fs.readFileSync(file, 'utf8')
     assert.doesNotMatch(source, /desktopToken|apiBaseUrl|X-A3-Desktop-Token|MODEL_API_KEY/)
   }
-  const preload = fs.readFileSync(path.join(projectDir, 'electron', 'preload.mjs'), 'utf8')
+  const preload = fs.readFileSync(path.join(projectDir, 'electron', 'preload.cjs'), 'utf8')
   assert.doesNotMatch(preload, /safeStorage|model-settings\.enc/)
   const assetsDir = path.join(projectDir, 'dist', 'assets')
   const emitted = fs.readdirSync(assetsDir).filter(name => name.endsWith('.js'))
