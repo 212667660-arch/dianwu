@@ -18,7 +18,11 @@ def _configure_desktop_data_dir() -> None:
         shutil.copyfile(template, target)
 
 
-def main() -> None:
+def main() -> int:
+    if len(sys.argv) > 1 and sys.argv[1] == "--knowledge-worker":
+        from backend.knowledge.worker_main import main as worker_main
+
+        return worker_main()
     _configure_desktop_data_dir()
     import uvicorn
     from backend.main import app
@@ -26,7 +30,8 @@ def main() -> None:
     host = os.environ.get("A3_HOST", "127.0.0.1")
     port = int(os.environ.get("A3_PORT", "8000"))
     uvicorn.run(app, host=host, port=port, log_level=os.environ.get("A3_LOG_LEVEL", "info"))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

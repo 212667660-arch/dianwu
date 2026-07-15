@@ -2,6 +2,8 @@
   "name": "a3-front",
   "private": true,
   "version": "0.0.0",
+  "description": "A3 本地优先的个性化学习多智能体桌面应用",
+  "author": "Wei kb <212667660@qq.com>",
   "type": "module",
   "main": "electron/main.mjs",
   "scripts": {

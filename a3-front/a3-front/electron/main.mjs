@@ -336,6 +336,7 @@ app.on('second-instance', () => {
 })
 app.whenReady().then(async () => {
   try {
+    await knowledgeImporter.prepare()
     activeModelConfig = await modelConfigStore.load()
     await startBackend(activeModelConfig)
     createWindow()

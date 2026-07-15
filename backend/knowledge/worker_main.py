@@ -53,8 +53,8 @@ def safe_object_path(request: WorkerRequest) -> Path:
 
 
 def emit(event) -> None:
-    sys.stdout.write(encode_worker_event(event) + "\n")
-    sys.stdout.flush()
+    sys.stdout.buffer.write((encode_worker_event(event) + "\n").encode("utf-8"))
+    sys.stdout.buffer.flush()
 
 
 def main() -> int:

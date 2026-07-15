@@ -8,6 +8,7 @@ import {
   open,
   rm,
   unlink,
+  writeFile,
 } from 'node:fs/promises'
 import path from 'node:path'
 import { Transform } from 'node:stream'
@@ -167,10 +168,19 @@ export function createKnowledgeImporter({ userDataDir }) {
   const knowledgeRoot = path.join(userDataDir, 'knowledge')
   const objectsRoot = path.join(knowledgeRoot, 'objects')
   const tempRoot = path.join(knowledgeRoot, 'tmp')
+  const packsRoot = path.join(knowledgeRoot, 'packs')
 
   async function ensureDirectories() {
     await mkdir(objectsRoot, { recursive: true })
     await mkdir(tempRoot, { recursive: true })
+    await mkdir(packsRoot, { recursive: true })
+    await writeFile(
+      path.join(packsRoot, 'README.txt'),
+      'A3 不会自动下载 OCR 或语义模型。请只安装已确认许可和 SHA-256、且兼容当前应用版本的本地模型包。\n',
+      { encoding: 'utf8', flag: 'wx' },
+    ).catch(error => {
+      if (error?.code !== 'EEXIST') throw error
+    })
   }
 
   async function importOne(source) {
@@ -230,6 +240,7 @@ export function createKnowledgeImporter({ userDataDir }) {
   }
 
   return Object.freeze({
+    prepare: ensureDirectories,
     importPaths,
     resolveObject,
     knowledgeRoot,

@@ -42,6 +42,20 @@ test('imports one verified object atomically and deduplicates by sha256', async 
 })
 
 
+test('prepares an empty optional-pack directory with local installation guidance', async () => {
+  const root = await tempRoot()
+  const importer = createKnowledgeImporter({ userDataDir: root })
+
+  await importer.prepare()
+
+  const packsRoot = path.join(root, 'knowledge', 'packs')
+  assert.deepEqual(await readdir(packsRoot), ['README.txt'])
+  const guidance = await readFile(path.join(packsRoot, 'README.txt'), 'utf8')
+  assert.match(guidance, /不会自动下载/)
+  assert.match(guidance, /许可和 SHA-256/)
+})
+
+
 test('rejects symbolic links and extension-signature mismatches', async t => {
   const root = await tempRoot()
   const importer = createKnowledgeImporter({ userDataDir: root })

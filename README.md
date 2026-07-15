@@ -4,7 +4,7 @@
 
 本项目是一个面向学习场景的后端原型系统。系统通过“画像 Agent”和“资源生成 Agent”协作，先用多轮对话了解学习者，再生成结构化学习画像、学习笔记、分层练习题和解析。模型输出采用可读的纯文本协议，便于调试、校验和前端渲染。
 
-当前后端已完成核心 P0 能力：多轮诊断、画像生成、资源生成、协议校验、错误映射、SSE 流式输出、取消生成、会话历史和离线测试。
+当前应用已完成核心 P0 能力：多轮诊断、画像生成、资源生成、协议校验、错误映射、SSE 流式输出、取消生成、会话历史、本地知识库和桌面端离线测试。
 
 学习资源生成后，系统会把练习题结构化保存并分配题目 ID。学生提交答案后，后端会更新知识点掌握度、错题记录和复习时间；后续资源生成会使用这些真实学习状态调整内容和难度。
 
@@ -18,6 +18,9 @@
 - Pydantic Settings
 - 双网关模型层：OpenAI 兼容接口与 Anthropic Messages API
 - pytest
+- Electron + Vue 3 + Pinia
+- PyMuPDF、python-docx、python-pptx、openpyxl
+- SQLite FTS5 + 可选 NumPy 本地语义索引
 
 ## 目录结构
 
@@ -28,7 +31,9 @@
 | `backend/protocols/` | 诊断、画像、资源协议模型、解析和序列化 |
 | `backend/models/` | API 请求与响应模型 |
 | `backend/evaluation/` | 固定样例和效果评分工具 |
+| `backend/knowledge/` | 本地对象解析、切片、FTS、可选 OCR/语义包与引用上下文 |
 | `backend/tests/` | 离线单元测试与接口测试 |
+| `a3-front/a3-front/` | Vue/Electron 桌面端、暖色三栏工作台与知识库界面 |
 | `codex/architecture/` | 架构设计与复审材料 |
 
 ## 本地启动
@@ -93,7 +98,7 @@ MODEL_NAME=deepseek-v4-pro
 .\.venv\Scripts\python.exe -m pytest -q backend
 ```
 
-当前离线测试覆盖诊断状态机、协议解析、错误响应、会话接口、流式事件、取消和评测工具。真实模型联调需要有效的 `MODEL_API_KEY`，不会在离线测试中自动发起。
+当前离线测试覆盖诊断状态机、协议解析、错误响应、会话接口、流式事件、取消、七格式知识解析、恶意文件隔离、检索性能和评测工具。真实模型联调需要有效的 `MODEL_API_KEY`，不会在离线测试中自动发起。
 
 也可以直接双击运行 `backend\quick_test.bat`，自动完成语法检查和全部后端测试；双击 `backend\quick_package_test.bat` 可额外重建 `api.exe` 并执行启动自检。两个入口会优先使用项目内的 `backend\competition` Python 环境。
 
@@ -112,7 +117,18 @@ MODEL_NAME=deepseek-v4-pro
 - `422`：检查消息是否为空、是否超过 8000 字，或 `session_id` 是否只包含字母、数字、下划线和连字符。
 - `502`：模型返回不符合协议，系统会尝试一次格式修复；仍失败时查看错误代码。
 - SSE 没有实时分片：确认客户端使用 `/api/chat/stream`，并关闭代理层缓冲。
-- 数据库位置：默认是 `backend/app.db`；桌面版应按架构文档迁移到 Electron userData 目录。
+- 数据库位置：开发模式默认是 `backend/app.db`；桌面版保存在 Electron userData 的 `backend/app.db`，知识对象保存在同一 userData 的 `knowledge/objects`。
+
+## 本地知识库
+
+桌面端“本地知识库”支持 PDF、DOCX、PPTX、XLSX、TXT、Markdown 和 CSV。文件选择和拖放都由 Electron 主进程完成：主进程校验普通文件、扩展名、签名、单文件 100 MiB、最多 50 个文件和批次 500 MiB，然后以 SHA-256 去重复制到 `userData/knowledge/objects`。renderer 和普通 HTTP API 不接收用户原路径。
+
+- 左侧集合用于整理课程资料，中间显示文档与导入进度，右侧显示安全元数据、OCR 提示、重建、删除和只读预览。
+- 学习空间可绑定多个集合。`allow_model_context` 只向当前模型服务发送最多 8 个相关片段；`local_search_only` 只做本机检索，不把资料正文发送给模型。
+- 模型收到的片段被标记为不可信资料，不能覆盖系统指令；模型引用必须匹配本次检索产生的 `[资料N]`，历史和导出保存同一份受控引用快照。
+- 图片型 PDF 在没有本地 OCR 包时进入 `OCR_REQUIRED`，不影响其他文档和主学习服务。语义包缺失或损坏时自动退回关键词检索。
+- A3 不会自动下载或随安装包分发 OCR/语义模型权重。首次启动会创建 `userData/knowledge/packs/README.txt`；只应安装具有明确许可、兼容范围和 SHA-256 的本地包。
+- 删除文档会清理数据库、FTS/语义索引和无引用对象；应用异常退出时进行中的任务标记为 `INTERRUPTED`，可由用户重试。
 
 ## 资源缓存
 
@@ -128,10 +144,10 @@ MODEL_NAME=deepseek-v4-pro
 
 ```powershell
 .\backend\build_api.ps1 -Python .\backend\competition\Scripts\python.exe
-.\backend\verify_api_package.ps1
+.\backend\verify_api_package.ps1 -Python .\backend\competition\Scripts\python.exe
 ```
 
-产物位于 `dist/api/api.exe`。运行后默认监听 `127.0.0.1:8000`；可用 `A3_PORT` 修改端口。打包版会将数据库和模型配置保存到 `%LOCALAPPDATA%\A3LearningAgent`，避免写入安装目录；也可通过 `A3_DATA_DIR` 指定自定义数据目录。
+产物位于 `dist/api/api.exe`。验证脚本会先以 `api.exe --knowledge-worker` 解析七种最小样本，再启动 HTTP 服务检查 `/health/live` 和 `/test`。运行后默认监听 `127.0.0.1:8000`；可用 `A3_PORT` 修改端口。打包版会将数据库和模型配置保存到 `%LOCALAPPDATA%\A3LearningAgent`，避免写入安装目录；也可通过 `A3_DATA_DIR` 指定自定义数据目录。
 
 ## 离线评测
 
@@ -180,6 +196,7 @@ MODEL_NAME=deepseek-v4-pro
 ## 后续工作
 
 - 使用有效的用户自定义模型配置完成真实流式联调。
-- 编写 React 或 Vue 界面，并通过 Electron 打包桌面端。
+- 完成多 API 高可用切换、模型能力与推理强度控制。
+- 在知识库稳定交付后，再按独立设计实施可扩展桌宠；账号体系继续只保留扩展边界。
 - 根据真实模型输出扩充评测集和评分基线。
 - 按 `codex/AI模型任务队列.md` 管理后续模型任务。

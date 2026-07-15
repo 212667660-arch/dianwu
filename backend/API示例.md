@@ -99,6 +99,9 @@ Accept: text/event-stream
  event: sources
  data: {"request_id":"...","sources":[{"title":"资料标题","url":"https://example.edu/resource","snippet":"公开资料摘要"}],"cached":false}
 
+ event: knowledge_sources
+ data: {"request_id":"...","sources":[{"reference_id":"资料1","document_id":9,"document_name":"极限讲义.pdf","locator_label":"第 3 页","locator":{"type":"page","start":3,"end":3},"chunk_id":11,"retrieval_mode":"keyword"}],"cached":false}
+
  event: validation
  data: {"request_id":"...","valid":true,"repair_attempted":false,"error_code":null}
 
@@ -146,6 +149,60 @@ Content-Type: application/json
 `GET /api/sessions/{session_id}/resources/{resource_id}/export?format=markdown`
 
 `format` 支持 `markdown`（默认）和 `txt`。资源 ID 必须属于该会话，否则返回 `404`。若资源生成时使用了在线检索，导出内容会在正文后附上持久化的“参考来源”；会话历史、普通资源阶段响应和 SSE 的 `sources` 事件会返回同一份来源快照。
+
+## 本地知识库
+
+知识库接口只接收 Electron 主进程已经复制并校验的对象 manifest，不接收用户原路径，也不提供 multipart 文件上传。`object_relpath` 只能是与 SHA-256 一致的 `objects/<64 位小写十六进制>`；后端会再次检查对象大小与哈希。
+
+```http
+POST /api/knowledge/collections
+Content-Type: application/json
+
+{"name":"高数","description":"极限与导数","color":"#c98f65"}
+```
+
+集合还支持 `GET /api/knowledge/collections`、`PUT /api/knowledge/collections/{id}` 和 `DELETE /api/knowledge/collections/{id}`。删除集合不会直接删除仍被其他集合引用的对象。
+
+```http
+POST /api/knowledge/imports
+Content-Type: application/json
+
+{
+  "collection_id": 3,
+  "files": [
+    {
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "display_name": "极限讲义.pdf",
+      "extension": ".pdf",
+      "mime_type": "application/pdf",
+      "byte_size": 1024,
+      "object_relpath": "objects/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ]
+}
+```
+
+导入返回 `202` 和任务列表。`GET /api/knowledge/imports` 读取进度，`DELETE /api/knowledge/imports/{job_id}` 取消任务；`POST /api/knowledge/documents/{document_id}/rebuild` 重新解析，`DELETE /api/knowledge/documents/{document_id}` 删除文档及无引用对象。支持格式为 PDF、DOCX、PPTX、XLSX、TXT、Markdown 和 CSV；单文件不超过 100 MiB，一次最多 50 个文件和 500 MiB。
+
+学习空间绑定：
+
+```http
+PUT /api/sessions/student_001/knowledge-collections
+Content-Type: application/json
+
+{"collection_ids":[3,4],"privacy_mode":"allow_model_context"}
+```
+
+`privacy_mode=allow_model_context` 允许把当前检索命中的少量片段作为不可信参考数据发送给模型；`local_search_only` 只允许本机搜索，不向模型发送片段。
+
+```http
+POST /api/knowledge/search
+Content-Type: application/json
+
+{"session_id":"student_001","query":"极限的直观定义","limit":8}
+```
+
+搜索只覆盖该会话已绑定的集合，返回 `keyword` 或 `hybrid` 模式、受控文档 ID、显示名、文本片段和 page/slide/sheet_rows/paragraph locator，不返回原始路径或对象路径。常见稳定错误码包括 `KNOWLEDGE_FILE_SIGNATURE_MISMATCH`、`KNOWLEDGE_ARCHIVE_UNSAFE`、`KNOWLEDGE_DOCUMENT_ENCRYPTED`、`KNOWLEDGE_PARSE_TIMEOUT`、`KNOWLEDGE_PARSE_FAILED`、`KNOWLEDGE_OCR_PACK_REQUIRED`、`KNOWLEDGE_INDEX_UNAVAILABLE` 和 `KNOWLEDGE_OBJECT_MISSING`。
 
 ## 错误响应
 

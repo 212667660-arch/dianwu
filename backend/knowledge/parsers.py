@@ -270,37 +270,38 @@ def _cell_text(value: object) -> str:
 
 def _parse_xlsx(path: Path, limits: ParserLimits) -> ParsedDocument:
     collector = _BlockCollector(limits)
-    workbook = load_workbook(
-        path,
-        read_only=True,
-        data_only=True,
-        keep_links=False,
-    )
-    try:
-        if len(workbook.worksheets) > limits.max_sheets:
-            raise KnowledgeParseError("KNOWLEDGE_PARSE_LIMIT_EXCEEDED")
-        nonempty_cells = 0
-        for sheet in workbook.worksheets:
-            for row_index, row in enumerate(sheet.iter_rows(values_only=True), 1):
-                values = [_cell_text(value) for value in row]
-                nonempty_cells += sum(bool(value) for value in values)
-                if nonempty_cells > limits.max_cells:
-                    raise KnowledgeParseError("KNOWLEDGE_PARSE_LIMIT_EXCEEDED")
-                if not any(values):
-                    continue
-                collector.add(
-                    StructuredBlock(
-                        text=" | ".join(values),
-                        heading_path=(sheet.title,),
-                        locator_type="sheet_rows",
-                        locator_start=row_index,
-                        locator_end=row_index,
-                        sheet_name=sheet.title,
+    with path.open("rb") as source:
+        workbook = load_workbook(
+            source,
+            read_only=True,
+            data_only=True,
+            keep_links=False,
+        )
+        try:
+            if len(workbook.worksheets) > limits.max_sheets:
+                raise KnowledgeParseError("KNOWLEDGE_PARSE_LIMIT_EXCEEDED")
+            nonempty_cells = 0
+            for sheet in workbook.worksheets:
+                for row_index, row in enumerate(sheet.iter_rows(values_only=True), 1):
+                    values = [_cell_text(value) for value in row]
+                    nonempty_cells += sum(bool(value) for value in values)
+                    if nonempty_cells > limits.max_cells:
+                        raise KnowledgeParseError("KNOWLEDGE_PARSE_LIMIT_EXCEEDED")
+                    if not any(values):
+                        continue
+                    collector.add(
+                        StructuredBlock(
+                            text=" | ".join(values),
+                            heading_path=(sheet.title,),
+                            locator_type="sheet_rows",
+                            locator_start=row_index,
+                            locator_end=row_index,
+                            sheet_name=sheet.title,
+                        )
                     )
-                )
-        return collector.result(sheet_count=len(workbook.worksheets))
-    finally:
-        workbook.close()
+            return collector.result(sheet_count=len(workbook.worksheets))
+        finally:
+            workbook.close()
 
 
 def _decode_text(path: Path, limits: ParserLimits) -> str:

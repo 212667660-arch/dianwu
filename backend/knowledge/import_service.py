@@ -80,20 +80,9 @@ async def spawn_isolated_worker(
     object_root: Path,
 ):
     project_root = Path(__file__).resolve().parents[2]
-    bootstrap = (
-        "import runpy,sys;"
-        + "sys.path.insert(0,"
-        + repr(str(project_root))
-        + ");"
-        + "runpy.run_module('backend.knowledge.worker_main',run_name='__main__')"
-    )
+    command = knowledge_worker_command(project_root)
     process = await asyncio.create_subprocess_exec(
-        sys.executable,
-        "-I",
-        "-X",
-        "utf8",
-        "-c",
-        bootstrap,
+        *command,
         cwd=str(project_root),
         env=worker_environment(
             os.environ,
@@ -111,6 +100,26 @@ async def spawn_isolated_worker(
     await process.stdin.drain()
     process.stdin.close()
     return process
+
+
+def knowledge_worker_command(project_root: Path) -> list[str]:
+    if getattr(sys, "frozen", False):
+        return [sys.executable, "--knowledge-worker"]
+    bootstrap = (
+        "import runpy,sys;"
+        + "sys.path.insert(0,"
+        + repr(str(project_root))
+        + ");"
+        + "runpy.run_module('backend.knowledge.worker_main',run_name='__main__')"
+    )
+    return [
+        sys.executable,
+        "-I",
+        "-X",
+        "utf8",
+        "-c",
+        bootstrap,
+    ]
 
 
 class KnowledgeImportService:
