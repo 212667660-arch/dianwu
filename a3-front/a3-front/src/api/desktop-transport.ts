@@ -34,7 +34,7 @@ function streamFromDesktop(
       if (message.streamId !== streamId) return
       if (message.type === 'event') onEvent(message.event)
       else if (message.type === 'done') finish()
-      else finish(toDesktopApiError(499, message.error))
+      else finish(toDesktopApiError(message.status ?? 499, message.error))
     })
 
     signal?.addEventListener('abort', onAbort, { once: true })

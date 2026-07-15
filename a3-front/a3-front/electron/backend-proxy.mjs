@@ -135,8 +135,8 @@ export function createBackendProxy({
 
       const status = normalizeStatus(response?.status)
       if (status < 200 || status >= 300) {
-        const error = await streamHttpFailure(response, status)
-        throw new StreamProxyError(error)
+        const failure = await streamHttpFailure(response, status)
+        throw new StreamProxyError(failure.error, failure.status)
       }
       if (!hasEventStreamContentType(response)) throw new StreamProxyError(invalidStreamResponse())
       if (!response?.body?.getReader) throw new StreamProxyError(invalidStreamResponse())
@@ -148,11 +148,11 @@ export function createBackendProxy({
       if (stream.controller.signal.aborted) throw streamCancelled()
       sendStreamMessage(owner, streamId, { streamId, type: 'done' })
     } catch (error) {
-      const safeError = streamSafeError(error)
+      const safeFailure = streamSafeFailure(error)
       if (!stream.controller.signal.aborted || stream.notifyCancellation) {
-        sendStreamMessage(owner, streamId, streamError(safeError))
+        sendStreamMessage(owner, streamId, streamError(safeFailure.error, safeFailure.status))
       }
-      await logStreamFailure(log, safeError)
+      await logStreamFailure(log, safeFailure.error)
     } finally {
       streams.delete(key)
     }
@@ -336,10 +336,13 @@ function parseSseBlock(block) {
 async function streamHttpFailure(response, status) {
   try {
     const body = await readResponseBody(response)
-    if (body.tooLarge) return invalidStreamResponse()
-    return hasJsonContentType(response) ? mapBackendFailure(status, body.text).error : mapBackendFailure(status, '').error
+    if (body.tooLarge) return { status: 502, error: invalidStreamResponse() }
+    const mapped = hasJsonContentType(response)
+      ? mapBackendFailure(status, body.text)
+      : mapBackendFailure(status, '')
+    return { status: mapped.status, error: mapped.error }
   } catch {
-    return invalidStreamResponse()
+    return { status: 502, error: invalidStreamResponse() }
   }
 }
 
@@ -353,20 +356,26 @@ function hasEventStreamContentType(response) {
 }
 
 class StreamProxyError extends Error {
-  constructor(error) {
+  constructor(error, status) {
     super(error.code)
     this.error = error
+    this.status = status
   }
 }
 
-function streamSafeError(error) {
-  if (error instanceof StreamProxyError) return error.error
-  if (error instanceof DOMException && error.name === 'AbortError') return streamCancelled()
-  return backendUnavailable() .error
+function streamSafeFailure(error) {
+  if (error instanceof StreamProxyError) return { error: error.error, status: error.status }
+  if (error instanceof DOMException && error.name === 'AbortError') return { error: streamCancelled() }
+  return { error: backendUnavailable().error }
 }
 
-function streamError(error) {
-  return { streamId: undefined, type: 'error', error }
+function streamError(error, status) {
+  return {
+    streamId: undefined,
+    type: 'error',
+    ...(status === undefined ? {} : { status }),
+    error,
+  }
 }
 
 function streamInvalidId() {
@@ -455,13 +464,23 @@ function mapBackendFailure(status, text) {
 function parseStructuredBackendError(text) {
   try {
     const value = JSON.parse(text)
-    if (!value || typeof value !== 'object' || typeof value.code !== 'string' || typeof value.message !== 'string') {
+    if (
+      !value
+      || typeof value !== 'object'
+      || Array.isArray(value)
+      || typeof value.code !== 'string'
+      || value.code.length === 0
+      || typeof value.message !== 'string'
+      || value.message.length === 0
+      || typeof value.retryable !== 'boolean'
+      || (value.request_id !== undefined && typeof value.request_id !== 'string')
+    ) {
       return null
     }
     return desktopError(
       value.code,
       value.message,
-      value.retryable === true,
+      value.retryable,
       typeof value.request_id === 'string' ? value.request_id : undefined,
     )
   } catch {

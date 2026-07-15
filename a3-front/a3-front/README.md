@@ -22,6 +22,23 @@ npm run build
 
 该命令用于 Web 部署，保留以 `/assets/` 为根的资源路径和 Web History。产物位于当前目录的 `dist/`。
 
+## 错误响应约定
+
+后端所有 HTTP 非 2xx 响应均使用同一安全信封，便于 Web 开发模式和 Electron 桌面模式一致处理：
+
+```json
+{
+  "code": "SESSION_NOT_FOUND",
+  "message": "会话不存在。",
+  "retryable": false,
+  "request_id": "请求追踪标识"
+}
+```
+
+- `code` 是稳定的程序化错误代码；`message` 可直接展示给用户；`retryable` 表示是否建议稍后重试。
+- FastAPI 会为每个错误响应返回相同的 `X-Request-ID` 响应头和 `request_id` 正文值。
+- 前端统一转换为 `BackendApiError`（为兼容旧调用，仍可使用别名 `DesktopApiError`），其中 `requestId` 对应后端的 `request_id`。非标准上游响应和网络异常只显示通用安全提示，不展示内部细节。
+
 ## Electron 桌面端
 
 桌面端源码和发布产物均在本目录：`electron/` 保存主进程与 preload，`release/` 保存解压验证产物或安装包。界面以 HanaAgent/openhanako 的三栏工作区布局为参考，保留 A3 的学习诊断、资源和复习流程。

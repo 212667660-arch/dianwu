@@ -9,3 +9,13 @@
 - 桌面端由主进程使用 `safeStorage` 保存模型密文并在后端启动时注入；Web 开发模式才使用后端 POST/PUT 设置接口。
 - 桌面 SSE 事件通过 preload 转发；普通请求和流式请求均由主进程执行白名单校验、令牌注入和错误映射。
 - API 错误会显示给用户，不会静默替换为假数据。
+
+## 统一错误对象
+
+后端 HTTP 非 2xx 响应固定为 `{ code, message, retryable, request_id }`。`WebTransport` 和 `DesktopTransport` 都会把它转换为 `BackendApiError`：
+
+- `status`：HTTP 状态码；
+- `code`、`message`、`retryable`：与后端原样对应；
+- `requestId`：后端 `request_id` 的驼峰字段。
+
+`DesktopApiError` 是 `BackendApiError` 的兼容导出。仅包含完整固定字段的错误响应会被保留；网络故障、非 JSON 或字段不完整的响应会降级为不含上游细节的通用错误。SSE 建流失败沿用同一转换规则，正常 SSE 事件协议不变。

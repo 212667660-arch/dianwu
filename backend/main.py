@@ -116,6 +116,30 @@ class DesktopAuthMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+class ErrorEnvelopeMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        if response.status_code < 400:
+            return response
+
+        content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+        if content_type == "application/json" or content_type.endswith("+json"):
+            return response
+
+        passthrough_headers = {
+            key: value
+            for key, value in response.headers.items()
+            if key.lower() not in {"content-length", "content-type", "x-request-id"}
+        }
+        error = AppError(
+            "HTTP_REQUEST_ERROR",
+            "请求无法处理。",
+            response.status_code,
+            retryable=response.status_code >= 500,
+        )
+        return error_response(request, error, headers=passthrough_headers)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     rate_limiter.clear()
@@ -136,6 +160,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["Content-Type", "X-Request-ID", "X-A3-Desktop-Token"],
 )
+app.add_middleware(ErrorEnvelopeMiddleware)
 app.include_router(chat.router)
 app.include_router(profile.router)
 app.include_router(resource.router)

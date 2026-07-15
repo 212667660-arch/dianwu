@@ -2,7 +2,7 @@
 
 > 项目：基于大模型的个性化资源生成与学习多智能体系统开发
 > 队列位置：E:\软件杯\codex\AI模型任务队列.md
-> 当前模型批次：Terra（T-029 统一错误响应契约进行中）
+> 当前模型批次：Terra（T-029 已完成，等待新增任务）
 > 最后审视日期：2026-07-14
 
 ## 一、使用规则
@@ -103,7 +103,7 @@
 | T-026 | P1 | 完成 | 完成 A3 前端真实联调与回归测试 | L-010 | 六个页面连接真实后端；诊断、SSE、取消、资源、答题和复习全流程浏览器验收；补充前端自动化回归；生产构建通过 |
 | T-027 | P2 | 完成 | 收敛 A3 前端生产产物与体验细节 | T-026 | 处理超过 500 kB 的主包告警，复核加载、错误和窄屏体验，保留实际收益并记录指标 |
 | T-028 | P2 | 完成 | 接入 Electron 前端壳并打包验收 | T-026、用户确认桌面端范围、S-011 | 主进程、无令牌预加载 IPC、前端产物加载和安装包验收；以 openhanako 作为交互与视觉参考 |
-| T-029 | P1 | 进行中 | 统一 FastAPI、Web 与 Electron 的错误响应契约 | S-013 | 404/422 与业务异常统一可解析错误信封，Web/Electron 显示一致且覆盖回归测试 |
+| T-029 | P1 | 完成 | 统一 FastAPI、Web 与 Electron 的错误响应契约 | S-013 | 404/422 与业务异常统一可解析错误信封，Web/Electron 显示一致且覆盖回归测试 |
 
 ## 六、Luna 队列
 
@@ -137,7 +137,7 @@
 
 Sol 批次已完成 S-008、S-009、S-010、S-011、S-014 和 S-015：生产安全边界、学习闭环、自适应建议、资源质量门槛、Electron IPC 契约、安装版安全模型配置闭环及项目 Git 安全基线均已落地。INBOX-001 继续保留 `backend/competition`，用于测试、评测和重新打包复现，但该目录不会进入 Git。
 
-Terra 批次已完成 T-024 和 T-025：流式生成取消已绑定原始会话，高成本接口在桌面令牌保护模式下执行按客户端滑动窗口限流，诊断历史按首条学习目标、最近消息和字符上限裁剪。下一项就绪任务为 T-029（统一 FastAPI、Web 与 Electron 错误响应契约）。INBOX-002 当前使用 DeepSeek OpenAI 兼容配置与 deepseek-v4-pro；旧混元和 OpenAI Terra 联调记录仅供历史追溯。
+Terra 批次已完成 T-024、T-025 和 T-029：流式生成取消已绑定原始会话，高成本接口在桌面令牌保护模式下执行按客户端滑动窗口限流，诊断历史按首条学习目标、最近消息和字符上限裁剪；T-029 已统一 FastAPI、Web 与 Electron 错误响应契约并完成全量回归。当前没有新的 Terra 就绪任务。INBOX-002 当前使用 DeepSeek OpenAI 兼容配置与 deepseek-v4-pro；旧混元和 OpenAI Terra 联调记录仅供历史追溯。
 
 Luna 批次已完成并通过复审。README、API 示例、协议说明、评测样例和开发总结已同步当前代码。L-007、L-008、L-009 已完成：快捷测试入口和浏览器测试台均已通过自动化测试、浏览器检查及打包启动自检；竞品对照和后端优化方案已形成。S-009 已就绪，等待切换 Sol 后实施跨模块学习闭环代码。
 
@@ -161,6 +161,7 @@ S-016 已完成：本仓库提交身份已设置为 `Wei kb <212667660@qq.com>`�
 
 | 日期 | 任务 ID | 模型 | 修改文件 | 验证结果 |
 | --- | --- | --- | --- | --- |
+| 2026-07-15 | T-029 | Terra | backend/main.py、backend/errors.py、backend/routers/chat.py、backend/routers/sessions.py、backend/routers/learning.py、backend/tests/error_assertions.py 及错误回归；a3-front/a3-front/electron/backend-proxy.mjs、electron/backend-proxy.test.mjs、src/api/transport.ts、src/api/desktop-transport.ts、src/api/desktop-transport.test.ts、README 文档 | 统一 `code/message/retryable/request_id` 错误信封，覆盖 FastAPI 404/405/422/500/503、业务资源 404、非法 CORS 预检和非 JSON 错误，同时保留合法 3xx 跳转；Electron SSE 建流失败保留 404/422/503 状态，Web/Electron 均转换为 `BackendApiError`。完整后端 `compileall` 与 pytest 87 passed（工作区独立 basetemp），Electron Node 69 passed，Vitest 28 passed，`npm run build` 与 `npm run build:desktop` 均退出码 0。 |
 | 2026-07-14 | S-016 | Sol | .git/config、codex/AI模型任务队列.md、GitHub `212667660-arch/a3-learning-agents` | 设置仓库级提交身份 `Wei kb <212667660@qq.com>`；确认 `origin` 为 GitHub 私有仓库，`git push -u origin main` 退出码 0并建立上游；GitHub 页面显示 `main`、2 commits 和项目文件。完成记录提交后再次推送，并使用 `git fetch`、`git rev-parse HEAD`、`git rev-parse origin/main`、`git ls-remote origin refs/heads/main` 验证三方哈希一致；工作区保持干净。 |
 | 2026-07-14 | S-015 | Sol | .gitignore、.gitattributes、codex/AI模型任务队列.md、Git 仓库元数据 | 在 `E:\软件杯` 初始化 `main` 单仓库；候选集审计后提交 156 个源码、测试、文档及小型验收文件，无超过 10 MiB 文件；真实 `backend/.env`、`backend/competition`、`node_modules`、`dist`、`release`、`desktop-backend`、数据库、凭据文件和 `.superpowers` 临时目录均不在索引。密钥特征扫描无命中；后端快捷测试 80 passed，`npm run test` 为 Electron Node 66/66、Vitest 23/23。首个提交 `16619b1`（`chore: establish A3 project baseline`）使用一次性本地 Codex 署名，未配置远程。 |
 | 2026-07-14 | S-014 | Sol | a3-front/a3-front/electron/model-config.mjs、electron/model-config-controller.mjs 及测试、electron/main.mjs、electron/preload.mjs、electron/ipc-contract.mjs、electron/runtime.test.mjs、src/api/、src/stores/backend.ts、src/layouts/AppLayout.vue、src/views/ModelSettings.vue、src/views/SmartTutor.vue 及测试、README.md、src/api/README.md、docs/superpowers/specs/2026-07-14-secure-model-settings-design.md、docs/superpowers/plans/2026-07-14-secure-model-settings-plan.md、release/、codex/AI模型任务队列.md | 新增 `safeStorage` 密文存储、固定受信 IPC、启动注入、测试后保存、ready 回滚、首次引导与未配置发送锁定；自审补充损坏凭据结构化错误和测试期间表单修改竞态回归。`backend/quick_test.ps1` 80 passed；`npm run test` 为 Node 66/66、Vitest 23/23；`npm run build`、`npm run build:desktop`、`npm run desktop:pack`、`npm run desktop:dist` 均退出码 0。全新隔离 userData 的 unpacked 启动退出码 0，ready/stop/forced-exit 日志齐全，`backend/app.db` 位于隔离目录，无 `model-settings.enc`，残留进程 0。安装包 `release/智学协作台 Setup 0.0.0.exe` 为 103,725,300 bytes；视觉截图保留于 `codex/artifacts/S-014-model-settings-desktop.png` 和 `S-014-model-settings-narrow.png`。 |

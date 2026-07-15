@@ -28,7 +28,7 @@ export type DesktopResponse =
 export type DesktopStreamMessage =
   | { streamId: string; type: 'event'; event: StreamEvent }
   | { streamId: string; type: 'done' }
-  | { streamId: string; type: 'error'; error: DesktopError }
+  | { streamId: string; type: 'error'; status?: number; error: DesktopError }
 
 export interface DesktopBridge {
   request(input: TransportRequest): Promise<DesktopResponse>
@@ -41,15 +41,24 @@ export interface DesktopBridge {
 }
 
 export class BackendApiError extends Error {
+  readonly status: number
+  readonly code: string
+  readonly retryable: boolean
+  readonly requestId?: string
+
   constructor(
-    readonly status: number,
-    readonly code: string,
+    status: number,
+    code: string,
     message: string,
-    readonly retryable = false,
-    readonly requestId?: string,
+    retryable = false,
+    requestId?: string,
   ) {
     super(message)
     this.name = 'BackendApiError'
+    this.status = status
+    this.code = code
+    this.retryable = retryable
+    this.requestId = requestId
   }
 }
 

@@ -81,7 +81,7 @@ describe('model settings API', () => {
     expect(request).not.toHaveBeenCalled()
   })
 
-  it('converts a fixed desktop model config error to DesktopApiError', async () => {
+  it('converts a fixed desktop model config error to BackendApiError', async () => {
     window.a3Desktop = {
       request: vi.fn(),
       modelConfigTest: vi.fn().mockResolvedValue({
@@ -97,7 +97,7 @@ describe('model settings API', () => {
     }
 
     await expect(backendApi.testModelSettings(modelInput)).rejects.toMatchObject({
-      name: 'DesktopApiError',
+      name: 'BackendApiError',
       code: 'MODEL_AUTHENTICATION_ERROR',
       status: 401,
     })

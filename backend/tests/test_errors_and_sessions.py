@@ -4,17 +4,7 @@ from backend.config import Settings
 from backend.errors import ConfigurationError
 from backend.main import app
 from backend.routers import chat
-
-
-def assert_error(response, status: int, code: str, retryable: bool = False) -> None:
-    assert response.status_code == status
-    body = response.json()
-    assert body["code"] == code
-    assert body["retryable"] is retryable
-    assert isinstance(body["message"], str) and body["message"]
-    assert isinstance(body["request_id"], str) and body["request_id"]
-    assert response.headers["X-Request-ID"] == body["request_id"]
-    assert "detail" not in body
+from backend.tests.error_assertions import assert_error
 
 
 def test_app_error_uses_structured_non_200_response(monkeypatch) -> None:
@@ -74,3 +64,17 @@ def test_unknown_route_and_method_use_safe_framework_envelopes() -> None:
         method = client.put("/health/live")
     assert_error(missing, 404, "HTTP_NOT_FOUND")
     assert_error(method, 405, "HTTP_METHOD_NOT_ALLOWED")
+
+
+def test_disallowed_cors_preflight_uses_safe_error_envelope() -> None:
+    with TestClient(app) as client:
+        response = client.options(
+            "/health/live",
+            headers={
+                "Origin": "http://localhost:5173",
+                "Access-Control-Request-Method": "PATCH",
+                "X-Request-ID": "cors-preflight",
+            },
+        )
+    assert_error(response, 400, "HTTP_REQUEST_ERROR")
+    assert response.json()["request_id"] == "cors-preflight"

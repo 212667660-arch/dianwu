@@ -6,6 +6,7 @@ from backend.database import SessionLocal, init_db
 from backend.main import app
 from backend.services import db as repo
 from backend.services import learning
+from backend.tests.error_assertions import assert_error
 
 PROFILE = """【协议:learner-profile/v1】
 画像版本：1
@@ -125,8 +126,7 @@ def test_question_attempt_is_scoped_to_session_and_invalidates_old_cache() -> No
             f"/api/sessions/{other_session_id}/questions/{question_id}/attempts",
             json={"answer": "1"},
         )
-    assert response.status_code == 404
-    assert response.json()["code"] == "QUESTION_NOT_FOUND"
+    assert_error(response, 404, "QUESTION_NOT_FOUND")
 
 
 def test_deleting_session_cascades_learning_records() -> None:

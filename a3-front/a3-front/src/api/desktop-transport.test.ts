@@ -84,4 +84,32 @@ describe('Desktop transport', () => {
     await expect(promise).rejects.toBeInstanceOf(DesktopApiError)
     expect(unsubscribe).toHaveBeenCalledTimes(1)
   })
+
+  it('preserves a canonical backend status for an Electron stream setup failure', async () => {
+    const { bridge } = fakeBridge()
+    const promise = createDesktopTransport(bridge).stream(
+      { method: 'POST', path: '/api/chat/stream', body: { session_id: 'student_1', message: 'hi' } },
+      () => {},
+    )
+    const streamId = vi.mocked(bridge.startStream).mock.calls[0][0]
+    bridge.emit({
+      streamId,
+      type: 'error',
+      status: 503,
+      error: {
+        code: 'MODEL_NOT_READY',
+        message: '模型服务尚未配置。',
+        retryable: false,
+        requestId: 'req-stream-503',
+      },
+    })
+
+    await expect(promise).rejects.toMatchObject({
+      name: 'BackendApiError',
+      status: 503,
+      code: 'MODEL_NOT_READY',
+      retryable: false,
+      requestId: 'req-stream-503',
+    })
+  })
 })

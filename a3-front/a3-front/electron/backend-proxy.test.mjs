@@ -224,6 +224,105 @@ test('retains structured backend error metadata from a 401 response', async () =
   })
 })
 
+test('preserves canonical 404, 422, and 503 backend error envelopes', async () => {
+  for (const [status, code, retryable] of [
+    [404, 'SESSION_NOT_FOUND', false],
+    [422, 'REQUEST_VALIDATION_ERROR', false],
+    [503, 'MODEL_NOT_READY', false],
+  ]) {
+    const { event, proxy } = createContext({
+      fetchImpl: async () => new Response(JSON.stringify({
+        code,
+        message: '安全错误文案。',
+        retryable,
+        request_id: 'req-contract',
+      }), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    })
+
+    const result = await proxy.request(event, { method: 'GET', path: '/health/ready' })
+
+    assert.deepEqual(result, {
+      ok: false,
+      status,
+      error: {
+        code,
+        message: '安全错误文案。',
+        retryable,
+        requestId: 'req-contract',
+      },
+    })
+  }
+})
+
+test('preserves canonical HTTP status for stream setup failures', async () => {
+  for (const [status, code, retryable] of [
+    [404, 'SESSION_NOT_FOUND', false],
+    [422, 'REQUEST_VALIDATION_ERROR', false],
+    [503, 'MODEL_NOT_READY', false],
+  ]) {
+    const messages = []
+    const { event, mainWebContents, proxy } = createContext({
+      fetchImpl: async () => new Response(JSON.stringify({
+        code,
+        message: '安全错误文案。',
+        retryable,
+        request_id: 'req-stream-contract',
+      }), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    })
+    mainWebContents.send = (_channel, message) => messages.push(message)
+
+    await proxy.startStream(event, `stream_contract_${status}`, {
+      method: 'POST',
+      path: '/api/chat/stream',
+      body: { session_id: 'student_1', message: 'hello' },
+    })
+
+    assert.deepEqual(messages, [{
+      streamId: `stream_contract_${status}`,
+      type: 'error',
+      status,
+      error: {
+        code,
+        message: '安全错误文案。',
+        retryable,
+        requestId: 'req-stream-contract',
+      },
+    }])
+  }
+})
+
+test('rejects an incomplete backend error envelope without exposing its body', async () => {
+  const { event, proxy } = createContext({
+    fetchImpl: async () => new Response(JSON.stringify({
+      code: 'SESSION_NOT_FOUND',
+      message: 'private upstream detail',
+      request_id: 'req-incomplete',
+    }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  })
+
+  const result = await proxy.request(event, { method: 'GET', path: '/health/ready' })
+
+  assert.deepEqual(result, {
+    ok: false,
+    status: 404,
+    error: {
+      code: 'DESKTOP_BACKEND_HTTP_ERROR',
+      message: '本地服务请求未成功。',
+      retryable: false,
+    },
+  })
+  assert.equal(JSON.stringify(result).includes('private upstream detail'), false)
+})
+
 test('maps a non-JSON HTTP error to a safe generic envelope', async () => {
   const upstreamSecret = 'private upstream diagnostic details'
   const { event, proxy } = createContext({

@@ -10,6 +10,7 @@ from backend.database import SessionLocal, init_db
 from backend.evaluation.cli import evaluate_outputs
 from backend.main import app
 from backend.services import db as repo
+from backend.tests.error_assertions import assert_error
 
 RESOURCE = """【协议:learning-resource/v1】
 主题：一次函数
@@ -63,11 +64,9 @@ def test_resource_export_is_scoped_to_its_session() -> None:
         assert 'attachment; filename="learning-resource-' in response.headers["content-disposition"]
         assert response.text == RESOURCE
         missing = client.get(f"/api/sessions/other/resources/{resource_id}/export")
-        assert missing.status_code == 404
-        assert missing.json()["code"] == "LEARNING_RESOURCE_NOT_FOUND"
+        assert_error(missing, 404, "LEARNING_RESOURCE_NOT_FOUND")
         invalid = client.get(f"/api/sessions/{session_id}/resources/{resource_id}/export?format=pdf")
-        assert invalid.status_code == 422
-        assert invalid.json()["code"] == "REQUEST_VALIDATION_ERROR"
+        assert_error(invalid, 422, "REQUEST_VALIDATION_ERROR")
 
 
 def test_session_history_and_export_include_persisted_sources() -> None:
