@@ -459,6 +459,27 @@ def test_worker_environment_is_minimal_and_contains_no_credentials() -> None:
     assert "UNRELATED" not in result
 
 
+def test_scan_pdf_stops_at_ocr_required_without_replacing_fts() -> None:
+    async def exercise() -> None:
+        repository = FakeRepository()
+        done = DoneEvent(page_count=3, text_characters=0, ocr_required=True)
+        process = FakeProcess([(done.model_dump_json() + "\n").encode("utf-8")])
+        process.finish(0)
+        service = KnowledgeImportService(
+            repository,
+            spawn_worker=lambda _request: process,
+        )
+
+        result = await service.run_job(7)
+
+        assert result.status == ImportJobStatus.OCR_REQUIRED.value
+        assert result.progress == 90
+        assert result.retryable is True
+        assert result.safe_error_code == "KNOWLEDGE_OCR_PACK_REQUIRED"
+
+    asyncio.run(exercise())
+
+
 def test_real_worker_persists_chunks_and_builds_search_index(tmp_path: Path) -> None:
     async def exercise() -> None:
         engine = create_engine("sqlite+pysqlite:///:memory:", future=True)

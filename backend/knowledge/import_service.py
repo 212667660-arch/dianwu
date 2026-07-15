@@ -276,6 +276,16 @@ class KnowledgeImportService:
             if current.cancel_requested:
                 self.repository.clear_worker_output(job_id)
                 return self._terminal_transition(job_id, completed=True)
+            if done.ocr_required:
+                self.repository.clear_worker_output(job_id)
+                return self._transition(
+                    job_id,
+                    ImportJobStatus.OCR_REQUIRED,
+                    90,
+                    stage="ocr_required",
+                    retryable=True,
+                    safe_error_code="KNOWLEDGE_OCR_PACK_REQUIRED",
+                )
             self.repository.finish_worker_output(job_id, done)
             self._transition(job_id, ImportJobStatus.INDEXING, 95)
             blocks = self.repository.worker_block_events(job_id)

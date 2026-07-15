@@ -98,6 +98,7 @@ class CapabilityStatus(StrictKnowledgeModel):
     available: bool
     mode: str
     error_code: str | None = None
+    version: str | None = None
 
 
 class KnowledgeStatusResponse(StrictKnowledgeModel):

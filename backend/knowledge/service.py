@@ -13,6 +13,7 @@ from backend.errors import (
     ResourceNotFoundError,
 )
 from backend.knowledge.models import ImportJobStatus
+from backend.knowledge.optional_packs import CapabilityRegistry
 from backend.knowledge.repository import (
     KnowledgeRecordConflict,
     KnowledgeRecordNotFound,
@@ -77,23 +78,37 @@ class KnowledgeService:
                 fts = True
             except KnowledgeUnavailable:
                 fts = False
+        capabilities = CapabilityRegistry()
+        if self.repository.knowledge_root is not None:
+            packs_root = self.repository.knowledge_root / "packs"
+            for kind in ("ocr", "semantic"):
+                pack_root = packs_root / kind
+                if pack_root.is_dir():
+                    capabilities.load_pack(pack_root)
+
+        def capability_payload(state) -> dict[str, object]:
+            return {
+                "available": state.available,
+                "mode": state.mode,
+                "error_code": state.error_code,
+                "version": state.version,
+            }
+
         return {
             "fts": {
                 "available": fts,
                 "mode": "keyword" if fts else "unavailable",
                 "error_code": None if fts else "KNOWLEDGE_INDEX_UNAVAILABLE",
+                "version": None,
             },
-            "worker": {"available": True, "mode": "isolated", "error_code": None},
-            "ocr_pack": {
-                "available": False,
-                "mode": "optional",
-                "error_code": "KNOWLEDGE_OCR_PACK_REQUIRED",
-            },
-            "semantic_pack": {
-                "available": False,
-                "mode": "optional",
+            "worker": {
+                "available": True,
+                "mode": "isolated",
                 "error_code": None,
+                "version": None,
             },
+            "ocr_pack": capability_payload(capabilities.ocr),
+            "semantic_pack": capability_payload(capabilities.semantic),
         }
 
     def _collection_response(self, collection) -> dict[str, object]:

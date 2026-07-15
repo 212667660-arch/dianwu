@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import socket
 import sys
+from typing import MutableMapping
 
 from backend.knowledge.worker_protocol import (
     BlockEvent,
@@ -18,6 +19,20 @@ from backend.knowledge.parsers import KnowledgeParseError, ParserLimits, parse_d
 
 class NetworkDisabledError(OSError):
     pass
+
+
+def scrub_sensitive_environment(environment: MutableMapping[str, str]) -> None:
+    allowed = {
+        "SYSTEMROOT",
+        "TEMP",
+        "TMP",
+        "PYTHONUTF8",
+        "PYTHONNOUSERSITE",
+    }
+    for key in tuple(environment):
+        if key in allowed or key.startswith("A3_KNOWLEDGE_"):
+            continue
+        environment.pop(key, None)
 
 
 def disable_network() -> None:
@@ -43,6 +58,7 @@ def emit(event) -> None:
 
 
 def main() -> int:
+    scrub_sensitive_environment(os.environ)
     disable_network()
     try:
         raw = sys.stdin.buffer.readline(131_073)

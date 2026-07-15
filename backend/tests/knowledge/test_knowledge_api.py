@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from hashlib import sha256
+import json
 from pathlib import Path
 import threading
 
@@ -14,6 +15,7 @@ from backend.database import Base
 from backend.knowledge.chunking import chunk_blocks
 from backend.knowledge.import_service import KnowledgeImportCoordinator
 from backend.knowledge.object_store import KnowledgeObjectStore
+from backend.knowledge.optional_packs import APP_VERSION
 from backend.knowledge.parsers import StructuredBlock
 from backend.knowledge.repository import KnowledgeRepository
 from backend.knowledge.search import KnowledgeSearchRepository
@@ -118,6 +120,42 @@ def test_collection_crud_and_status(api) -> None:
     assert status.status_code == 200
     assert status.json()["fts"]["available"] is True
     assert deleted.status_code == 204
+
+
+def test_knowledge_status_reports_verified_local_ocr_pack(api) -> None:
+    client, _service, _coordinator, root = api
+    pack_root = root / "packs" / "ocr"
+    pack_root.mkdir(parents=True)
+    payload = b"local-ocr-model"
+    (pack_root / "model.bin").write_bytes(payload)
+    major, minor, _patch = APP_VERSION.split(".")
+    (pack_root / "manifest.json").write_text(
+        json.dumps(
+            {
+                "kind": "ocr",
+                "version": "1.0.0",
+                "a3_compatibility": f">={major}.{minor},<{major}.{int(minor) + 1}",
+                "license_spdx": "Apache-2.0",
+                "files": [
+                    {
+                        "path": "model.bin",
+                        "sha256": sha256(payload).hexdigest(),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    status = client.get("/api/knowledge/status")
+
+    assert status.status_code == 200
+    assert status.json()["ocr_pack"] == {
+        "available": True,
+        "mode": "local",
+        "error_code": None,
+        "version": "1.0.0",
+    }
 
 
 def test_duplicate_collection_name_returns_stable_conflict(api) -> None:
