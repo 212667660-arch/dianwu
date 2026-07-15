@@ -15,6 +15,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from backend.config import get_settings
 from backend.database import init_db
+from backend.knowledge.import_service import (
+    recover_interrupted_import_jobs,
+    shutdown_import_services,
+)
 from backend.errors import (
     AppError,
     DesktopAuthRequiredError,
@@ -144,10 +148,12 @@ class ErrorEnvelopeMiddleware(BaseHTTPMiddleware):
 async def lifespan(_: FastAPI):
     rate_limiter.clear()
     init_db()
+    recover_interrupted_import_jobs()
     try:
         yield
     finally:
         rate_limiter.clear()
+        await shutdown_import_services()
         await close_runtime()
 
 

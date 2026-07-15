@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from datetime import datetime
+import json
 from pathlib import Path
 
 from sqlalchemy import delete, select, update
@@ -14,6 +15,7 @@ from backend.knowledge.models import (
     KnowledgeCollectionDocument,
     KnowledgeDocument,
     KnowledgeImportJob,
+    KnowledgeWorkerBlock,
     SessionKnowledgeCollection,
 )
 from backend.knowledge.schemas import KnowledgeChunkInput
@@ -265,6 +267,69 @@ class KnowledgeRepository:
         self.db.commit()
         self.db.refresh(job)
         return job
+
+    def stage_worker_block(self, job_id: int, block) -> None:
+        self.require_job(job_id)
+        payload = block.model_dump(mode="json")
+        existing = self.db.scalar(
+            select(KnowledgeWorkerBlock).where(
+                KnowledgeWorkerBlock.job_id == job_id,
+                KnowledgeWorkerBlock.ordinal == block.ordinal,
+            )
+        )
+        if existing is None:
+            self.db.add(
+                KnowledgeWorkerBlock(
+                    job_id=job_id,
+                    ordinal=block.ordinal,
+                    payload_json=json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+                )
+            )
+        else:
+            existing.payload_json = json.dumps(
+                payload,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+        self.db.commit()
+
+    def finish_worker_output(self, job_id: int, done) -> None:
+        job = self.require_job(job_id)
+        document = self.require_document(job.document_id)
+        document.page_count = done.page_count
+        document.slide_count = done.slide_count
+        document.sheet_count = done.sheet_count
+        document.text_characters = done.text_characters
+        self.db.commit()
+
+    def clear_worker_output(self, job_id: int) -> None:
+        self.db.execute(
+            delete(KnowledgeWorkerBlock).where(KnowledgeWorkerBlock.job_id == job_id)
+        )
+        self.db.commit()
+
+    def mark_active_jobs_interrupted(self) -> int:
+        active = {
+            ImportJobStatus.VALIDATING.value,
+            ImportJobStatus.PARSING.value,
+            ImportJobStatus.OCR_RUNNING.value,
+            ImportJobStatus.INDEXING.value,
+        }
+        result = self.db.execute(
+            update(KnowledgeImportJob)
+            .where(KnowledgeImportJob.status.in_(active))
+            .values(
+                status=ImportJobStatus.INTERRUPTED.value,
+                stage="interrupted",
+                retryable=True,
+                safe_error_code="KNOWLEDGE_IMPORT_INTERRUPTED",
+                version=KnowledgeImportJob.version + 1,
+                updated_at=datetime.utcnow(),
+            )
+            .execution_options(synchronize_session=False)
+        )
+        self.db.commit()
+        return int(result.rowcount or 0)
 
     def replace_chunks(
         self,

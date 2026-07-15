@@ -207,3 +207,30 @@ class KnowledgeImportJob(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     document = relationship("KnowledgeDocument", back_populates="jobs")
+    worker_blocks = relationship(
+        "KnowledgeWorkerBlock",
+        back_populates="job",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="KnowledgeWorkerBlock.ordinal",
+    )
+
+
+class KnowledgeWorkerBlock(Base):
+    __tablename__ = "knowledge_worker_blocks"
+    __table_args__ = (
+        UniqueConstraint("job_id", "ordinal", name="uq_knowledge_worker_block"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    job_id = Column(
+        Integer,
+        ForeignKey("knowledge_import_jobs.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    ordinal = Column(Integer, nullable=False)
+    payload_json = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    job = relationship("KnowledgeImportJob", back_populates="worker_blocks")
