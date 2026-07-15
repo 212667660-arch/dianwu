@@ -110,4 +110,19 @@ describe('SmartTutor failure recovery', () => {
     expect(apiMock.streamChat).not.toHaveBeenCalled()
     expect(apiMock.chat).not.toHaveBeenCalled()
   })
+
+  it('opens with a warm companion welcome and fills a starter into the composer', async () => {
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/tutor', component: SmartTutor }] })
+    await router.push('/tutor')
+    await router.isReady()
+    const wrapper = mount(SmartTutor, { global: { plugins: [router], stubs } })
+
+    expect(wrapper.text()).toContain('今天想一起学点什么？')
+    expect(wrapper.text()).toContain('学习伙伴')
+    expect(wrapper.find('[data-companion-id="study-companion"]').exists()).toBe(true)
+    const starter = wrapper.findAll('button').find(button => button.text().includes('一次函数'))
+    expect(starter).toBeDefined()
+    await starter!.trigger('click')
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toContain('一次函数')
+  })
 })

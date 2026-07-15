@@ -2,7 +2,7 @@
 
 > 项目：基于大模型的个性化资源生成与学习多智能体系统开发
 > 队列位置：E:\软件杯\codex\AI模型任务队列.md
-> 当前模型批次：Terra（T-029 已完成，等待新增任务）
+> 当前模型批次：Terra（T-030 已完成，等待新增任务）
 > 最后审视日期：2026-07-14
 
 ## 一、使用规则
@@ -104,7 +104,7 @@
 | T-027 | P2 | 完成 | 收敛 A3 前端生产产物与体验细节 | T-026 | 处理超过 500 kB 的主包告警，复核加载、错误和窄屏体验，保留实际收益并记录指标 |
 | T-028 | P2 | 完成 | 接入 Electron 前端壳并打包验收 | T-026、用户确认桌面端范围、S-011 | 主进程、无令牌预加载 IPC、前端产物加载和安装包验收；以 openhanako 作为交互与视觉参考 |
 | T-029 | P1 | 完成 | 统一 FastAPI、Web 与 Electron 的错误响应契约 | S-013 | 404/422 与业务异常统一可解析错误信封，Web/Electron 显示一致且覆盖回归测试 |
-| T-030 | P1 | 进行中 | 以 openhanako 为参考重做 A3 陪伴式学习工作台界面 | T-029、用户视觉确认 | 三栏工作台、欢迎式对话入口、书桌/便签信息面板、暖色浪漫视觉、账号与桌宠扩展边界；Vitest、Web/桌面构建和浏览器窄屏验收 |
+| T-030 | P1 | 完成 | 以 openhanako 为参考重做 A3 陪伴式学习工作台界面 | T-029、用户视觉确认 | 三栏工作台、欢迎式对话入口、书桌/便签信息面板、暖色浪漫视觉、账号与桌宠扩展边界；Vitest、Web/桌面构建和浏览器窄屏验收 |
 
 ## 六、Luna 队列
 
@@ -148,6 +148,8 @@ INBOX-002 已联调：后端已支持用户自定义 OpenAI 兼容或 Anthropic 
 
 Terra 前端批次已完成 T-026 与 T-027：真实模型驱动的诊断、画像、资源、答题、复习与六页响应式界面均已验收；前端新增流式错误恢复和 Vitest 回归。Element Plus 改为按需引入后，主 JavaScript 从 1,099.07 kB（gzip 365.04 kB）降至 309.13 kB（gzip 114.46 kB），主样式从 365.09 kB（gzip 49.96 kB）降至 59.72 kB（gzip 9.42 kB），已消除大包告警。用户已确认需要 Electron 桌面端，并指定 openhanako 为参考；T-028 已解除阻塞并进入实现。
 
+T-030 已完成：应用壳改为 openhanako 式三栏陪伴工作台，左侧为学习空间/对话导航，中间为欢迎式学习对话，右侧为今日书桌、学习便签、下一步与来源信息；暖色纸张、墨色文字、蓝绿与琥珀点缀已经统一。账号和桌宠仍未实现，但分别保留账号入口和桌宠插槽；现有 FastAPI、SSE、Electron IPC、模型设置自动引导和令牌隔离未改变。桌面 1440×900 与窄屏 375×812 浏览器验收无横向滚动，完整 Electron Node 69 项、Vitest 32 项、Web 和桌面构建均通过。
+
 T-028 已完成：Electron 主进程统一代理普通 HTTP/SSE 并独占动态后端地址和短期 token；preload 只暴露固定请求、流、取消和后端退出桥接；renderer 不接触 token。S-012 定位到退出残留的根因是 `closed` 回调读取已销毁 `BrowserWindow.webContents`，触发 `Object has been destroyed` 并中断退出；改为窗口创建时缓存 `webContents` 后，开发版和 unpacked 版测试模式均退出码 0 且无残留。完整 Node 49 项、Vitest 14 项、Web/桌面构建、unpacked、NSIS 与渲染器密钥扫描全部通过。发布包仍使用默认 Electron 图标且未配置代码签名/作者元数据，列为后续品牌与正式发行优化，不阻塞当前功能交付。
 
 S-013 已完成：前端实际使用的 13 组 HTTP/SSE 路径与 FastAPI 路由、Electron 白名单一致，后端快捷测试 80 项、Electron Node 49 项及 Vitest 14 项通过。专项复核同时确认两项交付缺口：全新安装版无模型密钥时 `/health/ready` 返回 503，而前端与 Electron 未开放配置保存/连通性测试，生产后端也禁止明文 `.env` 落盘；FastAPI 的 `detail` 错误与业务 `{code,message}` 错误在 Web/Electron 的解析不一致。前者登记 S-014，后者登记 T-029。
@@ -162,6 +164,7 @@ S-016 已完成：本仓库提交身份已设置为 `Wei kb <212667660@qq.com>`�
 
 | 日期 | 任务 ID | 模型 | 修改文件 | 验证结果 |
 | --- | --- | --- | --- | --- |
+| 2026-07-15 | T-030 | Terra | a3-front/a3-front/src/components/workspace/ConversationRail.vue、DeskPanel.vue 及测试；src/layouts/AppLayout.vue 与测试；src/views/SmartTutor.vue 与测试；src/styles/global.scss；设计与实施计划；codex/AI模型任务队列.md | 以 openhanako 为参考完成暖色三栏陪伴式工作台，保留真实后端、SSE、模型安全流程，并预留账号和桌宠扩展边界。TDD 新增 4 项前端行为回归；`npm run test` 为 Electron Node 69 passed、Vitest 32 passed；`npm run build` 与 `npm run build:desktop` 退出码 0。浏览器 1440×900 确认左右栏分别 220/290 px，375×812 确认左右栏收起、菜单和输入区可见且无横向滚动。 |
 | 2026-07-15 | T-029 | Terra | backend/main.py、backend/errors.py、backend/routers/chat.py、backend/routers/sessions.py、backend/routers/learning.py、backend/tests/error_assertions.py 及错误回归；a3-front/a3-front/electron/backend-proxy.mjs、electron/backend-proxy.test.mjs、src/api/transport.ts、src/api/desktop-transport.ts、src/api/desktop-transport.test.ts、README 文档 | 统一 `code/message/retryable/request_id` 错误信封，覆盖 FastAPI 404/405/422/500/503、业务资源 404、非法 CORS 预检和非 JSON 错误，同时保留合法 3xx 跳转；Electron SSE 建流失败保留 404/422/503 状态，Web/Electron 均转换为 `BackendApiError`。完整后端 `compileall` 与 pytest 87 passed（工作区独立 basetemp），Electron Node 69 passed，Vitest 28 passed，`npm run build` 与 `npm run build:desktop` 均退出码 0。 |
 | 2026-07-14 | S-016 | Sol | .git/config、codex/AI模型任务队列.md、GitHub `212667660-arch/a3-learning-agents` | 设置仓库级提交身份 `Wei kb <212667660@qq.com>`；确认 `origin` 为 GitHub 私有仓库，`git push -u origin main` 退出码 0并建立上游；GitHub 页面显示 `main`、2 commits 和项目文件。完成记录提交后再次推送，并使用 `git fetch`、`git rev-parse HEAD`、`git rev-parse origin/main`、`git ls-remote origin refs/heads/main` 验证三方哈希一致；工作区保持干净。 |
 | 2026-07-14 | S-015 | Sol | .gitignore、.gitattributes、codex/AI模型任务队列.md、Git 仓库元数据 | 在 `E:\软件杯` 初始化 `main` 单仓库；候选集审计后提交 156 个源码、测试、文档及小型验收文件，无超过 10 MiB 文件；真实 `backend/.env`、`backend/competition`、`node_modules`、`dist`、`release`、`desktop-backend`、数据库、凭据文件和 `.superpowers` 临时目录均不在索引。密钥特征扫描无命中；后端快捷测试 80 passed，`npm run test` 为 Electron Node 66/66、Vitest 23/23。首个提交 `16619b1`（`chore: establish A3 project baseline`）使用一次性本地 Codex 署名，未配置远程。 |

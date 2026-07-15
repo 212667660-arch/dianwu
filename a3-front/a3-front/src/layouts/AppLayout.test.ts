@@ -10,6 +10,9 @@ const backendMock = vi.hoisted(() => ({
   session: null,
   model: { api_key_configured: true },
   modelConfigured: true,
+  progress: { knowledge_points: [] },
+  nextAction: null,
+  resources: [],
   setSessionId: vi.fn(),
   refreshAll: vi.fn(),
   lastError: '',
@@ -39,6 +42,7 @@ const stubs = {
   RouterView: { template: '<div />' },
   RouterLink: { template: '<a><slot /></a>' },
   ElIcon: { template: '<i><slot /></i>' },
+  ElProgress: { template: '<div />' },
   ElButton: { template: '<button><slot /></button>' },
   ElInput: { props: ['modelValue'], template: '<div />' },
   ElTooltip: { template: '<span><slot /></span>' },
@@ -92,5 +96,15 @@ describe('AppLayout backend lifecycle', () => {
     await flushPromises()
 
     expect(router.currentRoute.value.path).toBe('/model-settings')
+  })
+
+  it('renders the companion workspace rail and desk panel', async () => {
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: AppLayout }] })
+    await router.push('/')
+    await router.isReady()
+    const wrapper = mount(AppLayout, { global: { plugins: [router], stubs } })
+    await flushPromises()
+    expect(wrapper.find('[data-test="conversation-rail"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="desk-panel"]').exists()).toBe(true)
   })
 })
