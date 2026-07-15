@@ -153,10 +153,12 @@ function isCancellationError(error: unknown) {
 }
 
 async function cancel() {
-  if (!generationId.value) { controller?.abort(); return }
-  try { await backendApi.cancelGeneration(generationId.value, activeSessionId.value || backend.sessionId); ElMessage.info('已请求取消生成') }
+  const cancelGenerationId = generationId.value
+  const cancelSessionId = activeSessionId.value || backend.sessionId
+  controller?.abort()
+  if (!cancelGenerationId) return
+  try { await backendApi.cancelGeneration(cancelGenerationId, cancelSessionId); ElMessage.info('已请求取消生成') }
   catch (error) { ElMessage.error(errorMessage(error)) }
-  finally { controller?.abort() }
 }
 
 watch(() => route.fullPath, () => {
@@ -164,7 +166,16 @@ watch(() => route.fullPath, () => {
   if (prompt) editor.value = prompt
 }, { immediate: true })
 watch(() => backend.sessionId, currentSessionId => {
-  if (generating.value && activeSessionId.value && currentSessionId !== activeSessionId.value) void cancel()
+  const shouldCancel = generating.value && activeSessionId.value && currentSessionId !== activeSessionId.value
+  pendingUser.value = ''
+  streamText.value = ''
+  sources.value = []
+  streamError.value = ''
+  failedMessage.value = ''
+  if (shouldCancel) {
+    generating.value = false
+    void cancel()
+  }
 })
 onBeforeUnmount(() => controller?.abort())
 </script>

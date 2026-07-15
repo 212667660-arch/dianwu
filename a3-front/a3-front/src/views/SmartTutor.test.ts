@@ -20,16 +20,24 @@ const storeMock = vi.hoisted(() => ({
   ready: true, modelConfigured: true, sessionId: 'test-session', session: null, progress: null, nextAction: null,
   refreshSession: vi.fn(),
 }))
+const storeHarness = vi.hoisted(() => ({ current: null as null | typeof storeMock }))
 
 vi.mock('@/api', () => ({
   backendApi: apiMock,
   DesktopApiError: DesktopApiErrorMock,
   errorMessage: (error: unknown) => error instanceof Error ? error.message : '请求失败',
 }))
-vi.mock('@/stores/backend', () => ({ useBackendStore: () => storeMock }))
+vi.mock('@/stores/backend', async () => {
+  const { reactive } = await import('vue')
+  const store = reactive(storeMock) as typeof storeMock
+  storeHarness.current = store
+  return { useBackendStore: () => store }
+})
 vi.mock('element-plus', () => ({ ElMessage: { error: vi.fn(), info: vi.fn() } }))
 
 import SmartTutor from './SmartTutor.vue'
+
+const backendStore = storeHarness.current!
 
 const stubs = {
   ElIcon: { template: '<i><slot /></i>' },
@@ -41,9 +49,9 @@ const stubs = {
 describe('SmartTutor failure recovery', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    storeMock.modelConfigured = true
-    storeMock.sessionId = 'test-session'
-    storeMock.refreshSession.mockResolvedValue(undefined)
+    backendStore.modelConfigured = true
+    backendStore.sessionId = 'test-session'
+    backendStore.refreshSession.mockResolvedValue(undefined)
     apiMock.streamChat.mockImplementation(async (_sessionId, _message, onEvent) => {
       onEvent({ event: 'error', code: 'FIELD_REQUIRED', message: '模型输出缺少必填字段，请重试。' })
     })
@@ -86,19 +94,17 @@ describe('SmartTutor failure recovery', () => {
     const send = wrapper.findAll('button').find(button => button.text() === '发送')
     await send!.trigger('click')
     await flushPromises()
-    const cancel = wrapper.findAll('button').find(button => button.text() === '取消')
-    expect(cancel).toBeDefined()
-    storeMock.sessionId = 'new-session'
-    await cancel!.trigger('click')
+    backendStore.sessionId = 'new-session'
     await flushPromises()
 
     expect(apiMock.cancelGeneration).toHaveBeenCalledWith('generation_1', 'test-session')
     expect(wrapper.text()).not.toContain('本次请求未完成')
     expect(wrapper.text()).not.toContain('桌面令牌')
+    expect(wrapper.text()).not.toContain('正在生成')
   })
 
   it('disables model sending while credentials are not configured', async () => {
-    storeMock.modelConfigured = false
+    backendStore.modelConfigured = false
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/tutor', component: SmartTutor }] })
     await router.push('/tutor')
     await router.isReady()
