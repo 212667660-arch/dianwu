@@ -1,16 +1,19 @@
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 import socket
 import sys
 
 from backend.knowledge.worker_protocol import (
+    BlockEvent,
+    DoneEvent,
     FailureEvent,
+    ProgressEvent,
     WorkerRequest,
     encode_worker_event,
 )
+from backend.knowledge.parsers import KnowledgeParseError, ParserLimits, parse_document
 
 
 class NetworkDisabledError(OSError):
@@ -44,8 +47,44 @@ def main() -> int:
     try:
         raw = sys.stdin.buffer.readline(131_073)
         request = WorkerRequest.model_validate_json(raw)
-        safe_object_path(request)
-        emit(FailureEvent(code="KNOWLEDGE_PARSER_NOT_IMPLEMENTED", retryable=True))
+        path = safe_object_path(request)
+        emit(ProgressEvent(progress=5, stage="parsing"))
+        result = parse_document(
+            path,
+            ParserLimits(**request.limits),
+            extension=request.extension,
+        )
+        total = max(len(result.blocks), 1)
+        for ordinal, block in enumerate(result.blocks):
+            emit(
+                BlockEvent(
+                    ordinal=ordinal,
+                    text=block.text,
+                    heading_path=list(block.heading_path),
+                    locator_type=block.locator_type,
+                    locator_start=block.locator_start,
+                    locator_end=block.locator_end,
+                    sheet_name=block.sheet_name,
+                )
+            )
+            emit(
+                ProgressEvent(
+                    progress=min(90, 5 + int((ordinal + 1) * 85 / total)),
+                    stage="parsing",
+                )
+            )
+        emit(
+            DoneEvent(
+                page_count=result.page_count,
+                slide_count=result.slide_count,
+                sheet_count=result.sheet_count,
+                text_characters=result.text_characters,
+                ocr_required=result.ocr_required,
+            )
+        )
+        return 0
+    except KnowledgeParseError as exc:
+        emit(FailureEvent(code=exc.code, retryable=exc.retryable))
         return 2
     except Exception:
         emit(FailureEvent(code="KNOWLEDGE_PARSE_FAILED", retryable=False))

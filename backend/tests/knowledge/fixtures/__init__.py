@@ -1,0 +1,1 @@
+"""Generated knowledge parser fixtures."""

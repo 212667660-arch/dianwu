@@ -80,6 +80,8 @@ async def spawn_isolated_worker(
     process = await asyncio.create_subprocess_exec(
         sys.executable,
         "-I",
+        "-X",
+        "utf8",
         "-c",
         bootstrap,
         cwd=str(project_root),
