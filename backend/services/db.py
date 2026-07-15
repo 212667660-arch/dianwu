@@ -485,6 +485,11 @@ def delete_session(db: Session, session_id: str) -> bool:
     session = get_session(db, session_id)
     if session is None:
         return False
+    from backend.knowledge.models import SessionKnowledgeCollection
+
+    db.query(SessionKnowledgeCollection).filter_by(session_id=session_id).delete(
+        synchronize_session=False
+    )
     db.delete(session)
     _commit(db)
     return True

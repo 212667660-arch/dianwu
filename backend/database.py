@@ -62,6 +62,7 @@ def _sqlite_migrate() -> None:
 def init_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     from backend.services import db as _models  # noqa: F401
+    from backend.knowledge import models as _knowledge_models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
     _sqlite_migrate()
