@@ -79,6 +79,11 @@ class RequestRateLimitedError(AppError):
         super().__init__("REQUEST_RATE_LIMITED", "请求过于频繁，请稍后重试。", 429, retryable=True)
 
 
+class RequestBodyTooLargeError(AppError):
+    def __init__(self) -> None:
+        super().__init__("REQUEST_BODY_TOO_LARGE", "请求内容过大。", 413)
+
+
 class ModelAuthenticationError(AppError):
     def __init__(self) -> None:
         super().__init__("MODEL_AUTHENTICATION_ERROR", "模型服务认证失败，请检查配置。", 503)
@@ -132,3 +137,63 @@ class PersistenceError(AppError):
 class ClientCancelledError(AppError):
     def __init__(self) -> None:
         super().__init__("CLIENT_CANCELLED", "生成已取消。", 499)
+
+
+class KnowledgeFileTooLargeError(AppError):
+    def __init__(self) -> None:
+        super().__init__("KNOWLEDGE_FILE_TOO_LARGE", "单个文件不能超过 100 MB。", 422)
+
+
+class KnowledgeFormatUnsupportedError(AppError):
+    def __init__(self) -> None:
+        super().__init__("KNOWLEDGE_FORMAT_UNSUPPORTED", "暂不支持这种文件格式。", 422)
+
+
+class KnowledgeFileSignatureMismatchError(AppError):
+    def __init__(self) -> None:
+        super().__init__("KNOWLEDGE_FILE_SIGNATURE_MISMATCH", "文件内容与导入记录不一致。", 422)
+
+
+class KnowledgeArchiveUnsafeError(AppError):
+    def __init__(self) -> None:
+        super().__init__("KNOWLEDGE_ARCHIVE_UNSAFE", "文件压缩结构不符合安全要求。", 422)
+
+
+class KnowledgeDocumentEncryptedError(AppError):
+    def __init__(self) -> None:
+        super().__init__("KNOWLEDGE_DOCUMENT_ENCRYPTED", "暂不支持加密或密码保护的文件。", 422)
+
+
+class KnowledgeParseTimeoutError(AppError):
+    def __init__(self) -> None:
+        super().__init__("KNOWLEDGE_PARSE_TIMEOUT", "资料解析超时，可以稍后重试。", 504, retryable=True)
+
+
+class KnowledgeParseFailedError(AppError):
+    def __init__(self) -> None:
+        super().__init__("KNOWLEDGE_PARSE_FAILED", "资料解析失败，可以稍后重试。", 422, retryable=True)
+
+
+class KnowledgeOcrPackRequiredError(AppError):
+    def __init__(self) -> None:
+        super().__init__("KNOWLEDGE_OCR_PACK_REQUIRED", "这份扫描资料需要安装本地 OCR 包。", 409)
+
+
+class KnowledgeIndexUnavailableError(AppError):
+    def __init__(self) -> None:
+        super().__init__("KNOWLEDGE_INDEX_UNAVAILABLE", "本地知识库索引暂时不可用。", 503, retryable=True)
+
+
+class KnowledgeImportCancelledError(AppError):
+    def __init__(self) -> None:
+        super().__init__("KNOWLEDGE_IMPORT_CANCELLED", "资料导入已取消。", 409)
+
+
+class KnowledgeObjectMissingError(AppError):
+    def __init__(self) -> None:
+        super().__init__("KNOWLEDGE_OBJECT_MISSING", "本地资料文件不存在。", 404)
+
+
+class KnowledgeCollectionConflictError(AppError):
+    def __init__(self) -> None:
+        super().__init__("KNOWLEDGE_COLLECTION_CONFLICT", "已存在同名知识库集合。", 409)

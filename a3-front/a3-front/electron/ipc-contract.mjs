@@ -243,6 +243,38 @@ function matchAllowedRoute(method, path, stream) {
   if (method === 'POST' && path === '/api/chat/stream') {
     return stream ? { ok: true, kind: 'chat-stream' } : denied('Streaming chat requires stream mode.')
   }
+  if (
+    (method === 'GET' && (
+      path === '/api/knowledge/status'
+      || path === '/api/knowledge/collections'
+      || path === '/api/knowledge/documents'
+      || path === '/api/knowledge/imports'
+    ))
+    || (method === 'POST' && (
+      path === '/api/knowledge/collections'
+      || path === '/api/knowledge/imports'
+      || path === '/api/knowledge/search'
+    ))
+  ) {
+    return { ok: true, kind: 'knowledge-static' }
+  }
+
+  const knowledgeCollectionMatch = /^\/api\/knowledge\/collections\/([1-9]\d*)$/.exec(path)
+  if (knowledgeCollectionMatch && ['GET', 'PUT', 'DELETE'].includes(method)) {
+    return { ok: true, kind: 'knowledge-collection' }
+  }
+  const knowledgeDocumentMatch = /^\/api\/knowledge\/documents\/([1-9]\d*)$/.exec(path)
+  if (knowledgeDocumentMatch && ['GET', 'DELETE'].includes(method)) {
+    return { ok: true, kind: 'knowledge-document' }
+  }
+  const knowledgeRebuildMatch = /^\/api\/knowledge\/documents\/([1-9]\d*)\/rebuild$/.exec(path)
+  if (method === 'POST' && knowledgeRebuildMatch) {
+    return { ok: true, kind: 'knowledge-rebuild' }
+  }
+  const knowledgeImportMatch = /^\/api\/knowledge\/imports\/([1-9]\d*)$/.exec(path)
+  if (knowledgeImportMatch && ['GET', 'DELETE'].includes(method)) {
+    return { ok: true, kind: 'knowledge-import' }
+  }
 
   const sessionMatch = /^\/api\/sessions\/([^/]+)(?:\/(progress|next-action|reviews|mistakes))?$/.exec(path)
   if (method === 'GET' && sessionMatch && SESSION_ID_PATTERN.test(sessionMatch[1])) {
@@ -252,6 +284,15 @@ function matchAllowedRoute(method, path, stream) {
   const rediagnoseMatch = /^\/api\/sessions\/([^/]+)\/rediagnose$/.exec(path)
   if (method === 'POST' && rediagnoseMatch && SESSION_ID_PATTERN.test(rediagnoseMatch[1])) {
     return { ok: true, kind: 'rediagnose' }
+  }
+
+  const knowledgeBindingMatch = /^\/api\/sessions\/([^/]+)\/knowledge-collections$/.exec(path)
+  if (
+    knowledgeBindingMatch
+    && SESSION_ID_PATTERN.test(knowledgeBindingMatch[1])
+    && ['GET', 'PUT'].includes(method)
+  ) {
+    return { ok: true, kind: 'knowledge-binding' }
   }
 
   const attemptMatch = /^\/api\/sessions\/([^/]+)\/questions\/([^/]+)\/attempts$/.exec(path)

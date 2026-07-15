@@ -88,3 +88,20 @@ def test_token_protected_high_cost_routes_are_rate_limited(monkeypatch) -> None:
         assert int(second.headers["Retry-After"]) >= 1
     finally:
         rate_limiter.clear()
+
+
+def test_token_protected_knowledge_search_is_rate_limited(monkeypatch) -> None:
+    settings = Settings(app_env="production", desktop_token="desktop-test-token", api_rate_limit_per_minute=1)
+    rate_limiter.clear()
+    monkeypatch.setattr(main_module, "get_settings", lambda: settings)
+    try:
+        with TestClient(app, client=("127.0.0.1", 50000)) as client:
+            headers = {"X-A3-Desktop-Token": "desktop-test-token"}
+            payload = {"session_id": "knowledge_limited", "query": "牛顿", "limit": 8}
+            first = client.post("/api/knowledge/search", headers=headers, json=payload)
+            second = client.post("/api/knowledge/search", headers=headers, json=payload)
+        assert first.status_code == 200
+        assert second.status_code == 429
+        assert second.json()["code"] == "REQUEST_RATE_LIMITED"
+    finally:
+        rate_limiter.clear()

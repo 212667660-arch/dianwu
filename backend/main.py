@@ -26,13 +26,14 @@ from backend.errors import (
     HttpNotFoundError,
     ModelNotReadyError,
     RequestRateLimitedError,
+    RequestBodyTooLargeError,
     RequestValidationAppError,
     UnexpectedBackendError,
 )
 from backend.services.orchestrator import close_runtime
 from backend.services.rate_limit import rate_limiter
 from backend.services.security import desktop_token_required, is_local_client, require_desktop_token, should_protect_path
-from backend.routers import chat, learning, model_settings, profile, resource, sessions, web
+from backend.routers import chat, knowledge, learning, model_settings, profile, resource, sessions, web
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
@@ -43,6 +44,12 @@ _HIGH_COST_RATE_LIMIT_PATHS = {
     "/api/chat/stream",
     "/api/profile",
     "/api/resource",
+    "/api/knowledge/search",
+}
+
+_REQUEST_BODY_LIMITS = {
+    "/api/knowledge/imports": 512 * 1024,
+    "/api/knowledge/search": 64 * 1024,
 }
 
 
@@ -117,6 +124,18 @@ class DesktopAuthMiddleware(BaseHTTPMiddleware):
                 if retry_after is not None:
                     error = RequestRateLimitedError()
                     return error_response(request, error, headers={"Retry-After": str(retry_after)})
+        maximum_body_size = _REQUEST_BODY_LIMITS.get(request.url.path)
+        if maximum_body_size is not None and request.method in {"POST", "PUT"}:
+            content_length = request.headers.get("content-length")
+            if content_length is not None:
+                try:
+                    too_large = int(content_length) > maximum_body_size
+                except ValueError:
+                    too_large = True
+            else:
+                too_large = len(await request.body()) > maximum_body_size
+            if too_large:
+                return error_response(request, RequestBodyTooLargeError())
         return await call_next(request)
 
 
@@ -168,6 +187,8 @@ app.add_middleware(
 )
 app.add_middleware(ErrorEnvelopeMiddleware)
 app.include_router(chat.router)
+app.include_router(knowledge.router)
+app.include_router(knowledge.session_router)
 app.include_router(profile.router)
 app.include_router(resource.router)
 app.include_router(sessions.router)

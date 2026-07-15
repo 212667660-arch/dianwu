@@ -129,6 +129,15 @@ class KnowledgeSearchRepository:
             )
         self.db.commit()
 
+    def delete_document_index(self, document_id: int, *, commit: bool = True) -> None:
+        self.ensure_schema()
+        self.db.execute(
+            text("DELETE FROM knowledge_chunks_fts WHERE document_id = :document_id"),
+            {"document_id": document_id},
+        )
+        if commit:
+            self.db.commit()
+
     def search(
         self,
         query: str,

@@ -132,6 +132,7 @@ async function startBackend(modelConfig = activeModelConfig) {
       A3_HOST: '127.0.0.1',
       A3_PORT: String(port),
       A3_DATA_DIR: command.dataDir,
+      A3_KNOWLEDGE_DIR: knowledgeImporter.knowledgeRoot,
       DESKTOP_TOKEN: token,
       APP_ENV: app.isPackaged ? 'production' : 'development',
       CORS_ORIGINS: 'null,http://127.0.0.1:5173',

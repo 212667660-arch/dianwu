@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
 import json
 from pathlib import Path
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.knowledge.models import (
@@ -32,6 +33,10 @@ class KnowledgeRecordNotFound(LookupError):
     pass
 
 
+class KnowledgeRecordConflict(RuntimeError):
+    pass
+
+
 class KnowledgeRepository:
     def __init__(self, db: Session, knowledge_root: Path | None = None) -> None:
         self.db = db
@@ -49,7 +54,11 @@ class KnowledgeRepository:
             color=color.lower(),
         )
         self.db.add(collection)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise KnowledgeRecordConflict("knowledge collection name already exists") from exc
         self.db.refresh(collection)
         return collection
 
@@ -69,7 +78,11 @@ class KnowledgeRepository:
         if color is not None:
             collection.color = color.lower()
         collection.updated_at = datetime.utcnow()
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise KnowledgeRecordConflict("knowledge collection name already exists") from exc
         self.db.refresh(collection)
         return collection
 
@@ -86,6 +99,29 @@ class KnowledgeRepository:
         if collection is None:
             raise KnowledgeRecordNotFound(f"knowledge collection {collection_id} was not found")
         return collection
+
+    def list_collections(self) -> list[KnowledgeCollection]:
+        return list(
+            self.db.scalars(
+                select(KnowledgeCollection).order_by(
+                    KnowledgeCollection.created_at,
+                    KnowledgeCollection.id,
+                )
+            )
+        )
+
+    def collection_counts(self, collection_id: int) -> tuple[int, int]:
+        documents = self.db.scalar(
+            select(func.count(KnowledgeCollectionDocument.id)).where(
+                KnowledgeCollectionDocument.collection_id == collection_id
+            )
+        )
+        sessions = self.db.scalar(
+            select(func.count(SessionKnowledgeCollection.id)).where(
+                SessionKnowledgeCollection.collection_id == collection_id
+            )
+        )
+        return int(documents or 0), int(sessions or 0)
 
     def upsert_document(
         self,
@@ -115,11 +151,86 @@ class KnowledgeRepository:
         self.db.refresh(document)
         return document
 
+    def create_import_jobs(
+        self,
+        collection_id: int,
+        manifests: Sequence[Mapping[str, object]],
+    ) -> list[KnowledgeImportJob]:
+        self.require_collection(collection_id)
+        jobs: list[KnowledgeImportJob] = []
+        try:
+            for manifest in manifests:
+                digest = str(manifest["sha256"])
+                document = self.db.scalar(
+                    select(KnowledgeDocument).where(KnowledgeDocument.sha256 == digest)
+                )
+                if document is None:
+                    document = KnowledgeDocument(**dict(manifest))
+                    self.db.add(document)
+                    self.db.flush()
+                link = self.db.scalar(
+                    select(KnowledgeCollectionDocument).where(
+                        KnowledgeCollectionDocument.collection_id == collection_id,
+                        KnowledgeCollectionDocument.document_id == document.id,
+                    )
+                )
+                if link is None:
+                    self.db.add(
+                        KnowledgeCollectionDocument(
+                            collection_id=collection_id,
+                            document_id=document.id,
+                        )
+                    )
+                job = KnowledgeImportJob(document_id=document.id)
+                self.db.add(job)
+                jobs.append(job)
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
+        for job in jobs:
+            self.db.refresh(job)
+        return jobs
+
     def require_document(self, document_id: int) -> KnowledgeDocument:
         document = self.db.get(KnowledgeDocument, document_id)
         if document is None:
             raise KnowledgeRecordNotFound(f"knowledge document {document_id} was not found")
         return document
+
+    def list_documents(
+        self,
+        *,
+        collection_id: int | None = None,
+        offset: int = 0,
+        limit: int = 100,
+    ) -> list[KnowledgeDocument]:
+        statement = select(KnowledgeDocument).where(
+            KnowledgeDocument.deleted_pending.is_(False)
+        )
+        if collection_id is not None:
+            statement = statement.join(KnowledgeCollectionDocument).where(
+                KnowledgeCollectionDocument.collection_id == collection_id
+            )
+        return list(
+            self.db.scalars(
+                statement.order_by(
+                    KnowledgeDocument.created_at.desc(),
+                    KnowledgeDocument.id.desc(),
+                ).offset(offset).limit(limit)
+            )
+        )
+
+    def delete_document_record(self, document_id: int, *, commit: bool = True) -> bool:
+        document = self.db.get(KnowledgeDocument, document_id)
+        if document is None:
+            return False
+        self.db.delete(document)
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
+        return True
 
     def link_document(self, collection_id: int, document_id: int) -> KnowledgeCollectionDocument:
         self.require_collection(collection_id)
@@ -208,6 +319,43 @@ class KnowledgeRepository:
             )
         )
 
+    def session_privacy_mode(self, session_id: str) -> str:
+        value = self.db.scalar(
+            select(SessionKnowledgeCollection.privacy_mode)
+            .where(SessionKnowledgeCollection.session_id == session_id)
+            .limit(1)
+        )
+        return str(value or "allow_model_context")
+
+    def list_jobs(self, *, limit: int = 100) -> list[KnowledgeImportJob]:
+        return list(
+            self.db.scalars(
+                select(KnowledgeImportJob)
+                .order_by(KnowledgeImportJob.created_at.desc(), KnowledgeImportJob.id.desc())
+                .limit(limit)
+            )
+        )
+
+    def active_job_ids(self, document_id: int) -> list[int]:
+        active_statuses = {
+            ImportJobStatus.QUEUED.value,
+            ImportJobStatus.VALIDATING.value,
+            ImportJobStatus.PARSING.value,
+            ImportJobStatus.OCR_REQUIRED.value,
+            ImportJobStatus.OCR_RUNNING.value,
+            ImportJobStatus.INDEXING.value,
+        }
+        return list(
+            self.db.scalars(
+                select(KnowledgeImportJob.id)
+                .where(
+                    KnowledgeImportJob.document_id == document_id,
+                    KnowledgeImportJob.status.in_(active_statuses),
+                )
+                .order_by(KnowledgeImportJob.id)
+            )
+        )
+
     def create_job(self, document_id: int) -> KnowledgeImportJob:
         self.require_document(document_id)
         job = KnowledgeImportJob(document_id=document_id)
@@ -221,6 +369,10 @@ class KnowledgeRepository:
         if job is None:
             raise KnowledgeRecordNotFound(f"knowledge import job {job_id} was not found")
         return job
+
+    def refresh_job(self, job_id: int) -> KnowledgeImportJob:
+        self.db.expire_all()
+        return self.require_job(job_id)
 
     def transition_job(
         self,
@@ -322,6 +474,7 @@ class KnowledgeRepository:
 
     def mark_active_jobs_interrupted(self) -> int:
         active = {
+            ImportJobStatus.QUEUED.value,
             ImportJobStatus.VALIDATING.value,
             ImportJobStatus.PARSING.value,
             ImportJobStatus.OCR_RUNNING.value,
@@ -342,6 +495,34 @@ class KnowledgeRepository:
         )
         self.db.commit()
         return int(result.rowcount or 0)
+
+    def mark_job_interrupted(self, job_id: int) -> bool:
+        recoverable = {
+            ImportJobStatus.QUEUED.value,
+            ImportJobStatus.VALIDATING.value,
+            ImportJobStatus.PARSING.value,
+            ImportJobStatus.OCR_REQUIRED.value,
+            ImportJobStatus.OCR_RUNNING.value,
+            ImportJobStatus.INDEXING.value,
+        }
+        result = self.db.execute(
+            update(KnowledgeImportJob)
+            .where(
+                KnowledgeImportJob.id == job_id,
+                KnowledgeImportJob.status.in_(recoverable),
+            )
+            .values(
+                status=ImportJobStatus.INTERRUPTED.value,
+                stage="interrupted",
+                retryable=True,
+                safe_error_code="KNOWLEDGE_IMPORT_INTERRUPTED",
+                version=KnowledgeImportJob.version + 1,
+                updated_at=datetime.utcnow(),
+            )
+            .execution_options(synchronize_session=False)
+        )
+        self.db.commit()
+        return result.rowcount == 1
 
     def replace_chunks(
         self,

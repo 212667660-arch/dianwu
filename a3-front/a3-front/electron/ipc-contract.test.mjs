@@ -216,11 +216,25 @@ test('accepts every whitelisted route and rejects a wrong method for each one', 
     { method: 'GET', path: '/api/settings/model' },
     { method: 'POST', path: '/api/chat' },
     { method: 'POST', path: '/api/chat/stream', options: { stream: true } },
+    { method: 'GET', path: '/api/knowledge/status' },
+    { method: 'GET', path: '/api/knowledge/collections' },
+    { method: 'POST', path: '/api/knowledge/collections' },
+    { method: 'PUT', path: '/api/knowledge/collections/7' },
+    { method: 'DELETE', path: '/api/knowledge/collections/7' },
+    { method: 'GET', path: '/api/knowledge/documents' },
+    { method: 'DELETE', path: '/api/knowledge/documents/7' },
+    { method: 'POST', path: '/api/knowledge/documents/7/rebuild' },
+    { method: 'POST', path: '/api/knowledge/imports' },
+    { method: 'GET', path: '/api/knowledge/imports/7' },
+    { method: 'DELETE', path: '/api/knowledge/imports/7' },
+    { method: 'POST', path: '/api/knowledge/search' },
     { method: 'GET', path: '/api/sessions/session_42' },
     { method: 'GET', path: '/api/sessions/session_42/progress' },
     { method: 'GET', path: '/api/sessions/session_42/next-action' },
     { method: 'GET', path: '/api/sessions/session_42/reviews' },
     { method: 'GET', path: '/api/sessions/session_42/mistakes' },
+    { method: 'GET', path: '/api/sessions/session_42/knowledge-collections' },
+    { method: 'PUT', path: '/api/sessions/session_42/knowledge-collections' },
     { method: 'POST', path: '/api/sessions/session_42/rediagnose' },
     { method: 'POST', path: '/api/sessions/session_42/questions/7/attempts' },
     { method: 'DELETE', path: '/api/generations/generation_123', query: { session_id: 'session_42' } },
@@ -233,7 +247,7 @@ test('accepts every whitelisted route and rejects a wrong method for each one', 
       ...(route.query === undefined ? {} : { query: route.query }),
     }
     expectAccepted(request, route.options)
-    expectRejected({ ...request, method: 'PUT' }, route.options, 'DESKTOP_REQUEST_DENIED')
+    expectRejected({ ...request, method: 'PATCH' }, route.options, 'DESKTOP_REQUEST_DENIED')
   }
 })
 

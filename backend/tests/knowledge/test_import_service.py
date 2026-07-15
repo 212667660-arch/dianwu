@@ -3,16 +3,23 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, replace
 from pathlib import Path
+import threading
+import time
 from types import SimpleNamespace
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
 
 from backend.database import Base
-from backend.knowledge.import_service import KnowledgeImportService, worker_environment
+from backend.knowledge.import_service import (
+    KnowledgeImportCoordinator,
+    KnowledgeImportService,
+    worker_environment,
+)
 from backend.knowledge.models import ImportJobStatus
 from backend.knowledge.repository import KnowledgeRepository
 from backend.knowledge.search import KnowledgeSearchRepository
+from backend.knowledge.worker_protocol import DoneEvent
 
 
 @dataclass(frozen=True)
@@ -41,6 +48,7 @@ class FakeRepository:
         }
         self.blocks = []
         self.done = None
+        self.cancel_requests = 0
 
     def require_job(self, job_id: int) -> FakeJob:
         return self.jobs[job_id]
@@ -74,6 +82,7 @@ class FakeRepository:
         return job
 
     def request_cancel(self, job_id: int) -> FakeJob:
+        self.cancel_requests += 1
         job = self.jobs[job_id]
         if job.cancel_requested:
             return job
@@ -85,6 +94,7 @@ class FakeRepository:
         count = 0
         for job_id, job in tuple(self.jobs.items()):
             if job.status in {
+                ImportJobStatus.QUEUED.value,
                 ImportJobStatus.VALIDATING.value,
                 ImportJobStatus.PARSING.value,
                 ImportJobStatus.OCR_RUNNING.value,
@@ -161,12 +171,206 @@ def test_cancel_terminates_worker_and_persists_cancelled() -> None:
         running = asyncio.create_task(service.run_job(7))
         await asyncio.wait_for(process.started.wait(), timeout=1)
 
+        repository.request_cancel(7)
         cancelled = await service.cancel(7)
         await asyncio.wait_for(running, timeout=1)
 
         assert cancelled.cancel_requested is True
+        assert repository.cancel_requests == 1
         assert process.terminated is True
         assert repository.require_job(7).status == ImportJobStatus.CANCELLED.value
+
+    asyncio.run(exercise())
+
+
+def test_coordinator_runs_job_loop_outside_caller_event_loop(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    coordinator = KnowledgeImportCoordinator(tmp_path / "knowledge")
+
+    async def slow_run(_job_id: int) -> None:
+        time.sleep(0.15)
+
+    monkeypatch.setattr(coordinator, "_run", slow_run)
+
+    async def exercise() -> None:
+        started = time.perf_counter()
+        coordinator.enqueue(7)
+        await asyncio.sleep(0.02)
+        elapsed = time.perf_counter() - started
+        await coordinator.shutdown()
+        assert elapsed < 0.08
+
+    asyncio.run(exercise())
+
+
+def test_coordinator_limits_parallel_jobs_to_two(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    coordinator = KnowledgeImportCoordinator(tmp_path / "knowledge")
+    lock = threading.Lock()
+    release = threading.Event()
+    two_started = threading.Event()
+    active = 0
+    maximum_active = 0
+
+    async def controlled_run(_job_id: int) -> None:
+        nonlocal active, maximum_active
+        with lock:
+            active += 1
+            maximum_active = max(maximum_active, active)
+            if active >= 2:
+                two_started.set()
+        while not release.is_set():
+            await asyncio.sleep(0.005)
+        with lock:
+            active -= 1
+
+    monkeypatch.setattr(coordinator, "_run", controlled_run)
+    monkeypatch.setattr(
+        coordinator,
+        "_mark_interrupted",
+        lambda _job_id: None,
+    )
+
+    async def exercise() -> None:
+        for job_id in range(1, 6):
+            coordinator.enqueue(job_id)
+        assert await asyncio.to_thread(two_started.wait, 1)
+        await asyncio.sleep(0.05)
+        with lock:
+            observed = maximum_active
+        release.set()
+        await coordinator.shutdown()
+        assert observed == 2
+
+    asyncio.run(exercise())
+
+
+def test_coordinator_shutdown_marks_not_started_jobs_interrupted(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    coordinator = KnowledgeImportCoordinator(tmp_path / "knowledge")
+    release = threading.Event()
+    two_started = threading.Event()
+    lock = threading.Lock()
+    active = 0
+    interrupted: list[int] = []
+
+    async def controlled_run(_job_id: int) -> None:
+        nonlocal active
+        with lock:
+            active += 1
+            if active == 2:
+                two_started.set()
+        while not release.is_set():
+            await asyncio.sleep(0.005)
+        with lock:
+            active -= 1
+
+    monkeypatch.setattr(coordinator, "_run", controlled_run)
+    monkeypatch.setattr(
+        coordinator,
+        "_mark_interrupted",
+        lambda job_id: interrupted.append(job_id),
+        raising=False,
+    )
+
+    async def exercise() -> None:
+        coordinator.enqueue(1)
+        coordinator.enqueue(2)
+        coordinator.enqueue(3)
+        assert await asyncio.to_thread(two_started.wait, 1)
+        shutdown = asyncio.create_task(coordinator.shutdown())
+        await asyncio.sleep(0.05)
+        release.set()
+        await shutdown
+
+    asyncio.run(exercise())
+    assert interrupted == [3]
+
+
+def test_coordinator_initialization_failure_marks_job_interrupted(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    coordinator = KnowledgeImportCoordinator(tmp_path / "knowledge")
+    interrupted: list[int] = []
+
+    async def fail_run(_job_id: int) -> None:
+        raise RuntimeError("injected initialization failure")
+
+    monkeypatch.setattr(coordinator, "_run", fail_run)
+    monkeypatch.setattr(
+        coordinator,
+        "_mark_interrupted",
+        lambda job_id: interrupted.append(job_id),
+        raising=False,
+    )
+
+    async def exercise() -> None:
+        coordinator.enqueue(7)
+        while coordinator._tasks:
+            await asyncio.sleep(0.005)
+        await coordinator.shutdown()
+
+    asyncio.run(exercise())
+    assert interrupted == [7]
+
+
+def test_cancel_during_indexing_finishes_as_cancelled(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    async def exercise() -> None:
+        database_path = tmp_path / "cancel-during-index.sqlite3"
+        engine = create_engine(f"sqlite+pysqlite:///{database_path}", future=True)
+
+        @event.listens_for(engine, "connect")
+        def enable_foreign_keys(connection, _record) -> None:
+            connection.execute("PRAGMA foreign_keys=ON")
+
+        Base.metadata.create_all(engine)
+        db = Session(engine)
+        repository = KnowledgeRepository(db, tmp_path / "knowledge")
+        document = repository.upsert_document(
+            sha256="8" * 64,
+            display_name="索引取消.txt",
+            extension=".txt",
+            mime_type="text/plain",
+            byte_size=16,
+            object_relpath="objects/" + "8" * 64,
+        )
+        job = repository.create_job(document.id)
+        done = DoneEvent(text_characters=0)
+        process = FakeProcess([(done.model_dump_json() + "\n").encode("utf-8")])
+        process.finish(0)
+
+        def cancel_from_another_session(_self, _document_id: int) -> None:
+            other = Session(engine)
+            try:
+                KnowledgeRepository(other).request_cancel(job.id)
+            finally:
+                other.close()
+
+        monkeypatch.setattr(
+            KnowledgeSearchRepository,
+            "replace_document_index",
+            cancel_from_another_session,
+        )
+        try:
+            result = await KnowledgeImportService(
+                repository,
+                spawn_worker=lambda _request: process,
+            ).run_job(job.id)
+            assert result.status == ImportJobStatus.CANCELLED.value
+            assert result.safe_error_code == "KNOWLEDGE_IMPORT_CANCELLED"
+        finally:
+            db.close()
+            engine.dispose()
 
     asyncio.run(exercise())
 
@@ -213,6 +417,15 @@ def test_startup_marks_running_jobs_interrupted() -> None:
         status=ImportJobStatus.PARSING.value,
         version=2,
     )
+    service = KnowledgeImportService(repository)
+
+    assert service.recover_interrupted() == 1
+    assert repository.require_job(7).status == ImportJobStatus.INTERRUPTED.value
+    assert repository.require_job(7).retryable is True
+
+
+def test_startup_marks_queued_jobs_interrupted() -> None:
+    repository = FakeRepository()
     service = KnowledgeImportService(repository)
 
     assert service.recover_interrupted() == 1

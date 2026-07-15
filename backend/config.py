@@ -9,6 +9,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("A3_DATA_DIR", BASE_DIR)).expanduser().resolve()
+KNOWLEDGE_DIR = Path(
+    os.environ.get("A3_KNOWLEDGE_DIR", DATA_DIR / "knowledge")
+).expanduser().resolve()
 ENV_FILE = DATA_DIR / ".env"
 SUPPORTED_MODEL_PROVIDERS = {"openai", "anthropic"}
 
