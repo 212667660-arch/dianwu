@@ -1,4 +1,4 @@
-import type { ModelConfigInput, StreamEvent } from './types'
+import type { KnowledgeImportBatch, KnowledgeLocator, ModelConfigInput, StreamEvent } from './types'
 
 export interface TransportRequest {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE'
@@ -34,6 +34,11 @@ export interface DesktopBridge {
   request(input: TransportRequest): Promise<DesktopResponse>
   modelConfigTest(input: ModelConfigInput): Promise<DesktopResponse>
   modelConfigSave(input: ModelConfigInput): Promise<DesktopResponse>
+  knowledgeChooseFiles?(collectionId: number): Promise<DesktopResponse>
+  knowledgeImportDroppedFiles?(files: FileList | File[], collectionId: number): Promise<DesktopResponse>
+  knowledgeRevealSource?(documentId: number): Promise<DesktopResponse>
+  knowledgeOpenSource?(documentId: number, locator: KnowledgeLocator): Promise<DesktopResponse>
+  knowledgeOnImportProgress?(listener: (jobs: KnowledgeImportBatch['jobs']) => void): () => void
   startStream(streamId: string, input: TransportRequest): void
   cancelStream(streamId: string): void
   onStreamEvent(listener: (message: DesktopStreamMessage) => void): () => void

@@ -5,6 +5,9 @@ const apiMock = vi.hoisted(() => ({
   live: vi.fn(), ready: vi.fn(), modelSettings: vi.fn(), session: vi.fn(), progress: vi.fn(),
   nextAction: vi.fn(), reviews: vi.fn(), mistakes: vi.fn(), submitAttempt: vi.fn(),
   testModelSettings: vi.fn(), saveModelSettings: vi.fn(),
+  knowledgeStatus: vi.fn(), knowledgeCollections: vi.fn(), knowledgeDocuments: vi.fn(),
+  knowledgeImports: vi.fn(), sessionKnowledgeCollections: vi.fn(),
+  saveSessionKnowledgeCollections: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
@@ -36,6 +39,12 @@ beforeEach(() => {
   apiMock.submitAttempt.mockResolvedValue({ attempt_id: 1, question_id: 7, duplicate: false, correct: true, score: 1, submitted_answer: '2', expected_answer: '2', explanation: '斜率是 2', feedback: '正确', error_type: null, mastery_score: 0.6, mastery_label: 'LEARNING', next_review_at: '2026-07-14T00:00:00Z' })
   apiMock.testModelSettings.mockResolvedValue({ provider: 'openai', model_name: 'test', status: 'connected', latency_ms: 12 })
   apiMock.saveModelSettings.mockResolvedValue({ provider: 'openai', base_url: 'https://example.com', model_name: 'test', api_key_configured: true, api_key_hint: '***', anthropic_version: '2023-06-01', request_timeout_seconds: 60 })
+  apiMock.knowledgeStatus.mockResolvedValue({ fts: { available: true, mode: 'keyword' } })
+  apiMock.knowledgeCollections.mockResolvedValue([{ id: 1, name: '高数', description: '', color: '#c98f65', document_count: 1, bound_session_count: 0, created_at: '', updated_at: '' }])
+  apiMock.knowledgeDocuments.mockResolvedValue([])
+  apiMock.knowledgeImports.mockResolvedValue([])
+  apiMock.sessionKnowledgeCollections.mockResolvedValue({ session_id: 'test-session', collection_ids: [1], privacy_mode: 'allow_model_context' })
+  apiMock.saveSessionKnowledgeCollections.mockResolvedValue({ session_id: 'test-session', collection_ids: [2], privacy_mode: 'allow_model_context' })
 })
 
 describe('backend store', () => {
@@ -93,5 +102,26 @@ describe('backend store', () => {
     expect(apiMock.saveModelSettings).toHaveBeenCalledWith(input)
     expect(store.modelConfigured).toBe(true)
     expect(store.modelConfigBusy).toBe(false)
+  })
+
+  it('keeps existing collections when one knowledge refresh request fails', async () => {
+    const store = useBackendStore()
+    await store.refreshKnowledge()
+    apiMock.knowledgeStatus.mockRejectedValue(new Error('offline'))
+
+    await store.refreshKnowledge()
+
+    expect(store.knowledgeCollections).toHaveLength(1)
+    expect(store.knowledgeStatus).toBeNull()
+  })
+
+  it('rolls back session bindings when save fails', async () => {
+    const store = useBackendStore()
+    await store.refreshKnowledge()
+    apiMock.saveSessionKnowledgeCollections.mockRejectedValue(new Error('failed'))
+
+    await expect(store.saveSessionKnowledgeCollections([2])).rejects.toThrow()
+
+    expect(store.boundKnowledgeCollectionIds).toEqual([1])
   })
 })

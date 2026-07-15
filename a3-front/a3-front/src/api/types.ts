@@ -9,6 +9,18 @@ export interface SourceItem {
   snippet: string
 }
 
+export interface KnowledgeLocator { type: 'page' | 'slide' | 'sheet_rows' | 'paragraph'; start: number; end: number; sheet_name?: string }
+export interface KnowledgeSource { reference_id: string; document_id: number; document_name: string; locator_label: string; locator: KnowledgeLocator; chunk_id: number; retrieval_mode: 'keyword' | 'hybrid' }
+export interface CapabilityStatus { available: boolean; mode: string; error_code?: string | null; version?: string | null }
+export interface KnowledgeStatus { fts: CapabilityStatus; worker: CapabilityStatus; ocr_pack: CapabilityStatus; semantic_pack: CapabilityStatus }
+export interface KnowledgeCollection { id: number; name: string; description: string; color: string; document_count: number; bound_session_count: number; created_at: string; updated_at: string }
+export interface KnowledgeCollectionInput { name: string; description: string; color: string }
+export interface KnowledgeDocument { id: number; sha256: string; display_name: string; extension: string; mime_type: string; byte_size: number; status: string; page_count: number | null; slide_count: number | null; sheet_count: number | null; text_characters: number; chunk_count: number; parser_version: string | null; safe_error_code: string | null; created_at: string; updated_at: string }
+export interface KnowledgeImportJob { id: number; document_id: number; status: string; progress: number; stage: string; retryable: boolean; safe_error_code: string | null; cancel_requested: boolean; version: number; created_at: string; updated_at: string }
+export interface KnowledgeBinding { session_id: string; collection_ids: number[]; privacy_mode: 'allow_model_context' | 'local_search_only' }
+export interface KnowledgeImportBatch { jobs: KnowledgeImportJob[] }
+export interface KnowledgeSearchResult { mode: 'keyword' | 'hybrid'; items: Array<{ chunk_id: number; document_id: number; document_name: string; text: string; heading_path: string; locator: KnowledgeLocator; score: number; retrieval_mode: 'keyword' | 'hybrid' }> }
+
 export interface ChatResponse {
   reply: string
   phase: 'diagnosis' | 'profile' | 'resource'
@@ -16,6 +28,7 @@ export interface ChatResponse {
   profile_version: number
   cached: boolean
   sources: SourceItem[]
+  knowledge_sources: KnowledgeSource[]
 }
 
 export interface SessionMessage {
@@ -38,6 +51,7 @@ export interface LearningResource {
   profile_version: number
   learning_state_version: number
   sources: SourceItem[]
+  knowledge_sources: KnowledgeSource[]
   quality_score: number
   quality_issues: string[]
   questions: QuestionItem[]
@@ -136,6 +150,7 @@ export interface StreamEvent {
   code?: string
   message?: string
   sources?: SourceItem[]
+  knowledge_sources?: KnowledgeSource[]
   resource_id?: number
   profile_version?: number
   cached?: boolean

@@ -5,6 +5,15 @@ import type {
   AttemptResponse,
   ChatResponse,
   HealthStatus,
+  KnowledgeBinding,
+  KnowledgeCollection,
+  KnowledgeCollectionInput,
+  KnowledgeDocument,
+  KnowledgeImportBatch,
+  KnowledgeImportJob,
+  KnowledgeLocator,
+  KnowledgeStatus,
+  KnowledgeSearchResult,
   MistakeItem,
   ModelConfigInput,
   ModelConnectionTest,
@@ -104,5 +113,34 @@ export const backendApi = {
     return activeTransport().request({
       method: 'POST', path: `/api/sessions/${encodeURIComponent(sessionId)}/rediagnose`,
     })
+  },
+  async knowledgeStatus() { return activeTransport().request<KnowledgeStatus>({ method: 'GET', path: '/api/knowledge/status' }) },
+  async knowledgeCollections() { return activeTransport().request<KnowledgeCollection[]>({ method: 'GET', path: '/api/knowledge/collections' }) },
+  async createKnowledgeCollection(input: KnowledgeCollectionInput) { return activeTransport().request<KnowledgeCollection>({ method: 'POST', path: '/api/knowledge/collections', body: input }) },
+  async updateKnowledgeCollection(collectionId: number, input: Partial<KnowledgeCollectionInput>) { return activeTransport().request<KnowledgeCollection>({ method: 'PUT', path: `/api/knowledge/collections/${collectionId}`, body: input }) },
+  async deleteKnowledgeCollection(collectionId: number) { return activeTransport().request<void>({ method: 'DELETE', path: `/api/knowledge/collections/${collectionId}` }) },
+  async knowledgeDocuments(collectionId?: number) { return activeTransport().request<KnowledgeDocument[]>({ method: 'GET', path: '/api/knowledge/documents', query: collectionId ? { collection_id: collectionId } : undefined }) },
+  async knowledgeImports() { return activeTransport().request<KnowledgeImportJob[]>({ method: 'GET', path: '/api/knowledge/imports' }) },
+  async searchKnowledge(sessionId: string, query: string, limit = 8) { return activeTransport().request<KnowledgeSearchResult>({ method: 'POST', path: '/api/knowledge/search', body: { session_id: sessionId, query, limit } }) },
+  async sessionKnowledgeCollections(sessionId: string) { return activeTransport().request<KnowledgeBinding>({ method: 'GET', path: `/api/sessions/${encodeURIComponent(sessionId)}/knowledge-collections` }) },
+  async saveSessionKnowledgeCollections(sessionId: string, collectionIds: number[], privacyMode: KnowledgeBinding['privacy_mode'] = 'allow_model_context') { return activeTransport().request<KnowledgeBinding>({ method: 'PUT', path: `/api/sessions/${encodeURIComponent(sessionId)}/knowledge-collections`, body: { collection_ids: collectionIds, privacy_mode: privacyMode } }) },
+  async chooseKnowledgeFiles(collectionId: number) {
+    if (!window.a3Desktop?.knowledgeChooseFiles) throw new Error('文件导入仅桌面版可用。')
+    return desktopEnvelope<KnowledgeImportBatch>(await window.a3Desktop.knowledgeChooseFiles(collectionId))
+  },
+  async importDroppedKnowledgeFiles(files: FileList | File[], collectionId: number) {
+    if (!window.a3Desktop?.knowledgeImportDroppedFiles) throw new Error('文件导入仅桌面版可用。')
+    return desktopEnvelope<KnowledgeImportBatch>(await window.a3Desktop.knowledgeImportDroppedFiles(files, collectionId))
+  },
+  async cancelKnowledgeImport(jobId: number) { return activeTransport().request<KnowledgeImportJob>({ method: 'DELETE', path: `/api/knowledge/imports/${jobId}` }) },
+  async deleteKnowledgeDocument(documentId: number) { return activeTransport().request<void>({ method: 'DELETE', path: `/api/knowledge/documents/${documentId}` }) },
+  async rebuildKnowledgeDocument(documentId: number) { return activeTransport().request<KnowledgeImportJob>({ method: 'POST', path: `/api/knowledge/documents/${documentId}/rebuild` }) },
+  async revealKnowledgeSource(documentId: number) {
+    if (!window.a3Desktop?.knowledgeRevealSource) throw new Error('来源定位仅桌面版可用。')
+    return desktopEnvelope<{ mode: string }>(await window.a3Desktop.knowledgeRevealSource(documentId))
+  },
+  async openKnowledgeSource(documentId: number, locator: KnowledgeLocator) {
+    if (!window.a3Desktop?.knowledgeOpenSource) throw new Error('来源预览仅桌面版可用。')
+    return desktopEnvelope<{ mode: string; displayName: string }>(await window.a3Desktop.knowledgeOpenSource(documentId, locator))
   },
 }

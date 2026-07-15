@@ -5,6 +5,11 @@ import type {
   MistakeItem,
   ModelConfigInput,
   ModelSettings,
+  KnowledgeBinding,
+  KnowledgeCollection,
+  KnowledgeDocument,
+  KnowledgeImportJob,
+  KnowledgeStatus,
   NextAction,
   ProgressSnapshot,
   ReviewTask,
@@ -27,6 +32,14 @@ export const useBackendStore = defineStore('backend', () => {
   const loading = ref(false)
   const modelConfigBusy = ref(false)
   const lastError = ref('')
+  const knowledgeStatus = ref<KnowledgeStatus | null>(null)
+  const knowledgeCollections = ref<KnowledgeCollection[]>([])
+  const knowledgeDocuments = ref<KnowledgeDocument[]>([])
+  const knowledgeJobs = ref<KnowledgeImportJob[]>([])
+  const boundKnowledgeCollectionIds = ref<number[]>([])
+  const knowledgePrivacyMode = ref<KnowledgeBinding['privacy_mode']>('allow_model_context')
+  const knowledgeLoading = ref(false)
+  const knowledgeError = ref('')
 
   const resources = computed(() => session.value?.resources || [])
   const questions = computed(() => resources.value.flatMap(resource => resource.questions))
@@ -123,10 +136,58 @@ export const useBackendStore = defineStore('backend', () => {
     }
   }
 
+  async function refreshKnowledge() {
+    knowledgeLoading.value = true
+    knowledgeError.value = ''
+    const results = await Promise.allSettled([
+      backendApi.knowledgeStatus(), backendApi.knowledgeCollections(),
+      backendApi.knowledgeDocuments(), backendApi.knowledgeImports(),
+      backendApi.sessionKnowledgeCollections(sessionId.value),
+    ])
+    knowledgeStatus.value = results[0].status === 'fulfilled' ? results[0].value : null
+    if (results[1].status === 'fulfilled') knowledgeCollections.value = results[1].value
+    if (results[2].status === 'fulfilled') knowledgeDocuments.value = results[2].value
+    if (results[3].status === 'fulfilled') knowledgeJobs.value = results[3].value
+    if (results[4].status === 'fulfilled') {
+      boundKnowledgeCollectionIds.value = results[4].value.collection_ids
+      knowledgePrivacyMode.value = results[4].value.privacy_mode
+    }
+    const failure = results.find(result => result.status === 'rejected')
+    if (failure?.status === 'rejected') knowledgeError.value = errorMessage(failure.reason)
+    knowledgeLoading.value = false
+  }
+
+  async function saveSessionKnowledgeCollections(collectionIds: number[], privacyMode = knowledgePrivacyMode.value) {
+    const previousIds = [...boundKnowledgeCollectionIds.value]
+    const previousMode = knowledgePrivacyMode.value
+    boundKnowledgeCollectionIds.value = [...collectionIds]
+    knowledgePrivacyMode.value = privacyMode
+    try {
+      const result = await backendApi.saveSessionKnowledgeCollections(sessionId.value, collectionIds, privacyMode)
+      boundKnowledgeCollectionIds.value = result.collection_ids
+      knowledgePrivacyMode.value = result.privacy_mode
+      return result
+    } catch (error) {
+      boundKnowledgeCollectionIds.value = previousIds
+      knowledgePrivacyMode.value = previousMode
+      throw error
+    }
+  }
+
+  async function chooseKnowledgeFiles(collectionId: number) { const result = await backendApi.chooseKnowledgeFiles(collectionId); await refreshKnowledge(); return result }
+  async function importDroppedKnowledgeFiles(files: FileList | File[], collectionId: number) { const result = await backendApi.importDroppedKnowledgeFiles(files, collectionId); await refreshKnowledge(); return result }
+  async function cancelKnowledgeJob(jobId: number) { const result = await backendApi.cancelKnowledgeImport(jobId); await refreshKnowledge(); return result }
+  async function deleteKnowledgeDocument(documentId: number) { await backendApi.deleteKnowledgeDocument(documentId); await refreshKnowledge() }
+  async function rebuildKnowledgeDocument(documentId: number) { const result = await backendApi.rebuildKnowledgeDocument(documentId); await refreshKnowledge(); return result }
+
   return {
     sessionId, live, ready, model, session, progress, nextAction, reviews, mistakes,
+    knowledgeStatus, knowledgeCollections, knowledgeDocuments, knowledgeJobs,
+    boundKnowledgeCollectionIds, knowledgePrivacyMode, knowledgeLoading, knowledgeError,
     resources, questions, profileReady, modelConfigured, modelLoaded, loading, modelConfigBusy, lastError,
     setSessionId, refreshHealth, refreshSession, refreshAll, submitAnswer,
     testModelSettings, saveModelSettings,
+    refreshKnowledge, saveSessionKnowledgeCollections, chooseKnowledgeFiles,
+    importDroppedKnowledgeFiles, cancelKnowledgeJob, deleteKnowledgeDocument, rebuildKnowledgeDocument,
   }
 })

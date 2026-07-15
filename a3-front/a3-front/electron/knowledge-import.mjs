@@ -217,8 +217,21 @@ export function createKnowledgeImporter({ userDataDir }) {
     return manifests
   }
 
+  async function resolveObject(digest) {
+    if (typeof digest !== 'string' || !/^[a-f0-9]{64}$/.test(digest)) {
+      throw importError('KNOWLEDGE_OBJECT_MISSING', '知识库对象标识无效。')
+    }
+    const candidate = path.join(objectsRoot, digest)
+    const metadata = await lstat(candidate).catch(() => null)
+    if (!metadata?.isFile() || metadata.isSymbolicLink()) {
+      throw importError('KNOWLEDGE_OBJECT_MISSING', '知识库对象不存在。')
+    }
+    return candidate
+  }
+
   return Object.freeze({
     importPaths,
+    resolveObject,
     knowledgeRoot,
     objectsRoot,
   })
