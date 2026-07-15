@@ -168,6 +168,8 @@ T-033 Task 6 已完成：新增隐藏的 `/internal/model-runtime/bootstrap|test
 
 T-033 Task 7 已完成：新增 `session_model_preferences` 一对一持久化、默认继承、严格 profile/model/reasoning/failover 枚举接口和会话删除级联。偏好只保存脱敏 ID，不因配置暂时不存在而丢失；普通与流式编排在每次请求开始读取一次学习空间偏好并映射为同一 `RuntimeSelection`。相关回归 21 passed。
 
+T-033 Task 8 已完成：新增 Electron `safeStorage` 版本 2 多配置保险库，支持全新安装空快照、版本 1 单配置内存迁移、最多 16 配置/每配置 64 模型、严格能力白名单、密文原子保存和字节快照恢复。迁移不主动重写旧文件，首次显式保存才生成 `model-profiles.enc`；新旧保险库 Node 8 passed，明文 Key 扫描断言通过。
+
 Luna 批次已完成并通过复审。README、API 示例、协议说明、评测样例和开发总结已同步当前代码。L-007、L-008、L-009 已完成：快捷测试入口和浏览器测试台均已通过自动化测试、浏览器检查及打包启动自检；竞品对照和后端优化方案已形成。S-009 已就绪，等待切换 Sol 后实施跨模块学习闭环代码。
 
 INBOX-002 已联调：后端已支持用户自定义 OpenAI 兼容或 Anthropic 网关。DeepSeek OpenAI 兼容路径已完成真实普通调用、SSE 分片与协议联调；后续可转入前端或 Electron 集成阶段。
