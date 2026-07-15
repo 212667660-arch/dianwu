@@ -1,16 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 
 from backend.errors import ProtocolValidationError
 from backend.protocols import DiagnosisDecision, parse_diagnosis_decision, parse_profile, serialize_profile
-from backend.services.llm_service import ModelGateway, user_block
+from backend.services.llm_service import user_block
 
-_gateway = ModelGateway()
-
-
-async def close_runtime() -> None:
-    await _gateway.aclose()
+CompleteCallable = Callable[[list[dict[str, str]], float], Awaitable[str]]
 
 
 def build_diagnosis_messages(history: Sequence[str], turn: int) -> list[dict[str, str]]:
@@ -39,27 +35,27 @@ def build_profile_messages(history: Sequence[str], profile_version: int) -> list
     ]
 
 
-async def _repair(messages: list[dict[str, str]], invalid: str, error: ProtocolValidationError) -> str:
-    return await _gateway.complete(messages + [
+async def _repair(messages: list[dict[str, str]], invalid: str, error: ProtocolValidationError, complete: CompleteCallable) -> str:
+    return await complete(messages + [
         {"role": "assistant", "content": invalid},
         {"role": "user", "content": f"上一次输出不符合协议，错误代码为 {error.code}。请仅修复格式后重新输出完整协议，不要解释。"},
     ])
 
 
-async def generate_diagnosis_decision(history: Sequence[str], turn: int) -> DiagnosisDecision:
+async def generate_diagnosis_decision(history: Sequence[str], turn: int, *, complete: CompleteCallable) -> DiagnosisDecision:
     messages = build_diagnosis_messages(history, turn)
-    raw = await _gateway.complete(messages)
+    raw = await complete(messages, 0.2)
     try:
         return parse_diagnosis_decision(raw)
     except ProtocolValidationError as exc:
-        return parse_diagnosis_decision(await _repair(messages, raw, exc))
+        return parse_diagnosis_decision(await _repair(messages, raw, exc, complete))
 
 
-async def generate_profile(history: Sequence[str], profile_version: int = 1) -> str:
+async def generate_profile(history: Sequence[str], profile_version: int = 1, *, complete: CompleteCallable) -> str:
     messages = build_profile_messages(history, profile_version)
-    raw = await _gateway.complete(messages)
+    raw = await complete(messages, 0.2)
     try:
         profile = parse_profile(raw)
     except ProtocolValidationError as exc:
-        profile = parse_profile(await _repair(messages, raw, exc))
+        profile = parse_profile(await _repair(messages, raw, exc, complete))
     return serialize_profile(profile)

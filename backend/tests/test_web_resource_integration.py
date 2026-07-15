@@ -59,8 +59,13 @@ def test_resource_generation_accepts_web_sources(monkeypatch) -> None:
             assert "https://example.test" in messages[-1]["content"]
             return RESOURCE
 
-    monkeypatch.setattr(resource_agent, "_gateway", Gateway())
-    output = asyncio.run(resource_agent.generate_resources(PROFILE, "生成一次函数资料", [WebSearchResult(title="资料", url="https://example.test", snippet="内容").model_dump()]))
+    gateway = Gateway()
+    output = asyncio.run(resource_agent.generate_resources(
+        PROFILE,
+        "生成一次函数资料",
+        [WebSearchResult(title="资料", url="https://example.test", snippet="内容").model_dump()],
+        complete=gateway.complete,
+    ))
     assert "【学习笔记】" in output
 
 
@@ -68,7 +73,7 @@ def test_resource_endpoint_returns_web_sources(monkeypatch) -> None:
     async def search(query: str):
         return [WebSearchResult(title="教学资料", url="https://example.test/math", snippet="一次函数")]
 
-    async def generate(profile_text: str, request_message: str, web_sources):
+    async def generate(profile_text: str, request_message: str, web_sources, *, complete):
         assert web_sources[0]["url"] == "https://example.test/math"
         return RESOURCE
 
@@ -84,7 +89,7 @@ def test_resource_endpoint_degrades_when_search_returns_empty(monkeypatch) -> No
     async def no_search(query: str):
         return []
 
-    async def generate(profile_text: str, request_message: str, web_sources):
+    async def generate(profile_text: str, request_message: str, web_sources, *, complete):
         assert web_sources == []
         return RESOURCE
 

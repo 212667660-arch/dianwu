@@ -17,8 +17,8 @@ from backend.knowledge.context import (
 )
 from backend.protocols import parse_profile, parse_resource, serialize_profile, serialize_resource
 from backend.services import db as repo
-from backend.services import learning, profile_agent, resource_agent
-from backend.services.llm_service import ModelGateway
+from backend.services import learning
+from backend.services.model_runtime import RuntimeSelection, model_runtime_router
 from backend.services.profile_agent import build_profile_messages, generate_diagnosis_decision, generate_profile
 from backend.services.resource_agent import build_resource_messages, generate_resources
 from backend.services.resource_quality import validate_resource_quality
@@ -26,7 +26,6 @@ from backend.services.web_search import search_web_optional
 
 _REDIAGNOSE_HINTS = ("重新诊断", "重新生成画像", "换画像", "重新分析我")
 _FIRST_FOLLOW_UP = "为了更准确地帮你制定学习计划，你目前最容易在哪一步出错？"
-_gateway = ModelGateway()
 _generation_cancel_events: dict[str, asyncio.Event] = {}
 _generation_sessions: dict[str, str] = {}
 _workflow_locks: dict[str, asyncio.Lock] = {}
@@ -46,7 +45,27 @@ async def close_runtime() -> None:
     _generation_sessions.clear()
     _workflow_locks.clear()
     repo.clear_runtime_state()
-    await asyncio.gather(_gateway.aclose(), profile_agent.close_runtime(), resource_agent.close_runtime())
+    await model_runtime_router.close()
+
+
+def _runtime_selection(_db: Session, _session_id: str) -> RuntimeSelection:
+    return RuntimeSelection()
+
+
+def _selected_complete(selection: RuntimeSelection):
+    async def complete(messages: list[dict[str, str]], temperature: float = 0.2) -> str:
+        result = await model_runtime_router.complete(selection, messages, temperature)
+        return result.text
+    return complete
+
+
+class _RuntimeStreamAdapter:
+    async def stream(self, messages, temperature=0.2):
+        async for delta in model_runtime_router.stream_text(RuntimeSelection(), messages, temperature):
+            yield delta
+
+
+_gateway = _RuntimeStreamAdapter()
 
 
 def cancel_generation(generation_id: str, session_id: str) -> bool:
@@ -104,6 +123,7 @@ async def _generate_adaptive_resource(
     message: str,
     sources: list[dict[str, str]],
     knowledge_context: str = "",
+    complete=None,
 ) -> str:
     keyword_arguments = {
         "learning_context": learning.learning_context(db, session_id),
@@ -114,6 +134,7 @@ async def _generate_adaptive_resource(
         profile_text,
         message,
         sources,
+        complete=complete,
         **keyword_arguments,
     )
 
@@ -147,8 +168,8 @@ def _knowledge_payload(context) -> list[dict[str, object]]:
     return [citation_payload(citation) for citation in context.citations]
 
 
-async def _diagnosis_reply(db: Session, session, session_id: str):
-    decision = await generate_diagnosis_decision(_history_texts(db, session_id), session.diagnosis_turns + 1)
+async def _diagnosis_reply(db: Session, session, session_id: str, complete):
+    decision = await generate_diagnosis_decision(_history_texts(db, session_id), session.diagnosis_turns + 1, complete=complete)
     if _needs_forced_follow_up(session, decision):
         repo.record_diagnosis_snapshot(db, session, decision.model_dump_json(), ["当前水平", "薄弱知识点"], decision.confidence)
         return False, _FIRST_FOLLOW_UP
@@ -166,6 +187,7 @@ async def handle_message(db: Session, session_id: str, message: str) -> ChatResu
 async def _handle_message(db: Session, session_id: str, message: str) -> ChatResult:
     repo.append_message(db, session_id, "user", message)
     session = repo.get_or_create_session(db, session_id)
+    complete = _selected_complete(_runtime_selection(db, session_id))
     if _is_rediagnose(message):
         repo.restart_diagnosis(db, session)
 
@@ -173,12 +195,12 @@ async def _handle_message(db: Session, session_id: str, message: str) -> ChatRes
         if session.state in {repo.SessionState.NEW.value, repo.SessionState.DIAGNOSING.value}:
             if session.state == repo.SessionState.NEW.value:
                 repo.set_state(db, session, repo.SessionState.DIAGNOSING)
-            complete, reply = await _diagnosis_reply(db, session, session_id)
-            if not complete:
+            diagnosis_complete, reply = await _diagnosis_reply(db, session, session_id, complete)
+            if not diagnosis_complete:
                 repo.append_message(db, session_id, "assistant", reply)
                 return ChatResult(reply, "diagnosis", session.state, session.profile_version)
             repo.set_state(db, session, repo.SessionState.PROFILE_READY)
-            profile_text = await generate_profile(_history_texts(db, session_id), session.profile_version + 1)
+            profile_text = await generate_profile(_history_texts(db, session_id), session.profile_version + 1, complete=complete)
             version = repo.save_profile(db, session, profile_text)
             repo.append_message(db, session_id, "assistant", profile_text)
             return ChatResult(profile_text, "profile", session.state, version)
@@ -221,6 +243,7 @@ async def _handle_message(db: Session, session_id: str, message: str) -> ChatRes
                 message,
                 source_payload,
                 knowledge_context.prompt,
+                complete,
             )
             resource_text, _used, citation_issues = sanitize_citations(
                 resource_text,
@@ -274,14 +297,15 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
     try:
         repo.append_message(db, session_id, "user", message)
         session = repo.get_or_create_session(db, session_id)
+        complete = _selected_complete(_runtime_selection(db, session_id))
         if _is_rediagnose(message):
             repo.restart_diagnosis(db, session)
         if session.state in {repo.SessionState.NEW.value, repo.SessionState.DIAGNOSING.value}:
             if session.state == repo.SessionState.NEW.value:
                 repo.set_state(db, session, repo.SessionState.DIAGNOSING)
             yield {"event": "phase", "request_id": request_id, "generation_id": generation_id, "phase": "diagnosis"}
-            complete, reply = await _diagnosis_reply(db, session, session_id)
-            if not complete:
+            diagnosis_complete, reply = await _diagnosis_reply(db, session, session_id, complete)
+            if not diagnosis_complete:
                 repo.append_message(db, session_id, "assistant", reply)
                 yield {"event": "delta", "request_id": request_id, "content": reply, "provisional": False}
                 yield {"event": "done", "request_id": request_id, "status": "completed", "state": session.state}
@@ -299,7 +323,7 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
                 repaired = False
                 error_code = None
             except ProtocolValidationError as exc:
-                canonical = await generate_profile(_history_texts(db, session_id), session.profile_version + 1)
+                canonical = await generate_profile(_history_texts(db, session_id), session.profile_version + 1, complete=complete)
                 repaired = True
                 error_code = exc.code
             yield {"event": "validation", "request_id": request_id, "valid": True, "repair_attempted": repaired, "error_code": error_code}
@@ -373,6 +397,7 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
                 message,
                 source_payload,
                 knowledge_context.prompt,
+                complete,
             )
             resource = parse_resource(canonical)
             repaired = True

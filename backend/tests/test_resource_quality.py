@@ -56,8 +56,11 @@ def test_resource_agent_repairs_output_below_quality_gate(monkeypatch) -> None:
             return LOW_QUALITY_RESOURCE if self.calls == 1 else GOOD_RESOURCE
 
     gateway = Gateway()
-    monkeypatch.setattr(resource_agent, "_gateway", gateway)
-    output = asyncio.run(resource_agent.generate_resources(PROFILE, "生成一次函数资料"))
+    output = asyncio.run(resource_agent.generate_resources(
+        PROFILE,
+        "生成一次函数资料",
+        complete=gateway.complete,
+    ))
     assert gateway.calls == 2
     assert parse_resource(output).topic == "一次函数"
 

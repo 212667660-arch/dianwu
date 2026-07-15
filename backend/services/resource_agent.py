@@ -1,15 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+
 from backend.errors import ProtocolValidationError
 from backend.protocols import parse_profile, parse_resource, serialize_resource
-from backend.services.llm_service import ModelGateway, user_block
+from backend.services.llm_service import user_block
 from backend.services.resource_quality import validate_resource_quality
 
-_gateway = ModelGateway()
-
-
-async def close_runtime() -> None:
-    await _gateway.aclose()
+CompleteCallable = Callable[[list[dict[str, str]], float], Awaitable[str]]
 
 
 def build_resource_messages(
@@ -41,8 +39,8 @@ def build_resource_messages(
     ]
 
 
-async def _repair(messages: list[dict[str, str]], invalid: str, error: ProtocolValidationError) -> str:
-    return await _gateway.complete(messages + [
+async def _repair(messages: list[dict[str, str]], invalid: str, error: ProtocolValidationError, complete: CompleteCallable) -> str:
+    return await complete(messages + [
         {"role": "assistant", "content": invalid},
         {"role": "user", "content": f"上一次输出未通过协议或质量校验，错误代码为 {error.code}。请修复后重新输出完整协议，不要解释。"},
     ])
@@ -54,6 +52,8 @@ async def generate_resources(
     web_sources: list[dict[str, str]] | None = None,
     learning_context: str = "",
     knowledge_context: str = "",
+    *,
+    complete: CompleteCallable,
 ) -> str:
     parse_profile(profile_text)
     messages = build_resource_messages(
@@ -63,11 +63,11 @@ async def generate_resources(
         learning_context,
         knowledge_context,
     )
-    raw = await _gateway.complete(messages, temperature=0.4)
+    raw = await complete(messages, 0.4)
     try:
         resource = parse_resource(raw)
         validate_resource_quality(resource)
     except ProtocolValidationError as exc:
-        resource = parse_resource(await _repair(messages, raw, exc))
+        resource = parse_resource(await _repair(messages, raw, exc, complete))
         validate_resource_quality(resource)
     return serialize_resource(resource)

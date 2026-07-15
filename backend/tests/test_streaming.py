@@ -54,7 +54,7 @@ class ResourceGateway:
 
 
 def test_stream_emits_real_deltas_then_persists(monkeypatch) -> None:
-    async def complete_decision(history, turn):
+    async def complete_decision(history, turn, *, complete):
         return DiagnosisDecision(
             status="COMPLETE", current_turn=turn, confirmed_fields=["学科", "学习目标"],
             missing_fields=["无"], confidence=0.8, next_question="无", reason="信息足够",
@@ -87,7 +87,7 @@ async def _collect(stream):
 
 
 def test_stream_can_be_cancelled_by_generation_id(monkeypatch) -> None:
-    async def complete_decision(history, turn):
+    async def complete_decision(history, turn, *, complete):
         return DiagnosisDecision(
             status="COMPLETE", current_turn=turn, confirmed_fields=["学科"],
             missing_fields=["无"], confidence=0.8, next_question="无", reason="信息足够",
@@ -111,7 +111,7 @@ def test_stream_can_be_cancelled_by_generation_id(monkeypatch) -> None:
 
 
 def test_stream_unexpected_error_uses_structured_events(monkeypatch) -> None:
-    async def complete_decision(history, turn):
+    async def complete_decision(history, turn, *, complete):
         return DiagnosisDecision(
             status="COMPLETE", current_turn=turn, confirmed_fields=["学科"],
             missing_fields=["无"], confidence=0.8, next_question="无", reason="信息足够",

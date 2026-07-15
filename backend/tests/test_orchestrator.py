@@ -43,21 +43,21 @@ VALID_RESOURCE_WITH_CITATIONS = """【协议:learning-resource/v1】
 
 
 def test_diagnosis_requires_follow_up_then_generates_profile(monkeypatch) -> None:
-    async def continue_decision(history, turn):
+    async def continue_decision(history, turn, *, complete):
         return DiagnosisDecision(
             status="CONTINUE", current_turn=turn, confirmed_fields=["学科"],
             missing_fields=["薄弱知识点"], confidence=0.4,
             next_question="你最容易在哪一步出错？", reason="需要定位薄弱点",
         )
 
-    async def complete_decision(history, turn):
+    async def complete_decision(history, turn, *, complete):
         return DiagnosisDecision(
             status="COMPLETE", current_turn=turn, confirmed_fields=["学科", "学习目标"],
             missing_fields=["无"], confidence=0.8,
             next_question="无", reason="信息已足够",
         )
 
-    async def profile(history, profile_version):
+    async def profile(history, profile_version, *, complete):
         return VALID_PROFILE.replace("画像版本：1", f"画像版本：{profile_version}")
 
     init_db()
@@ -120,7 +120,7 @@ def test_history_window_keeps_goal_and_most_recent_messages() -> None:
 def test_diagnosis_does_not_retrieve_local_knowledge_by_default(monkeypatch) -> None:
     calls: list[tuple[str, str]] = []
 
-    async def continue_decision(history, turn):
+    async def continue_decision(history, turn, *, complete):
         return DiagnosisDecision(
             status="CONTINUE",
             current_turn=turn,
@@ -162,6 +162,8 @@ def test_resource_generation_uses_bound_knowledge_and_persists_safe_citations(
         web_sources,
         learning_context="",
         knowledge_context="",
+        *,
+        complete,
     ):
         captured["knowledge_context"] = knowledge_context
         return VALID_RESOURCE_WITH_CITATIONS

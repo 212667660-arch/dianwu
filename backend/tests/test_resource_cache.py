@@ -49,7 +49,7 @@ def _profiled_session(db, session_id: str):
 def test_identical_resource_request_uses_persistent_cache(monkeypatch) -> None:
     calls = 0
 
-    async def generate_resources(profile_text: str, request_message: str, sources, learning_context="") -> str:
+    async def generate_resources(profile_text: str, request_message: str, sources, learning_context="", *, complete) -> str:
         nonlocal calls
         assert "一次函数图像" in learning_context
         calls += 1
@@ -100,7 +100,7 @@ def test_streamed_identical_request_emits_cache_event(monkeypatch) -> None:
 def test_resource_sources_are_persisted_and_reused_by_cache(monkeypatch) -> None:
     source = WebSearchResult(title="一次函数资料", url="https://example.test/linear", snippet="图像与斜率讲解")
 
-    async def generate_resources(profile_text: str, request_message: str, sources: list[dict[str, str]], learning_context="") -> str:
+    async def generate_resources(profile_text: str, request_message: str, sources: list[dict[str, str]], learning_context="", *, complete) -> str:
         assert sources == [source.model_dump()]
         assert "一次函数图像" in learning_context
         return RESOURCE
