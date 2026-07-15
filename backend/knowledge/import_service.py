@@ -10,8 +10,10 @@ import sys
 import weakref
 
 from backend.database import SessionLocal
+from backend.knowledge.chunking import chunk_blocks
 from backend.knowledge.models import ImportJobStatus
 from backend.knowledge.repository import KnowledgeRepository
+from backend.knowledge.search import KnowledgeSearchRepository
 from backend.knowledge.worker_protocol import (
     BlockEvent,
     DoneEvent,
@@ -230,6 +232,13 @@ class KnowledgeImportService:
                     )
                 self.repository.finish_worker_output(job_id, done)
                 self._transition(job_id, ImportJobStatus.INDEXING, 95)
+                blocks = self.repository.worker_block_events(job_id)
+                chunks = chunk_blocks(blocks, parser_version="chunk-v1")
+                document_id = self.repository.require_job(job_id).document_id
+                self.repository.replace_chunks(document_id, chunks)
+                search = KnowledgeSearchRepository(self.repository.db)
+                search.replace_document_index(document_id)
+                self.repository.clear_worker_output(job_id)
                 return self._transition(job_id, ImportJobStatus.COMPLETED, 100)
             except asyncio.TimeoutError:
                 if process is not None:

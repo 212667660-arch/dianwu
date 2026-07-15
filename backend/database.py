@@ -66,6 +66,9 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
     _sqlite_migrate()
+    from backend.knowledge.search import initialize_knowledge_fts
+
+    initialize_knowledge_fts(engine)
     db = SessionLocal()
     try:
         _models.backfill_learning_state(db)

@@ -2,10 +2,17 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, replace
+from pathlib import Path
 from types import SimpleNamespace
 
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import Session
+
+from backend.database import Base
 from backend.knowledge.import_service import KnowledgeImportService, worker_environment
 from backend.knowledge.models import ImportJobStatus
+from backend.knowledge.repository import KnowledgeRepository
+from backend.knowledge.search import KnowledgeSearchRepository
 
 
 @dataclass(frozen=True)
@@ -237,3 +244,47 @@ def test_worker_environment_is_minimal_and_contains_no_credentials() -> None:
     assert "DESKTOP_TOKEN" not in result
     assert "HTTPS_PROXY" not in result
     assert "UNRELATED" not in result
+
+
+def test_real_worker_persists_chunks_and_builds_search_index(tmp_path: Path) -> None:
+    async def exercise() -> None:
+        engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
+
+        @event.listens_for(engine, "connect")
+        def enable_foreign_keys(connection, _record) -> None:
+            connection.execute("PRAGMA foreign_keys=ON")
+
+        Base.metadata.create_all(engine)
+        db = Session(engine)
+        knowledge_root = tmp_path / "knowledge"
+        objects_root = knowledge_root / "objects"
+        objects_root.mkdir(parents=True)
+        digest = "e" * 64
+        content = "牛顿第二定律说明力等于质量乘以加速度"
+        (objects_root / digest).write_text(content, encoding="utf-8")
+        repository = KnowledgeRepository(db, knowledge_root)
+        collection = repository.create_collection("物理")
+        document = repository.upsert_document(
+            sha256=digest,
+            display_name="物理讲义.txt",
+            extension=".txt",
+            mime_type="text/plain",
+            byte_size=len(content.encode("utf-8")),
+            object_relpath=f"objects/{digest}",
+        )
+        repository.link_document(collection.id, document.id)
+        job = repository.create_job(document.id)
+        try:
+            result = await KnowledgeImportService(repository).run_job(job.id)
+            hits = KnowledgeSearchRepository(db).search(
+                "牛顿 定律",
+                collection_ids=[collection.id],
+            )
+            assert result.status == ImportJobStatus.COMPLETED.value
+            assert repository.require_document(document.id).chunk_count == 1
+            assert [hit.document_name for hit in hits] == ["物理讲义.txt"]
+        finally:
+            db.close()
+            engine.dispose()
+
+    asyncio.run(exercise())

@@ -308,6 +308,18 @@ class KnowledgeRepository:
         )
         self.db.commit()
 
+    def worker_block_events(self, job_id: int):
+        from backend.knowledge.worker_protocol import BlockEvent
+
+        rows = list(
+            self.db.scalars(
+                select(KnowledgeWorkerBlock)
+                .where(KnowledgeWorkerBlock.job_id == job_id)
+                .order_by(KnowledgeWorkerBlock.ordinal)
+            )
+        )
+        return [BlockEvent.model_validate_json(row.payload_json) for row in rows]
+
     def mark_active_jobs_interrupted(self) -> int:
         active = {
             ImportJobStatus.VALIDATING.value,
