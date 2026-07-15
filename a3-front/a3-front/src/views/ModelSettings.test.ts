@@ -13,6 +13,7 @@ const storeMock = vi.hoisted(() => ({
     request_timeout_seconds: 60,
   },
   modelConfigured: false,
+  modelLoaded: true,
   modelConfigBusy: false,
   testModelSettings: vi.fn(),
   saveModelSettings: vi.fn(),
@@ -71,6 +72,7 @@ describe('ModelSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     storeMock.modelConfigured = false
+    storeMock.modelLoaded = true
     storeMock.model.api_key_configured = false
     storeMock.model.api_key_hint = ''
     storeMock.testModelSettings.mockResolvedValue({
@@ -105,6 +107,31 @@ describe('ModelSettings', () => {
     expect((apiKey.element as HTMLInputElement).value).toBe('')
     expect(router.currentRoute.value.path).toBe('/tutor')
     expect(wrapper.text()).not.toContain('test-secret-key')
+  })
+
+  it('keeps connection testing disabled until the saved model settings are loaded', async () => {
+    storeMock.modelLoaded = false
+    const router = routerForTest()
+    await router.push('/model-settings')
+    await router.isReady()
+    const wrapper = mount(ModelSettings, { global: { plugins: [router], stubs } })
+
+    expect(wrapper.get('[data-testid="model-test"]').attributes('disabled')).toBeDefined()
+    expect(storeMock.testModelSettings).not.toHaveBeenCalled()
+  })
+
+  it('delegates an empty Key test to the desktop credential store when renderer metadata is stale', async () => {
+    storeMock.modelConfigured = true
+    storeMock.model.api_key_configured = false
+    const router = routerForTest()
+    await router.push('/model-settings')
+    await router.isReady()
+    const wrapper = mount(ModelSettings, { global: { plugins: [router], stubs } })
+
+    await wrapper.get('[data-testid="model-test"]').trigger('click')
+    await flushPromises()
+
+    expect(storeMock.testModelSettings).toHaveBeenCalledWith(expect.objectContaining({ api_key: '' }))
   })
 
   it('clears a failed candidate Key and keeps save disabled', async () => {

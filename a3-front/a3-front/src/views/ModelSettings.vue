@@ -77,7 +77,7 @@
             <el-button
               data-testid="model-test"
               :loading="backend.modelConfigBusy && activeAction === 'test'"
-              :disabled="backend.modelConfigBusy"
+              :disabled="backend.modelConfigBusy || !backend.modelLoaded"
               @click="runTest"
             >测试连接</el-button>
             <el-button
@@ -167,7 +167,6 @@ function candidate(): ModelConfigInput {
 
 function validateCandidate(value: ModelConfigInput) {
   if (!value.base_url || !value.model_name || !value.anthropic_version) return '请完整填写模型配置。'
-  if (!backend.model?.api_key_configured && !value.api_key) return '首次配置必须输入 API Key。'
   if (!/^https?:\/\//i.test(value.base_url)) return 'API 地址必须以 http:// 或 https:// 开头。'
   if (!Number.isFinite(value.request_timeout_seconds) || value.request_timeout_seconds < 5 || value.request_timeout_seconds > 300) {
     return '请求超时必须在 5 到 300 秒之间。'

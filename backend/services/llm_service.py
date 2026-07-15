@@ -34,6 +34,12 @@ class ModelGateway:
             raise ConfigurationError()
         validate_model_base_url(self.settings.resolved_base_url, self.settings)
 
+    def _new_http_client(self) -> httpx.AsyncClient:
+        return httpx.AsyncClient(
+            timeout=self.settings.request_timeout_seconds,
+            trust_env=False,
+        )
+
     def _openai_client_or_raise(self) -> AsyncOpenAI:
         self._validate_settings()
         signature = (self.settings.resolved_api_key, self.settings.resolved_base_url, self.settings.request_timeout_seconds)
@@ -41,7 +47,7 @@ class ModelGateway:
             self._openai_client = AsyncOpenAI(
                 api_key=self.settings.resolved_api_key,
                 base_url=self.settings.resolved_base_url,
-                timeout=self.settings.request_timeout_seconds,
+                http_client=self._new_http_client(),
             )
             self._client_signature = signature
         return self._openai_client
@@ -158,7 +164,7 @@ class ModelGateway:
     async def _complete_anthropic(self, messages: list[dict[str, str]], temperature: float) -> str:
         self._validate_settings()
         try:
-            async with httpx.AsyncClient(timeout=self.settings.request_timeout_seconds) as client:
+            async with self._new_http_client() as client:
                 response = await client.post(self._anthropic_url(), headers=self._anthropic_headers(), json=self._anthropic_payload(messages, temperature))
         except httpx.TimeoutException as exc:
             raise ModelTimeoutError() from exc
@@ -212,7 +218,7 @@ class ModelGateway:
         payload = self._anthropic_payload(messages, temperature)
         payload["stream"] = True
         try:
-            async with httpx.AsyncClient(timeout=self.settings.request_timeout_seconds) as client:
+            async with self._new_http_client() as client:
                 async with client.stream("POST", self._anthropic_url(), headers=self._anthropic_headers(), json=payload) as response:
                     self._raise_anthropic_response(response)
                     async for line in response.aiter_lines():

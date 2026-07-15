@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 
-import { createModelConfigStore, modelEnvironment } from './model-config.mjs'
+import { createModelConfigStore, modelEnvironment, sanitizeModelEnvironment } from './model-config.mjs'
 
 const baseConfig = {
   provider: 'openai',
@@ -49,6 +49,21 @@ test('保存配置只写入密文并可读取同一配置', async () => {
       REQUEST_TIMEOUT_SECONDS: '60',
     })
   })
+})
+
+test('桌面后端环境移除终端中的模型凭据并保留无关变量', () => {
+  const environment = sanitizeModelEnvironment({
+    PATH: 'test-path',
+    OPENAI_API_KEY: 'ambient-openai-key',
+    openai_base_url: 'https://lowercase.example.test',
+    OPENAI_BASE_URL: 'https://ambient.example.test',
+    OPENAI_MODEL: 'ambient-model',
+    HY_API_KEY: 'ambient-hy-key',
+    MODEL_API_KEY: 'ambient-model-key',
+    MODEL_PROVIDER: 'openai',
+  })
+
+  assert.deepEqual(environment, { PATH: 'test-path' })
 })
 
 test('safeStorage 不可用时拒绝保存且不创建明文文件', async () => {

@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { awaitBackendStartup, shouldNotifyBackendExit, stopBackendProcess } from './backend-lifecycle.mjs'
 import { createBackendProxy } from './backend-proxy.mjs'
 import { desktopError, isTrustedDesktopSender } from './ipc-contract.mjs'
-import { createModelConfigStore, modelEnvironment } from './model-config.mjs'
+import { createModelConfigStore, modelEnvironment, sanitizeModelEnvironment } from './model-config.mjs'
 import { createBackendModelTester, createModelConfigController } from './model-config-controller.mjs'
 import { backendCommand, electronUserDataPath, navigationAction } from './runtime.mjs'
 
@@ -120,7 +120,7 @@ async function startBackend(modelConfig = activeModelConfig) {
   const runningProcess = spawn(command.command, command.args, {
     cwd: command.cwd,
     env: {
-      ...process.env,
+      ...sanitizeModelEnvironment(process.env),
       A3_HOST: '127.0.0.1',
       A3_PORT: String(port),
       A3_DATA_DIR: command.dataDir,

@@ -13,6 +13,21 @@ const CONFIG_FIELDS = new Set([
   'request_timeout_seconds',
 ])
 
+const MODEL_ENVIRONMENT_KEYS = new Set([
+  'MODEL_PROVIDER',
+  'MODEL_API_KEY',
+  'MODEL_BASE_URL',
+  'MODEL_NAME',
+  'ANTHROPIC_VERSION',
+  'REQUEST_TIMEOUT_SECONDS',
+  'OPENAI_API_KEY',
+  'OPENAI_BASE_URL',
+  'OPENAI_MODEL',
+  'HY_API_KEY',
+  'HY_BASE_URL',
+  'HY_MODEL',
+])
+
 export function createModelConfigStore({ safeStorage, filePath, fsImpl = fs }) {
   if (!safeStorage || typeof filePath !== 'string' || !filePath) {
     throw new TypeError('Model config store requires safeStorage and filePath.')
@@ -103,6 +118,15 @@ export function modelEnvironment(input) {
     ANTHROPIC_VERSION: value.anthropic_version,
     REQUEST_TIMEOUT_SECONDS: String(value.request_timeout_seconds),
   }
+}
+
+export function sanitizeModelEnvironment(environment) {
+  if (!environment || typeof environment !== 'object' || Array.isArray(environment)) {
+    throw new TypeError('Process environment must be an object.')
+  }
+  return Object.fromEntries(
+    Object.entries(environment).filter(([key]) => !MODEL_ENVIRONMENT_KEYS.has(key.toUpperCase())),
+  )
 }
 
 function normalizeModelConfig(input) {

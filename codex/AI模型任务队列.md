@@ -2,8 +2,8 @@
 
 > 项目：基于大模型的个性化资源生成与学习多智能体系统开发
 > 队列位置：E:\软件杯\codex\AI模型任务队列.md
-> 当前模型批次：Terra（T-031 已完成，等待新增任务）
-> 最后审视日期：2026-07-14
+> 当前模型批次：Terra（T-032 已完成，等待新增任务）
+> 最后审视日期：2026-07-15
 
 ## 一、使用规则
 
@@ -106,6 +106,7 @@
 | T-029 | P1 | 完成 | 统一 FastAPI、Web 与 Electron 的错误响应契约 | S-013 | 404/422 与业务异常统一可解析错误信封，Web/Electron 显示一致且覆盖回归测试 |
 | T-030 | P1 | 完成 | 以 openhanako 为参考重做 A3 陪伴式学习工作台界面 | T-029、用户视觉确认 | 三栏工作台、欢迎式对话入口、书桌/便签信息面板、暖色浪漫视觉、账号与桌宠扩展边界；Vitest、Web/桌面构建和浏览器窄屏验收 |
 | T-031 | P0 | 完成 | 修复 Electron 沙箱预加载桥接缺失导致桌面后端误判离线 | T-030、体验测试截图 | 沙箱兼容 preload、桌面 IPC 桥接可用、模型设置与健康检查恢复、Electron/前端回归和真实窗口验收 |
+| T-032 | P0 | 完成 | 修复桌面模型连接失败、环境密钥污染与首次配置误判 | T-031、模型连接体验截图 | 模型 HTTP 客户端绕过错误系统代理；Electron 不继承终端模型密钥；空 Key 交由主进程安全存储解析；DeepSeek 真实测试、保存、重启与留空复测全部成功 |
 
 ## 六、Luna 队列
 
@@ -167,6 +168,7 @@ S-016 已完成：本仓库提交身份已设置为 `Wei kb <212667660@qq.com>`�
 
 | 日期 | 任务 ID | 模型 | 修改文件 | 验证结果 |
 | --- | --- | --- | --- | --- |
+| 2026-07-15 | T-032 | Terra | backend/services/llm_service.py、backend/tests/test_llm_gateway.py；a3-front/a3-front/electron/main.mjs、electron/model-config.mjs、electron/model-config.test.mjs；src/stores/backend.ts、src/views/ModelSettings.vue、src/views/ModelSettings.test.ts；desktop-backend；codex/AI模型任务队列.md | 根因包括 Windows 将普通 HTTP CONNECT 代理登记为 HTTPS、Electron 继承终端 `OPENAI_API_KEY` 覆盖项目配置，以及渲染器自行误判首次配置。OpenAI/Anthropic 客户端统一 `trust_env=False`；桌面启动环境移除所有模型变量，仅允许 safeStorage 显式注入；配置加载期间禁用测试，空 Key 委托主进程安全存储。新 `api.exe` 启动自检通过；真实桌面完成正确 Key 内存迁移、连接测试 1591 ms、加密保存、后端重启及留空复测 1557 ms，未输出 Key。最终 `pytest -q backend` 88 passed；Electron Node 71 passed；Vitest 35 passed；`npm run build:desktop` 退出码 0。 |
 | 2026-07-15 | T-031 | Terra | a3-front/a3-front/electron/main.mjs、electron/preload.cjs（替代 preload.mjs）、electron/runtime.test.mjs、codex/AI模型任务队列.md | 修复 Electron 沙箱不加载 ESM preload 导致 `window.a3Desktop` 缺失、渲染器误走 Web 传输并显示“服务离线”。新增 CommonJS preload 回归；`npm run test` 为 Electron Node 70 passed、Vitest 33 passed。真实窗口日志确认 `/health/live`、`/health/ready`、`/api/settings/model` 均经 IPC 代理访问并返回 200，应用保持运行供用户继续测试。 |
 | 2026-07-15 | T-030 | Terra | a3-front/a3-front/src/components/workspace/ConversationRail.vue、DeskPanel.vue 及测试；src/layouts/AppLayout.vue 与测试；src/views/SmartTutor.vue 与测试；src/views/Dashboard.vue；src/styles/global.scss；设计与实施计划；codex/AI模型任务队列.md | 以 openhanako 为参考完成暖色三栏陪伴式工作台，保留真实后端、SSE、模型安全流程，并预留账号和桌宠扩展边界。TDD 新增 5 项前端行为回归；代码审查问题已收敛，包括同路由建议更新、生成取消会话归属、模型设置入口、双书桌共享便签、移动会话切换和抽屉名称。`npm run test` 为 Electron Node 69 passed、Vitest 33 passed；`npm run build` 与 `npm run build:desktop` 退出码 0。浏览器 1440×900 确认左右栏分别 220/290 px，375×812 确认左右栏收起、菜单和输入区可见且无横向滚动。 |
 | 2026-07-15 | T-029 | Terra | backend/main.py、backend/errors.py、backend/routers/chat.py、backend/routers/sessions.py、backend/routers/learning.py、backend/tests/error_assertions.py 及错误回归；a3-front/a3-front/electron/backend-proxy.mjs、electron/backend-proxy.test.mjs、src/api/transport.ts、src/api/desktop-transport.ts、src/api/desktop-transport.test.ts、README 文档 | 统一 `code/message/retryable/request_id` 错误信封，覆盖 FastAPI 404/405/422/500/503、业务资源 404、非法 CORS 预检和非 JSON 错误，同时保留合法 3xx 跳转；Electron SSE 建流失败保留 404/422/503 状态，Web/Electron 均转换为 `BackendApiError`。完整后端 `compileall` 与 pytest 87 passed（工作区独立 basetemp），Electron Node 69 passed，Vitest 28 passed，`npm run build` 与 `npm run build:desktop` 均退出码 0。 |

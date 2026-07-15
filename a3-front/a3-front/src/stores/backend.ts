@@ -18,6 +18,7 @@ export const useBackendStore = defineStore('backend', () => {
   const live = ref(false)
   const ready = ref(false)
   const model = ref<ModelSettings | null>(null)
+  const modelLoaded = ref(false)
   const session = ref<SessionHistory | null>(null)
   const progress = ref<ProgressSnapshot | null>(null)
   const nextAction = ref<NextAction | null>(null)
@@ -40,6 +41,7 @@ export const useBackendStore = defineStore('backend', () => {
   }
 
   async function refreshHealth() {
+    modelLoaded.value = false
     try {
       live.value = (await backendApi.live()).status === 'live'
     } catch {
@@ -54,6 +56,8 @@ export const useBackendStore = defineStore('backend', () => {
       model.value = await backendApi.modelSettings()
     } catch {
       model.value = null
+    } finally {
+      modelLoaded.value = true
     }
   }
 
@@ -121,7 +125,7 @@ export const useBackendStore = defineStore('backend', () => {
 
   return {
     sessionId, live, ready, model, session, progress, nextAction, reviews, mistakes,
-    resources, questions, profileReady, modelConfigured, loading, modelConfigBusy, lastError,
+    resources, questions, profileReady, modelConfigured, modelLoaded, loading, modelConfigBusy, lastError,
     setSessionId, refreshHealth, refreshSession, refreshAll, submitAnswer,
     testModelSettings, saveModelSettings,
   }

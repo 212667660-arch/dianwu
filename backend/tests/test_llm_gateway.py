@@ -107,6 +107,21 @@ def test_gateway_close_releases_openai_client() -> None:
     assert gateway._client_signature is None
 
 
+def test_model_http_client_ignores_system_proxy() -> None:
+    gateway = ModelGateway(Settings(
+        model_provider="openai",
+        model_api_key="test-key",
+        model_base_url="https://example.test/v1",
+        model_name="custom-model",
+    ))
+
+    client = gateway._new_http_client()
+    try:
+        assert client._trust_env is False
+    finally:
+        asyncio.run(client.aclose())
+
+
 def test_openai_permission_and_not_found_errors_are_safe(monkeypatch) -> None:
     response = httpx.Response(403, request=httpx.Request("POST", "https://example.test/v1/chat/completions"))
     gateway = ModelGateway(Settings(
