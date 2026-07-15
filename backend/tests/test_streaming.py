@@ -2,7 +2,12 @@ import asyncio
 import uuid
 
 from backend.database import SessionLocal, init_db
+from backend.knowledge.chunking import chunk_blocks
+from backend.knowledge.parsers import StructuredBlock
+from backend.knowledge.repository import KnowledgeRepository
+from backend.knowledge.search import KnowledgeSearchRepository
 from backend.protocols import DiagnosisDecision
+from backend.services import db as repo
 from backend.services import orchestrator
 
 
@@ -21,10 +26,30 @@ PROFILE = """【协议:learner-profile/v1】
 待确认问题：无
 【协议结束】"""
 
+RESOURCE = """【协议:learning-resource/v1】
+主题：牛顿第二定律
+画像版本：1
+资源类型：笔记｜练习
+目标难度：基础
+【学习笔记】
+牛顿第二定律说明合外力等于质量和加速度的乘积，即 F=ma。[资料1]
+【分层练习:基础】
+题目1：质量 2 kg、合力 8 N 时加速度是多少？
+答案1：4 m/s²
+解析1：a=F/m=8/2=4 m/s²。
+【协议结束】"""
+
 
 class FakeGateway:
     async def stream(self, messages, temperature=0.2):
         for part in (PROFILE[:60], PROFILE[60:]):
+            yield part
+
+
+class ResourceGateway:
+    async def stream(self, messages, temperature=0.4):
+        assert any('<knowledge_data untrusted="true">' in item["content"] for item in messages)
+        for part in (RESOURCE[:80], RESOURCE[80:]):
             yield part
 
 
@@ -111,6 +136,94 @@ def test_stream_unexpected_error_uses_structured_events(monkeypatch) -> None:
         assert any(event["event"] == "error" and event["code"] == "BACKEND_UNEXPECTED_ERROR" for event in events)
         assert events[-1]["event"] == "done"
         assert events[-1]["status"] == "failed"
+    finally:
+        db.close()
+
+
+def test_resource_stream_emits_knowledge_sources_before_first_delta(monkeypatch) -> None:
+    async def connected():
+        return False
+
+    async def no_web(_message: str):
+        return []
+
+    init_db()
+    session_id = f"knowledge-stream-{uuid.uuid4().hex}"
+    digest = uuid.uuid4().hex + uuid.uuid4().hex
+    db = SessionLocal()
+    try:
+        session = repo.get_or_create_session(db, session_id)
+        session.state = repo.SessionState.PROFILED.value
+        session.last_stable_state = repo.SessionState.PROFILED.value
+        session.profile_text = PROFILE
+        session.profile_version = 1
+        repo.commit(db)
+        knowledge = KnowledgeRepository(db)
+        collection = knowledge.create_collection(f"流式资料-{uuid.uuid4().hex[:8]}")
+        document = knowledge.upsert_document(
+            sha256=digest,
+            display_name="file:///Users/alice/物理讲义.md",
+            extension=".md",
+            mime_type="text/markdown",
+            byte_size=64,
+            object_relpath=f"objects/{digest}",
+        )
+        knowledge.link_document(collection.id, document.id)
+        knowledge.replace_chunks(
+            document.id,
+            chunk_blocks(
+                [
+                    StructuredBlock(
+                        text="牛顿第二定律是 F=ma。",
+                        heading_path=("动力学",),
+                        locator_type="sheet_rows",
+                        locator_start=2,
+                        locator_end=3,
+                        sheet_name=r"C:\Users\alice\答案表",
+                    )
+                ],
+                parser_version="chunk-v1",
+            ),
+        )
+        KnowledgeSearchRepository(db).replace_document_index(document.id)
+        knowledge.replace_session_collections(
+            session_id,
+            [collection.id],
+            privacy_mode="allow_model_context",
+        )
+        monkeypatch.setattr(orchestrator, "search_web_optional", no_web)
+        monkeypatch.setattr(orchestrator, "_gateway", ResourceGateway())
+
+        events = asyncio.run(
+            _collect(
+                orchestrator.stream_message(
+                    db,
+                    session_id,
+                    "请讲解牛顿第二定律",
+                    connected,
+                )
+            )
+        )
+
+        source_index = next(
+            index for index, event in enumerate(events)
+            if event["event"] == "knowledge_sources"
+        )
+        delta_index = next(
+            index for index, event in enumerate(events)
+            if event["event"] == "delta"
+        )
+        assert source_index < delta_index
+        source = events[source_index]["sources"][0]
+        assert source["reference_id"] == "资料1"
+        assert source["document_name"] == "物理讲义.md"
+        assert source["locator_label"] == "工作表 · 第 2–3 行"
+        assert source["locator"]["sheet_name"] == "工作表"
+        assert "text" not in source
+        assert "object_relpath" not in source
+        assert "Users" not in str(source)
+        assert "file://" not in str(source)
+        assert events[-1]["status"] == "completed"
     finally:
         db.close()
 

@@ -17,13 +17,22 @@ ResourcePath = Annotated[int, Path(ge=1)]
 
 def _resource_export_content(resource: repo.Resource) -> str:
     sources = repo.resource_sources(resource)
-    if not sources:
+    knowledge_sources = repo.resource_knowledge_sources(resource)
+    if not sources and not knowledge_sources:
         return resource.content
-    citations = ["【参考来源】"]
-    for index, source in enumerate(sources, start=1):
-        citations.append(f"{index}. {source['title']}\n   {source['url']}")
-        if source["snippet"]:
-            citations.append(f"   {source['snippet']}")
+    citations: list[str] = []
+    if knowledge_sources:
+        citations.append("【本地资料引用】")
+        for source in knowledge_sources:
+            citations.append(
+                f"[{source['reference_id']}] {source['document_name']} · {source['locator_label']}"
+            )
+    if sources:
+        citations.append("【参考来源】")
+        for index, source in enumerate(sources, start=1):
+            citations.append(f"{index}. {source['title']}\n   {source['url']}")
+            if source["snippet"]:
+                citations.append(f"   {source['snippet']}")
     return f"{resource.content.rstrip()}\n\n" + "\n".join(citations)
 
 
@@ -47,6 +56,7 @@ async def get_session_history(session_id: SessionPath, db: Session = Depends(get
                 "profile_version": item.profile_version,
                 "learning_state_version": item.learning_state_version,
                 "sources": repo.resource_sources(item),
+                "knowledge_sources": repo.resource_knowledge_sources(item),
                 "quality_score": item.quality_score,
                 "quality_issues": repo.resource_quality_issues(item),
                 "questions": [

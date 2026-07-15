@@ -4,11 +4,17 @@ import asyncio
 import logging
 import uuid
 from collections.abc import AsyncIterator
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
 from backend.config import get_settings
 from backend.errors import AppError, ClientCancelledError, DomainStateError, ProtocolValidationError, UnexpectedBackendError
+from backend.knowledge.context import (
+    citation_payload,
+    retrieve_knowledge_context,
+    sanitize_citations,
+)
 from backend.protocols import parse_profile, parse_resource, serialize_profile, serialize_resource
 from backend.services import db as repo
 from backend.services import learning, profile_agent, resource_agent
@@ -62,6 +68,7 @@ class ChatResult:
         profile_version: int = 0,
         cached: bool = False,
         sources: list[dict[str, str]] | None = None,
+        knowledge_sources: list[dict[str, object]] | None = None,
     ) -> None:
         self.reply = reply
         self.phase = phase
@@ -69,6 +76,7 @@ class ChatResult:
         self.profile_version = profile_version
         self.cached = cached
         self.sources = sources or []
+        self.knowledge_sources = knowledge_sources or []
 
 
 def _is_rediagnose(message: str) -> bool:
@@ -95,13 +103,48 @@ async def _generate_adaptive_resource(
     profile_text: str,
     message: str,
     sources: list[dict[str, str]],
+    knowledge_context: str = "",
 ) -> str:
+    keyword_arguments = {
+        "learning_context": learning.learning_context(db, session_id),
+    }
+    if knowledge_context:
+        keyword_arguments["knowledge_context"] = knowledge_context
     return await generate_resources(
         profile_text,
         message,
         sources,
-        learning_context=learning.learning_context(db, session_id),
+        **keyword_arguments,
     )
+
+
+def _knowledge_retrieval_query(db: Session, session_id: str, message: str) -> str:
+    weak_points = (
+        db.query(repo.KnowledgePoint)
+        .filter_by(session_id=session_id)
+        .order_by(repo.KnowledgePoint.mastery_score, repo.KnowledgePoint.updated_at.desc())
+        .limit(3)
+        .all()
+    )
+    due_reviews = (
+        db.query(repo.ReviewTask)
+        .filter(
+            repo.ReviewTask.session_id == session_id,
+            repo.ReviewTask.status == "PENDING",
+            repo.ReviewTask.due_at <= datetime.utcnow(),
+        )
+        .order_by(repo.ReviewTask.due_at, repo.ReviewTask.id)
+        .limit(3)
+        .all()
+    )
+    parts = [message]
+    parts.extend(point.name for point in weak_points)
+    parts.extend(task.knowledge_point.name for task in due_reviews)
+    return " ".join(dict.fromkeys(part.strip() for part in parts if part.strip()))
+
+
+def _knowledge_payload(context) -> list[dict[str, object]]:
+    return [citation_payload(citation) for citation in context.citations]
 
 
 async def _diagnosis_reply(db: Session, session, session_id: str):
@@ -143,18 +186,68 @@ async def _handle_message(db: Session, session_id: str, message: str) -> ChatRes
         if session.state == repo.SessionState.PROFILED.value:
             if not session.profile_text:
                 raise DomainStateError("会话画像缺失，请重新诊断。", "PROFILE_MISSING")
-            cached = repo.find_cached_resource(db, session, message, get_settings().resource_cache_ttl_seconds)
+            knowledge_context = retrieve_knowledge_context(
+                db,
+                session_id,
+                _knowledge_retrieval_query(db, session_id, message),
+            )
+            knowledge_sources = _knowledge_payload(knowledge_context)
+            cached = None
+            if not knowledge_sources:
+                cached = repo.find_cached_resource(
+                    db,
+                    session,
+                    message,
+                    get_settings().resource_cache_ttl_seconds,
+                )
             if cached is not None:
                 repo.append_message(db, session_id, "assistant", cached.content)
-                return ChatResult(cached.content, "resource", session.state, session.profile_version, cached=True, sources=repo.resource_sources(cached))
+                return ChatResult(
+                    cached.content,
+                    "resource",
+                    session.state,
+                    session.profile_version,
+                    cached=True,
+                    sources=repo.resource_sources(cached),
+                    knowledge_sources=repo.resource_knowledge_sources(cached),
+                )
             repo.begin_generation(db, session)
             sources = await search_web_optional(message)
             source_payload = [item.model_dump() for item in sources]
-            resource_text = await _generate_adaptive_resource(db, session_id, session.profile_text, message, source_payload)
+            resource_text = await _generate_adaptive_resource(
+                db,
+                session_id,
+                session.profile_text,
+                message,
+                source_payload,
+                knowledge_context.prompt,
+            )
+            resource_text, _used, citation_issues = sanitize_citations(
+                resource_text,
+                knowledge_context.citations,
+            )
             resource = parse_resource(resource_text)
-            repo.complete_generation(db, session, resource.topic, message, resource_text, session.profile_version, source_payload)
+            validate_resource_quality(resource)
+            repo.complete_generation(
+                db,
+                session,
+                resource.topic,
+                message,
+                resource_text,
+                session.profile_version,
+                source_payload,
+                knowledge_sources=knowledge_sources,
+                extra_quality_issues=citation_issues,
+            )
             repo.append_message(db, session_id, "assistant", resource_text)
-            return ChatResult(resource_text, "resource", session.state, session.profile_version, sources=source_payload)
+            return ChatResult(
+                resource_text,
+                "resource",
+                session.state,
+                session.profile_version,
+                sources=source_payload,
+                knowledge_sources=knowledge_sources,
+            )
 
         if session.state == repo.SessionState.GENERATING.value:
             raise DomainStateError("当前会话正在生成学习资源，请等待完成。", "GENERATION_IN_PROGRESS")
@@ -220,11 +313,25 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
 
         if session.state != repo.SessionState.PROFILED.value or not session.profile_text:
             raise DomainStateError("会话尚未完成诊断，请先继续诊断。", "RESOURCE_NOT_READY")
-        cached = repo.find_cached_resource(db, session, message, get_settings().resource_cache_ttl_seconds)
+        knowledge_context = retrieve_knowledge_context(
+            db,
+            session_id,
+            _knowledge_retrieval_query(db, session_id, message),
+        )
+        knowledge_sources = _knowledge_payload(knowledge_context)
+        cached = None
+        if not knowledge_sources:
+            cached = repo.find_cached_resource(
+                db,
+                session,
+                message,
+                get_settings().resource_cache_ttl_seconds,
+            )
         if cached is not None:
             yield {"event": "phase", "request_id": request_id, "generation_id": generation_id, "phase": "resource"}
             yield {"event": "cache", "request_id": request_id, "hit": True, "resource_id": cached.id}
             yield {"event": "sources", "request_id": request_id, "sources": repo.resource_sources(cached), "cached": True}
+            yield {"event": "knowledge_sources", "request_id": request_id, "sources": repo.resource_knowledge_sources(cached), "cached": True}
             repo.append_message(db, session_id, "assistant", cached.content)
             yield {"event": "delta", "request_id": request_id, "content": cached.content, "provisional": False}
             yield {"event": "persisted", "request_id": request_id, "resource_id": cached.id, "cached": True}
@@ -236,8 +343,18 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
         sources = await search_web_optional(message)
         source_payload = [item.model_dump() for item in sources]
         yield {"event": "sources", "request_id": request_id, "sources": source_payload, "cached": False}
+        yield {"event": "knowledge_sources", "request_id": request_id, "sources": knowledge_sources, "cached": False}
         learning_context = learning.learning_context(db, session_id)
-        async for delta in _gateway.stream(build_resource_messages(session.profile_text, message, source_payload, learning_context), temperature=0.4):
+        async for delta in _gateway.stream(
+            build_resource_messages(
+                session.profile_text,
+                message,
+                source_payload,
+                learning_context,
+                knowledge_context.prompt,
+            ),
+            temperature=0.4,
+        ):
             if cancel_event.is_set() or await is_disconnected():
                 raise ClientCancelledError()
             raw += delta
@@ -249,14 +366,37 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
             repaired = False
             error_code = None
         except ProtocolValidationError as exc:
-            canonical = await _generate_adaptive_resource(db, session_id, session.profile_text, message, source_payload)
+            canonical = await _generate_adaptive_resource(
+                db,
+                session_id,
+                session.profile_text,
+                message,
+                source_payload,
+                knowledge_context.prompt,
+            )
             resource = parse_resource(canonical)
             repaired = True
             error_code = exc.code
+        canonical, _used, citation_issues = sanitize_citations(
+            canonical,
+            knowledge_context.citations,
+        )
+        resource = parse_resource(canonical)
+        validate_resource_quality(resource)
         yield {"event": "validation", "request_id": request_id, "valid": True, "repair_attempted": repaired, "error_code": error_code}
         if canonical.strip() != raw.strip():
             yield {"event": "replace", "request_id": request_id, "content": canonical}
-        stored = repo.complete_generation(db, session, resource.topic, message, canonical, session.profile_version, source_payload)
+        stored = repo.complete_generation(
+            db,
+            session,
+            resource.topic,
+            message,
+            canonical,
+            session.profile_version,
+            source_payload,
+            knowledge_sources=knowledge_sources,
+            extra_quality_issues=citation_issues,
+        )
         repo.append_message(db, session_id, "assistant", canonical)
         yield {"event": "persisted", "request_id": request_id, "resource_id": stored.id}
         yield {"event": "done", "request_id": request_id, "status": "completed", "state": session.state}

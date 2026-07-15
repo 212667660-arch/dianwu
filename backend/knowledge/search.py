@@ -35,6 +35,8 @@ class SearchHit:
     sheet_name: str | None
     score: float
     retrieval_mode: str = "keyword"
+    parser_version: str = "chunk-v1"
+    index_version: str = "fts-v1"
 
 
 _CREATE_FTS = """
@@ -186,6 +188,7 @@ class KnowledgeSearchRepository:
                     chunk.locator_start AS locator_start,
                     chunk.locator_end AS locator_end,
                     chunk.sheet_name AS sheet_name,
+                    chunk.parser_version AS parser_version,
                     bm25(knowledge_chunks_fts) AS rank
                 FROM knowledge_chunks_fts
                 JOIN knowledge_chunks AS chunk
@@ -217,6 +220,8 @@ class KnowledgeSearchRepository:
                 locator_end=int(row["locator_end"]),
                 sheet_name=row["sheet_name"],
                 score=-float(row["rank"]),
+                parser_version=str(row["parser_version"]),
+                index_version="fts-v1",
             )
             for row in rows
         ]

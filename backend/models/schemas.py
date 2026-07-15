@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
@@ -70,6 +70,33 @@ class WebSearchResult(BaseModel):
     snippet: str = Field(default="", max_length=1000)
 
 
+class KnowledgeLocator(BaseModel):
+    type: Literal["page", "slide", "sheet_rows", "paragraph"]
+    start: int = Field(ge=1)
+    end: int = Field(ge=1)
+    sheet_name: Optional[str] = Field(default=None, max_length=128)
+
+    @model_validator(mode="after")
+    def validate_range(self) -> "KnowledgeLocator":
+        if self.end < self.start:
+            raise ValueError("knowledge locator end precedes start")
+        if self.type == "sheet_rows" and not self.sheet_name:
+            raise ValueError("sheet row locator requires sheet_name")
+        if self.type != "sheet_rows" and self.sheet_name is not None:
+            raise ValueError("only sheet row locators accept sheet_name")
+        return self
+
+
+class KnowledgeSourceResult(BaseModel):
+    reference_id: str = Field(pattern=r"^资料[1-9]\d{0,2}$")
+    document_id: int = Field(ge=1)
+    document_name: str = Field(min_length=1, max_length=255)
+    locator_label: str = Field(min_length=1, max_length=160)
+    locator: KnowledgeLocator
+    chunk_id: int = Field(ge=1)
+    retrieval_mode: Literal["keyword", "hybrid"]
+
+
 class ChatResponse(BaseModel):
     reply: str
     phase: Literal["diagnosis", "profile", "resource"]
@@ -77,6 +104,7 @@ class ChatResponse(BaseModel):
     profile_version: int = 0
     cached: bool = False
     sources: list[WebSearchResult] = Field(default_factory=list)
+    knowledge_sources: list[KnowledgeSourceResult] = Field(default_factory=list)
 
 
 class WebSearchResponse(BaseModel):
@@ -87,6 +115,7 @@ class WebSearchResponse(BaseModel):
 class ResourceResponse(BaseModel):
     resource_text: str
     sources: list[WebSearchResult] = Field(default_factory=list)
+    knowledge_sources: list[KnowledgeSourceResult] = Field(default_factory=list)
 
 
 class AnswerAttemptRequest(BaseModel):

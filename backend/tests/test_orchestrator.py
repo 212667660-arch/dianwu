@@ -2,6 +2,10 @@ import asyncio
 import uuid
 
 from backend.database import SessionLocal, init_db
+from backend.knowledge.chunking import chunk_blocks
+from backend.knowledge.parsers import StructuredBlock
+from backend.knowledge.repository import KnowledgeRepository
+from backend.knowledge.search import KnowledgeSearchRepository
 from backend.protocols import DiagnosisDecision
 from backend.errors import DomainStateError
 from backend.services import db as repo
@@ -22,6 +26,19 @@ VALID_PROFILE = """【协议:learner-profile/v1】
 推荐难度：基础｜提高
 置信度：0.80
 待确认问题：无
+【协议结束】"""
+
+VALID_RESOURCE_WITH_CITATIONS = """【协议:learning-resource/v1】
+主题：牛顿第二定律
+画像版本：1
+资源类型：笔记｜练习
+目标难度：基础
+【学习笔记】
+牛顿第二定律说明物体加速度与合外力成正比、与质量成反比，可写成 F=ma。[资料1]伪造内容[资料99]
+【分层练习:基础】
+题目1：质量为 2 kg 的物体受到 6 N 合力，加速度是多少？
+答案1：3 m/s²
+解析1：根据 a=F/m=6/2=3 m/s²。
 【协议结束】"""
 
 
@@ -96,5 +113,131 @@ def test_history_window_keeps_goal_and_most_recent_messages() -> None:
         assert history == ["goal", "recent-two"]
         assert "old-middle" not in history
         assert sum(len(message) for message in history) <= 14
+    finally:
+        db.close()
+
+
+def test_diagnosis_does_not_retrieve_local_knowledge_by_default(monkeypatch) -> None:
+    calls: list[tuple[str, str]] = []
+
+    async def continue_decision(history, turn):
+        return DiagnosisDecision(
+            status="CONTINUE",
+            current_turn=turn,
+            confirmed_fields=["学科"],
+            missing_fields=["薄弱知识点"],
+            confidence=0.4,
+            next_question="你最容易在哪一步出错？",
+            reason="需要定位薄弱点",
+        )
+
+    def retrieve(_db, session_id: str, query: str):
+        calls.append((session_id, query))
+        raise AssertionError("diagnosis must not retrieve knowledge")
+
+    init_db()
+    session_id = f"knowledge-diagnosis-{uuid.uuid4().hex}"
+    monkeypatch.setattr(orchestrator, "generate_diagnosis_decision", continue_decision)
+    monkeypatch.setattr(orchestrator, "retrieve_knowledge_context", retrieve, raising=False)
+    db = SessionLocal()
+    try:
+        result = asyncio.run(orchestrator.handle_message(db, session_id, "我想学高数"))
+        assert result.phase == "diagnosis"
+        assert calls == []
+    finally:
+        db.close()
+
+
+def test_resource_generation_uses_bound_knowledge_and_persists_safe_citations(
+    monkeypatch,
+) -> None:
+    captured: dict[str, str] = {}
+
+    async def no_web(_message: str):
+        return []
+
+    async def generate(
+        profile_text,
+        request_message,
+        web_sources,
+        learning_context="",
+        knowledge_context="",
+    ):
+        captured["knowledge_context"] = knowledge_context
+        return VALID_RESOURCE_WITH_CITATIONS
+
+    init_db()
+    session_id = f"knowledge-resource-{uuid.uuid4().hex}"
+    digest = uuid.uuid4().hex + uuid.uuid4().hex
+    db = SessionLocal()
+    try:
+        session = repo.get_or_create_session(db, session_id)
+        session.state = repo.SessionState.PROFILED.value
+        session.last_stable_state = repo.SessionState.PROFILED.value
+        session.profile_text = VALID_PROFILE
+        session.profile_version = 1
+        repo.commit(db)
+
+        knowledge = KnowledgeRepository(db)
+        collection = knowledge.create_collection(f"物理-{uuid.uuid4().hex[:8]}")
+        document = knowledge.upsert_document(
+            sha256=digest,
+            display_name=r"C:\Users\alice\课程.md",
+            extension=".md",
+            mime_type="text/markdown",
+            byte_size=64,
+            object_relpath=f"objects/{digest}",
+        )
+        knowledge.link_document(collection.id, document.id)
+        knowledge.replace_chunks(
+            document.id,
+            chunk_blocks(
+                [
+                    StructuredBlock(
+                        text="牛顿第二定律是 F=ma。",
+                        heading_path=("动力学",),
+                        locator_type="sheet_rows",
+                        locator_start=3,
+                        locator_end=4,
+                        sheet_name="file:///Users/alice/private/答案表",
+                    )
+                ],
+                parser_version="chunk-v1",
+            ),
+        )
+        KnowledgeSearchRepository(db).replace_document_index(document.id)
+        knowledge.replace_session_collections(
+            session_id,
+            [collection.id],
+            privacy_mode="allow_model_context",
+        )
+
+        monkeypatch.setattr(orchestrator, "search_web_optional", no_web)
+        monkeypatch.setattr(orchestrator, "generate_resources", generate)
+        result = asyncio.run(
+            orchestrator.handle_message(db, session_id, "请讲解牛顿第二定律")
+        )
+
+        assert captured["knowledge_context"].startswith(
+            '<knowledge_data untrusted="true">'
+        )
+        assert result.knowledge_sources[0]["reference_id"] == "资料1"
+        assert "object_relpath" not in str(result.knowledge_sources)
+        assert result.knowledge_sources[0]["document_name"] == "课程.md"
+        assert result.knowledge_sources[0]["locator_label"] == "工作表 · 第 3–4 行"
+        assert result.knowledge_sources[0]["locator"]["sheet_name"] == "工作表"
+        assert "Users" not in str(result.knowledge_sources)
+        assert "file://" not in str(result.knowledge_sources)
+        assert "Users" not in captured["knowledge_context"]
+        assert "[资料1]" in result.reply
+        assert "[资料99]" not in result.reply
+        stored = (
+            db.query(repo.Resource)
+            .filter(repo.Resource.session_id == session_id)
+            .order_by(repo.Resource.id.desc())
+            .first()
+        )
+        assert repo.resource_knowledge_sources(stored)[0]["document_name"] == "课程.md"
+        assert "KNOWLEDGE_CITATION_UNKNOWN:资料99" in repo.resource_quality_issues(stored)
     finally:
         db.close()

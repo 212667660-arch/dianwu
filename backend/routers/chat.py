@@ -25,6 +25,7 @@ async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)) -> Chat
         profile_version=result.profile_version,
         cached=result.cached,
         sources=result.sources,
+        knowledge_sources=result.knowledge_sources,
     )
 
 

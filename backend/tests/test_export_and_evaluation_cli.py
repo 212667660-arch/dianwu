@@ -40,7 +40,11 @@ PROFILE = """【协议:learner-profile/v1】
 【协议结束】"""
 
 
-def _stored_resource(session_id: str, sources: list[dict[str, str]] | None = None) -> int:
+def _stored_resource(
+    session_id: str,
+    sources: list[dict[str, str]] | None = None,
+    knowledge_sources: list[dict[str, object]] | None = None,
+) -> int:
     init_db()
     db = SessionLocal()
     try:
@@ -49,7 +53,16 @@ def _stored_resource(session_id: str, sources: list[dict[str, str]] | None = Non
         repo.set_state(db, session, repo.SessionState.PROFILE_READY)
         repo.save_profile(db, session, PROFILE)
         repo.begin_generation(db, session)
-        return repo.complete_generation(db, session, "一次函数", "生成练习", RESOURCE, 1, sources).id
+        return repo.complete_generation(
+            db,
+            session,
+            "一次函数",
+            "生成练习",
+            RESOURCE,
+            1,
+            sources,
+            knowledge_sources,
+        ).id
     finally:
         db.close()
 
@@ -83,6 +96,46 @@ def test_session_history_and_export_include_persisted_sources() -> None:
         assert "【参考来源】" in response.text
         assert source["title"] in response.text
         assert source["url"] in response.text
+
+
+def test_session_history_and_export_never_expose_local_knowledge_paths() -> None:
+    session_id = f"export-knowledge-{uuid.uuid4().hex}"
+    knowledge_source = {
+        "reference_id": "资料1",
+        "document_id": 7,
+        "document_name": r"C:\Users\alice\课程.md",
+        "locator_label": "file:///Users/alice/答案表 · 第 2–3 行",
+        "locator": {
+            "type": "sheet_rows",
+            "start": 2,
+            "end": 3,
+            "sheet_name": "file:///Users/alice/答案表",
+        },
+        "chunk_id": 11,
+        "retrieval_mode": "keyword",
+    }
+    resource_id = _stored_resource(
+        session_id,
+        knowledge_sources=[knowledge_source],
+    )
+
+    with TestClient(app) as client:
+        history = client.get(f"/api/sessions/{session_id}")
+        assert history.status_code == 200
+        stored_source = history.json()["resources"][0]["knowledge_sources"][0]
+        assert stored_source["document_name"] == "课程.md"
+        assert stored_source["locator_label"] == "工作表 · 第 2–3 行"
+        assert stored_source["locator"]["sheet_name"] == "工作表"
+        assert "Users" not in history.text
+        assert "file://" not in history.text
+
+        response = client.get(
+            f"/api/sessions/{session_id}/resources/{resource_id}/export?format=markdown"
+        )
+        assert response.status_code == 200
+        assert "课程.md · 工作表 · 第 2–3 行" in response.text
+        assert "Users" not in response.text
+        assert "file://" not in response.text
 
 
 def test_evaluation_cli_covers_sample_outputs() -> None:

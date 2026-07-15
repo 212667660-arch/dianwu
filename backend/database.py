@@ -46,6 +46,7 @@ def _sqlite_migrate() -> None:
     _add_missing_columns("resources", {
         "request_message": "TEXT NOT NULL DEFAULT ''",
         "sources_json": "TEXT NOT NULL DEFAULT '[]'",
+        "knowledge_sources_json": "TEXT NOT NULL DEFAULT '[]'",
         "profile_version": "INTEGER NOT NULL DEFAULT 0",
         "learning_state_version": "INTEGER NOT NULL DEFAULT 0",
         "protocol_version": "VARCHAR(32) NOT NULL DEFAULT 'learning-resource/v1'",

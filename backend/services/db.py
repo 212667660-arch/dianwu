@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timedelta
 from enum import Enum
 from threading import RLock
@@ -11,6 +12,11 @@ from sqlalchemy.orm import Session, relationship
 
 from backend.database import Base
 from backend.errors import DomainStateError, PersistenceError
+from backend.knowledge.safety import (
+    build_locator_label,
+    safe_document_name,
+    safe_sheet_name,
+)
 
 
 class SessionState(str, Enum):
@@ -90,6 +96,7 @@ class Resource(Base):
     request_message = Column(Text, nullable=False, default="")
     content = Column(Text, nullable=False)
     sources_json = Column(Text, nullable=False, default="[]")
+    knowledge_sources_json = Column(Text, nullable=False, default="[]")
     profile_version = Column(Integer, default=0, nullable=False)
     learning_state_version = Column(Integer, default=0, nullable=False)
     protocol_version = Column(String(32), default="learning-resource/v1", nullable=False)
@@ -402,6 +409,77 @@ def resource_sources(resource: Resource) -> list[dict[str, str]]:
     return normalize_source_snapshots(parsed if isinstance(parsed, list) else [])
 
 
+def normalize_knowledge_source_snapshots(
+    sources: list[dict[str, object]] | None,
+) -> list[dict[str, object]]:
+    normalized: list[dict[str, object]] = []
+    for item in sources or []:
+        if not isinstance(item, dict):
+            continue
+        reference_id = str(item.get("reference_id", "")).strip()
+        document_name = safe_document_name(item.get("document_name", ""))
+        retrieval_mode = str(item.get("retrieval_mode", "keyword"))
+        locator = item.get("locator")
+        if (
+            not re.fullmatch(r"资料[1-9]\d{0,2}", reference_id)
+            or not document_name
+            or retrieval_mode not in {"keyword", "hybrid"}
+            or not isinstance(locator, dict)
+        ):
+            continue
+        try:
+            document_id = int(item.get("document_id", 0))
+            chunk_id = int(item.get("chunk_id", 0))
+            start = int(locator.get("start", 0))
+            end = int(locator.get("end", 0))
+        except (TypeError, ValueError):
+            continue
+        locator_type = str(locator.get("type", ""))
+        if (
+            document_id < 1
+            or chunk_id < 1
+            or start < 1
+            or end < start
+            or locator_type not in {"page", "slide", "sheet_rows", "paragraph"}
+        ):
+            continue
+        safe_locator: dict[str, object] = {
+            "type": locator_type,
+            "start": start,
+            "end": end,
+        }
+        if locator_type == "sheet_rows":
+            sheet_name = safe_sheet_name(locator.get("sheet_name", ""))
+            safe_locator["sheet_name"] = sheet_name
+        else:
+            sheet_name = None
+        locator_label = build_locator_label(locator_type, start, end, sheet_name)
+        normalized.append(
+            {
+                "reference_id": reference_id,
+                "document_id": document_id,
+                "document_name": document_name,
+                "locator_label": locator_label,
+                "locator": safe_locator,
+                "chunk_id": chunk_id,
+                "retrieval_mode": retrieval_mode,
+            }
+        )
+        if len(normalized) == 8:
+            break
+    return normalized
+
+
+def resource_knowledge_sources(resource: Resource) -> list[dict[str, object]]:
+    try:
+        parsed = json.loads(resource.knowledge_sources_json or "[]")
+    except (TypeError, json.JSONDecodeError):
+        return []
+    return normalize_knowledge_source_snapshots(
+        parsed if isinstance(parsed, list) else []
+    )
+
+
 def resource_quality_issues(resource: Resource) -> list[str]:
     try:
         parsed = json.loads(resource.quality_issues_json or "[]")
@@ -421,6 +499,7 @@ def find_cached_resource(db: Session, session: ChatSession, request_message: str
             Resource.profile_version == session.profile_version,
             Resource.learning_state_version == session.learning_state_version,
             Resource.request_message == request_message,
+            Resource.knowledge_sources_json == "[]",
             Resource.status == "COMPLETED",
             Resource.created_at >= cutoff,
         )
@@ -437,6 +516,8 @@ def complete_generation(
     content: str,
     profile_version: int,
     sources: list[dict[str, object]] | None = None,
+    knowledge_sources: list[dict[str, object]] | None = None,
+    extra_quality_issues: list[str] | None = None,
 ) -> Resource:
     if session.state != SessionState.GENERATING.value:
         raise DomainStateError("当前状态不能完成资源生成。", "GENERATION_STATE_INVALID")
@@ -444,6 +525,8 @@ def complete_generation(
     from backend.services.resource_quality import assess_resource_quality
 
     quality = assess_resource_quality(parse_resource(content))
+    additional_issues = [str(item)[:128] for item in extra_quality_issues or []]
+    combined_issues = list(dict.fromkeys([*quality.issues, *additional_issues]))
     resource = Resource(
         session_id=session.session_id,
         kind="mixed",
@@ -451,10 +534,14 @@ def complete_generation(
         request_message=request_message,
         content=content,
         sources_json=json.dumps(normalize_source_snapshots(sources), ensure_ascii=False),
+        knowledge_sources_json=json.dumps(
+            normalize_knowledge_source_snapshots(knowledge_sources),
+            ensure_ascii=False,
+        ),
         profile_version=profile_version,
         learning_state_version=session.learning_state_version,
-        quality_score=quality.score,
-        quality_issues_json=json.dumps(quality.issues, ensure_ascii=False),
+        quality_score=max(0, quality.score - 10 * len(additional_issues)),
+        quality_issues_json=json.dumps(combined_issues, ensure_ascii=False),
     )
     db.add(resource)
     _index_resource_questions(db, resource)
