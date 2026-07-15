@@ -124,6 +124,46 @@ class ModelNotFoundError(AppError):
         super().__init__("MODEL_NOT_FOUND", message, 404)
 
 
+class ModelProfileNotFoundError(AppError):
+    def __init__(self) -> None:
+        super().__init__("MODEL_PROFILE_NOT_FOUND", "指定的模型配置不存在。", 404)
+
+
+class ModelProfileDisabledError(AppError):
+    def __init__(self) -> None:
+        super().__init__("MODEL_PROFILE_DISABLED", "指定的模型配置已停用。", 409)
+
+
+class ModelProfileNeedsAttentionError(AppError):
+    def __init__(self) -> None:
+        super().__init__("MODEL_PROFILE_NEEDS_ATTENTION", "模型配置需要重新检查。", 409)
+
+
+class ModelCapabilityUnsupportedError(AppError):
+    def __init__(self) -> None:
+        super().__init__("MODEL_CAPABILITY_UNSUPPORTED", "当前模型不支持所选能力。", 422)
+
+
+class ModelFailoverExhaustedError(AppError):
+    def __init__(self) -> None:
+        super().__init__("MODEL_FAILOVER_EXHAUSTED", "可用模型服务均未能完成请求。", 503, retryable=True)
+
+
+class ModelRuntimeSnapshotInvalidError(AppError):
+    def __init__(self) -> None:
+        super().__init__("MODEL_RUNTIME_SNAPSHOT_INVALID", "模型运行配置快照无效。", 422)
+
+
+class ModelRuntimeApplyFailedError(AppError):
+    def __init__(self) -> None:
+        super().__init__("MODEL_RUNTIME_APPLY_FAILED", "模型运行配置应用失败。", 503)
+
+
+class ModelStreamInterruptedError(AppError):
+    def __init__(self) -> None:
+        super().__init__("MODEL_STREAM_INTERRUPTED", "模型流式响应已中断。", 502, retryable=True)
+
+
 class ProtocolValidationError(AppError):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(code, message, 502)
