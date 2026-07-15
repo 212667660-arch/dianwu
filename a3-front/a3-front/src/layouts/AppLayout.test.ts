@@ -106,5 +106,6 @@ describe('AppLayout backend lifecycle', () => {
     await flushPromises()
     expect(wrapper.find('[data-test="conversation-rail"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="desk-panel"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="desk-toggle"]').exists()).toBe(true)
   })
 })
