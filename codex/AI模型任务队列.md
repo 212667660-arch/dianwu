@@ -2,7 +2,7 @@
 
 > 项目：基于大模型的个性化资源生成与学习多智能体系统开发
 > 队列位置：E:\软件杯\codex\AI模型任务队列.md
-> 当前模型批次：Sol（S-017 进行中）
+> 当前模型批次：Sol（S-017 已完成，等待切换 Terra 执行 T-033）
 > 最后审视日期：2026-07-15
 
 ## 一、使用规则
@@ -70,7 +70,7 @@
 | S-014 | P0 | 完成 | 实现安装版安全模型配置闭环 | S-008、S-011、T-028 | 前端模型配置与连通性测试、Electron `safeStorage` 凭据保存、主进程启动注入、受控 IPC 路由及全新安装就绪验收 |
 | S-015 | P1 | 完成 | 建立项目 Git 安全基线 | S-014 | 根目录单仓库、敏感/生成文件忽略规则、首个本地 main 基线提交及仓库状态验收 |
 | S-016 | P1 | 完成 | 连接 GitHub 私有远程仓库 | S-015 | 本地提交身份、`origin`、`main` 上游分支、远程提交一致性和推送验收 |
-| S-017 | P0 | 进行中 | 设计稳定优先的多 API 配置、故障转移、模型切换与推理强度架构 | S-014、T-032、用户已确认“手动主配置 + 自动备用切换 + 可关闭自动切换” | 多配置加密存储协议、主备/手动切换策略、连接复用与重试边界、模型能力与推理强度映射、前后端接口和验收门槛 |
+| S-017 | P0 | 完成 | 设计稳定优先的多 API 配置、故障转移、模型切换与推理强度架构 | S-014、T-032、用户已确认“手动主配置 + 自动备用切换 + 可关闭自动切换” | Electron 版本 2 加密保险库、后端内存路由器、原子热应用、主备与熔断、普通/流式边界、全局与学习空间覆盖、模型能力和推理强度适配、13 项 TDD 实施计划 |
 
 ## 五、Terra 队列
 
@@ -108,7 +108,7 @@
 | T-030 | P1 | 完成 | 以 openhanako 为参考重做 A3 陪伴式学习工作台界面 | T-029、用户视觉确认 | 三栏工作台、欢迎式对话入口、书桌/便签信息面板、暖色浪漫视觉、账号与桌宠扩展边界；Vitest、Web/桌面构建和浏览器窄屏验收 |
 | T-031 | P0 | 完成 | 修复 Electron 沙箱预加载桥接缺失导致桌面后端误判离线 | T-030、体验测试截图 | 沙箱兼容 preload、桌面 IPC 桥接可用、模型设置与健康检查恢复、Electron/前端回归和真实窗口验收 |
 | T-032 | P0 | 完成 | 修复桌面模型连接失败、环境密钥污染与首次配置误判 | T-031、模型连接体验截图 | 模型 HTTP 客户端绕过错误系统代理；Electron 不继承终端模型密钥；空 Key 交由主进程安全存储解析；DeepSeek 真实测试、保存、重启与留空复测全部成功 |
-| T-033 | P0 | 阻塞 | 实现多 API 配置、高可用切换、模型选择与推理强度控制 | S-017 | 多配置增删改查和加密保存、手动切换与自动故障转移、低延迟连接复用、模型/推理强度 UI、后端兼容层、真实桌面稳定性与回归测试 |
+| T-033 | P0 | 就绪 | 实现多 API 配置、高可用切换、模型选择与推理强度控制 | S-017 | 多配置增删改查和加密保存、手动切换与自动故障转移、低延迟连接复用、模型/推理强度 UI、后端兼容层、真实桌面稳定性与回归测试 |
 | T-034 | P0 | 完成 | 建立当前 API 连接稳定性与延迟基线并修复可复现缺陷 | T-032 | 11 次真实调用全部成功；后端连续 5 次 P50 1329 ms、P95 2108 ms，桌面全链路 3/3 成功；客户端复用、2 次自动重试和 60 秒超时生效；无可复现连接 Bug，不提前实现 S-017 架构范围 |
 
 ## 六、Luna 队列
@@ -171,6 +171,7 @@ S-016 已完成：本仓库提交身份已设置为 `Wei kb <212667660@qq.com>`�
 
 | 日期 | 任务 ID | 模型 | 修改文件 | 验证结果 |
 | --- | --- | --- | --- | --- |
+| 2026-07-15 | S-017 | Sol | a3-front/a3-front/docs/superpowers/specs/2026-07-15-multi-api-stability-design.md、docs/superpowers/plans/2026-07-15-multi-api-stability-plan.md、codex/AI模型任务队列.md | 用户确认稳定优先、手动主配置 + 自动备用切换、全局默认 + 学习空间覆盖、流式已输出后不静默换模型，并授权后续设计直接采纳。设计采用 Electron `safeStorage` 版本 2 保险库 + 后端原子内存路由器，规定可重试错误、3 次/2 配置总预算、熔断冷却、密钥边界、模型能力声明、推理档位映射、兼容迁移和发布门槛。实施计划拆为 13 个 TDD 任务、91 个步骤和 13 个提交点；占位符、矛盾、类型一致性和需求覆盖自审通过，T-033 已解除阻塞。 |
 | 2026-07-15 | T-034 | Terra | codex/AI模型任务队列.md；本地桌面运行日志与临时基线脚本（未落盘） | 使用正确项目配置连续执行后端真实调用 5 次，5/5 成功，延迟 1065–2108 ms、P50 1329 ms、P95 2108 ms；同一客户端首次 2004 ms、空闲 7 秒后 1002 ms、立即复用 1125 ms，无空闲重连退化。Electron → safeStorage → IPC → FastAPI → DeepSeek 全链路连续测试 3 次，3/3 成功，接口延迟 1230–1775 ms、端到端 1429–1947 ms。日志无认证、连接、超时或 SDK 重试错误；确认 OpenAI 客户端复用、默认 2 次重试和 60 秒超时生效。累计 11 次真实调用全部成功，未发现可复现连接 Bug，参数优化留给 S-017 稳定优先架构。 |
 | 2026-07-15 | T-032 | Terra | backend/services/llm_service.py、backend/tests/test_llm_gateway.py；a3-front/a3-front/electron/main.mjs、electron/model-config.mjs、electron/model-config.test.mjs；src/stores/backend.ts、src/views/ModelSettings.vue、src/views/ModelSettings.test.ts；desktop-backend；codex/AI模型任务队列.md | 根因包括 Windows 将普通 HTTP CONNECT 代理登记为 HTTPS、Electron 继承终端 `OPENAI_API_KEY` 覆盖项目配置，以及渲染器自行误判首次配置。OpenAI/Anthropic 客户端统一 `trust_env=False`；桌面启动环境移除所有模型变量，仅允许 safeStorage 显式注入；配置加载期间禁用测试，空 Key 委托主进程安全存储。新 `api.exe` 启动自检通过；真实桌面完成正确 Key 内存迁移、连接测试 1591 ms、加密保存、后端重启及留空复测 1557 ms，未输出 Key。最终 `pytest -q backend` 88 passed；Electron Node 71 passed；Vitest 35 passed；`npm run build:desktop` 退出码 0。 |
 | 2026-07-15 | T-031 | Terra | a3-front/a3-front/electron/main.mjs、electron/preload.cjs（替代 preload.mjs）、electron/runtime.test.mjs、codex/AI模型任务队列.md | 修复 Electron 沙箱不加载 ESM preload 导致 `window.a3Desktop` 缺失、渲染器误走 Web 传输并显示“服务离线”。新增 CommonJS preload 回归；`npm run test` 为 Electron Node 70 passed、Vitest 33 passed。真实窗口日志确认 `/health/live`、`/health/ready`、`/api/settings/model` 均经 IPC 代理访问并返回 200，应用保持运行供用户继续测试。 |

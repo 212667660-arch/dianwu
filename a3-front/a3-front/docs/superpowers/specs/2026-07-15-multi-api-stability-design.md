@@ -57,7 +57,7 @@ T-034 的真实基线为 11/11 次调用成功。后端连续调用 P50 为 1329
 ```text
 version: 2
 global:
-  default_profile_id
+  default_profile_id: nullable until the first profile is saved
   auto_failover
   fallback_profile_ids[]
 profiles[]:
@@ -73,7 +73,9 @@ profiles[]:
   models[]
 ```
 
-每个模型条目保存稳定 ID、供应商模型名、显示名、能力声明、允许的推理档位和供应商适配方式。适配方式必须来自代码内白名单枚举，界面不能保存或发送任意 JSON 参数。保险库整体由 `safeStorage` 加密，继续使用临时文件 + 原子重命名。版本 1 自动迁移为一个启用的默认配置，原密钥不经过 renderer。
+全新安装允许 `profiles=[]`、`default_profile_id=null` 和空备用列表，此时 backend live 但 ready=false，界面进入首次配置引导。保存第一套已测试配置时自动设为默认配置。
+
+每个模型条目保存稳定 ID、供应商模型名、显示名、最大输出 token、能力声明、允许的推理档位和供应商适配方式。适配方式必须来自代码内白名单枚举，界面不能保存或发送任意 JSON 参数。最大输出 token 必须在 512–32768 之间，并继续受供应商实际上限约束。保险库整体由 `safeStorage` 加密，继续使用临时文件 + 原子重命名。版本 1 自动迁移为一个启用的默认配置，原密钥不经过 renderer。
 
 保险库不保存运行期成功率、熔断计时器或原始错误；这些状态只存在于后端内存。
 
@@ -207,8 +209,8 @@ updated_at
 
 每个模型声明 `supported_reasoning_efforts` 和 `reasoning_adapter`。适配器只使用经过验证的供应商参数：
 
-- OpenAI 兼容模型可映射到 `reasoning_effort` 或供应商明确支持的兼容字段；
-- Anthropic 模型可映射到受支持的 thinking/budget 结构；
+- OpenAI 兼容模型可映射到 `reasoning_effort`；显式推理时由适配器决定是否省略不兼容的 temperature；
+- Anthropic 模型可映射到受支持的 thinking/budget 结构；thinking 开启时省略 temperature，并保证 `max_tokens` 严格大于 `budget_tokens`；
 - 普通模型使用 `none` 适配器，不发送推理字段；
 - 自定义网关默认能力为未知，用户可在高级设置中声明，系统不得靠模型名称猜测。
 
