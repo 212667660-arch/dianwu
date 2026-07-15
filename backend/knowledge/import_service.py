@@ -119,6 +119,7 @@ class KnowledgeImportService:
         repository,
         *,
         spawn_worker: Callable[[WorkerRequest], object] | None = None,
+        schedule_semantic_update: Callable[[int], None] | None = None,
         parse_timeout_seconds: float = 120,
         termination_timeout_seconds: float = 2,
     ) -> None:
@@ -126,6 +127,7 @@ class KnowledgeImportService:
         self.parse_timeout_seconds = parse_timeout_seconds
         self.termination_timeout_seconds = termination_timeout_seconds
         self._spawn_worker = spawn_worker
+        self._schedule_semantic_update = schedule_semantic_update
         self._active: dict[int, object] = {}
         self._active_lock = asyncio.Lock()
         _SERVICES.add(self)
@@ -294,6 +296,13 @@ class KnowledgeImportService:
             self.repository.replace_chunks(document_id, chunks)
             search = KnowledgeSearchRepository(self.repository.db)
             search.replace_document_index(document_id)
+            if self._schedule_semantic_update is not None:
+                try:
+                    self._schedule_semantic_update(document_id)
+                except Exception:
+                    logger.warning(
+                        "knowledge semantic update skipped: KNOWLEDGE_VECTOR_INDEX_UNAVAILABLE"
+                    )
             self.repository.clear_worker_output(job_id)
             return self._terminal_transition(job_id, completed=True)
         except asyncio.TimeoutError:

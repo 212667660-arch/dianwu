@@ -480,6 +480,44 @@ def test_scan_pdf_stops_at_ocr_required_without_replacing_fts() -> None:
     asyncio.run(exercise())
 
 
+def test_semantic_update_scheduler_failure_never_fails_keyword_import(
+    monkeypatch,
+) -> None:
+    async def exercise() -> None:
+        repository = FakeRepository()
+        repository.db = object()
+        repository.worker_block_events = lambda _job_id: []
+        repository.replace_chunks = lambda _document_id, _chunks: []
+        done = DoneEvent(text_characters=0)
+        process = FakeProcess([(done.model_dump_json() + "\n").encode("utf-8")])
+        process.finish(0)
+
+        class FakeSearch:
+            def __init__(self, _db) -> None:
+                pass
+
+            def replace_document_index(self, _document_id: int) -> None:
+                pass
+
+        monkeypatch.setattr(
+            "backend.knowledge.import_service.KnowledgeSearchRepository",
+            FakeSearch,
+        )
+
+        def broken_scheduler(_document_id: int) -> None:
+            raise RuntimeError("semantic queue unavailable")
+
+        result = await KnowledgeImportService(
+            repository,
+            spawn_worker=lambda _request: process,
+            schedule_semantic_update=broken_scheduler,
+        ).run_job(7)
+
+        assert result.status == ImportJobStatus.COMPLETED.value
+
+    asyncio.run(exercise())
+
+
 def test_real_worker_persists_chunks_and_builds_search_index(tmp_path: Path) -> None:
     async def exercise() -> None:
         engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
