@@ -197,6 +197,32 @@ class ModelRuntimeRouter:
             ),
         )
 
+    def reviewer_candidate_ids(
+        self,
+        generation_profile_id: str | None = None,
+    ) -> tuple[str, ...]:
+        snapshot = self._snapshot
+        ordered: list[str] = []
+        if snapshot.value.default_profile_id is not None:
+            ordered.append(snapshot.value.default_profile_id)
+        ordered.extend(snapshot.value.fallback_profile_ids)
+        ordered.extend(profile.id for profile in snapshot.value.profiles)
+        enabled = [
+            profile_id
+            for profile_id in dict.fromkeys(ordered)
+            if (
+                profile_id in snapshot.profiles
+                and snapshot.profiles[profile_id].definition.enabled
+                and not snapshot.profiles[profile_id].needs_attention
+            )
+        ]
+        if generation_profile_id in enabled:
+            enabled = [
+                profile_id for profile_id in enabled
+                if profile_id != generation_profile_id
+            ] + [generation_profile_id]
+        return tuple(enabled)
+
     def legacy_model_settings(self) -> ModelSettingsResponse | None:
         snapshot = self._snapshot
         profile_id = snapshot.value.default_profile_id

@@ -14,6 +14,7 @@ from backend.services.content_safety.models import (
 from backend.services.content_safety.normalization import normalize_for_scan
 from backend.services.content_safety.policy import PolicyDecision, evaluate_context, evaluate_request
 from backend.services.content_safety.prompt_boundary import bounded_untrusted_payload, untrusted_json_block
+from backend.services.content_safety.reviewer import ReviewContext, ReviewResult, SafetyReviewer
 
 __all__ = [
     "DetectionResult",
@@ -24,6 +25,9 @@ __all__ = [
     "SafetyAction",
     "SafetyMetadata",
     "SafetyStage",
+    "ReviewContext",
+    "ReviewResult",
+    "SafetyReviewer",
     "detect_structures",
     "evaluate_context",
     "evaluate_request",

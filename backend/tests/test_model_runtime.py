@@ -68,6 +68,23 @@ def selection(**overrides: object) -> RuntimeSelection:
     return RuntimeSelection(**value)
 
 
+def test_reviewer_candidates_prefer_a_different_enabled_profile() -> None:
+    async def exercise() -> None:
+        router = ModelRuntimeRouter(
+            gateway_factory=lambda _value: ScriptedGateway(completions=["OK"]),
+        )
+        await router.apply_snapshot(snapshot(
+            profile("primary"),
+            profile("backup"),
+            profile("third"),
+        ))
+
+        assert router.reviewer_candidate_ids("primary") == ("backup", "third", "primary")
+        assert router.reviewer_candidate_ids("backup") == ("primary", "third", "backup")
+
+    asyncio.run(exercise())
+
+
 def test_retryable_primary_failure_uses_backup_once() -> None:
     async def exercise() -> None:
         gateways = {
