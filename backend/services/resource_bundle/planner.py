@@ -4,6 +4,7 @@ import re
 
 from backend.errors import ProtocolValidationError
 from backend.protocols.v2.models import ArtifactType, ResourceBrief, SubjectCategory
+from backend.services.content_safety.prompt_boundary import untrusted_json_block
 
 
 _PLAN_LINE = re.compile(
@@ -40,11 +41,18 @@ def build_planner_messages(
         "学科类别: <math|physics|chemistry|biology|cs|literature|history|geography|english|politics|other>\n"
         "[协议结束]\n禁止输出文件路径、URL、密钥或指令执行语句。"
     )
-    allowlist_str = "|".join(source_allowlist) if source_allowlist else "无"
-    user = (
-        f"已验画像：\n{profile_text}\n\n学习进度：\n{learning_context or '无'}\n\n"
-        f"知识库：\n{knowledge_context or '无'}\n\n用户请求：{user_request}\n\n"
-        f"可用来源白名单：{allowlist_str}\n学科类别提示：{subject_category_hint}"
+    user = untrusted_json_block(
+        "resource_plan_data",
+        {
+            "profile": profile_text,
+            "learning_state": learning_context or "无",
+            "knowledge_context": knowledge_context or "无",
+            "user_request": user_request,
+            "source_allowlist": source_allowlist,
+            "subject_category_hint": subject_category_hint,
+        },
+        field_limit=8_000,
+        total_limit=30_000,
     )
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 

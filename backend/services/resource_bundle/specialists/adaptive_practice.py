@@ -4,7 +4,7 @@ import re
 
 from backend.protocols.v2.models import ArtifactType, ArtifactStatus, ResourceArtifact, ResourceBrief, SubjectCategory
 from backend.services.resource_bundle.safety import check_dangerous_content
-from backend.services.resource_bundle.specialists.base import Specialist, SpecialistResult
+from backend.services.resource_bundle.specialists.base import Specialist, SpecialistResult, build_specialist_prompt
 
 _CODE_LAB_SECTIONS = ["目标", "环境", "步骤", "验收标准", "参考方法", "起始代码"]
 _EXPERIMENT_SECTIONS = ["目标", "前置条件", "步骤", "验收标准", "参考方法"]
@@ -20,38 +20,25 @@ class AdaptivePracticeSpecialist(Specialist):
         learning_context: str, knowledge_context: str,
     ) -> list[dict[str, str]]:
         if brief.subject_category == SubjectCategory.CS:
-            section_instruction = "\n".join(f"## {s}\n（在此填写{s}内容）" for s in _CODE_LAB_SECTIONS)
-            format_note = (
-                f"请生成编程实验（code lab）格式的适应性练习。\n"
-                f"必须包含 ## 起始代码 部分，提供初始代码框架。\n"
-                f"严格按照以下部分输出：\n{section_instruction}"
+            sections = "\n".join(f"## {s}\n（在此填写{s}内容）" for s in _CODE_LAB_SECTIONS)
+            static_instruction = (
+                "生成编程实验并包含非空起始代码，严格按以下部分输出：\n"
+                f"{sections}"
             )
         else:
-            section_instruction = "\n".join(f"## {s}\n（在此填写{s}内容）" for s in _EXPERIMENT_SECTIONS)
-            format_note = (
-                f"请生成实验/案例格式的适应性练习。\n"
-                f"不需要提供代码模板。\n"
-                f"严格按照以下部分输出：\n{section_instruction}"
+            sections = "\n".join(f"## {s}\n（在此填写{s}内容）" for s in _EXPERIMENT_SECTIONS)
+            static_instruction = (
+                "生成实验/案例，不提供代码模板，严格按以下部分输出：\n"
+                f"{sections}"
             )
-
-        system_msg = (
-            f"你是一位专业的适应性练习设计专家。请为主题「{brief.topic}」生成适应性练习。\n"
-            f"学习目标：{''.join(brief.learning_objectives)}\n"
-            f"目标难度：{brief.target_difficulty}\n"
-            f"薄弱知识点：{''.join(brief.weak_knowledge_points) if brief.weak_knowledge_points else '无'}\n"
-            f"风格约束：{brief.style_constraints or '无特殊约束'}\n"
-            f"学科类别：{brief.subject_category.value}\n\n"
-            f"{format_note}"
+        return build_specialist_prompt(
+            artifact_type=self.artifact_type,
+            static_instruction=static_instruction,
+            brief=brief,
+            profile_text=profile_text,
+            learning_context=learning_context,
+            knowledge_context=knowledge_context,
         )
-        user_msg = (
-            f"学习者画像：{profile_text}\n"
-            f"学习上下文：{learning_context}\n"
-            f"知识上下文：{knowledge_context}"
-        )
-        return [
-            {"role": "system", "content": system_msg},
-            {"role": "user", "content": user_msg},
-        ]
 
     def parse(
         self, raw_output: str, artifact_id: str, *,

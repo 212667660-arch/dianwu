@@ -4,14 +4,20 @@ from collections.abc import Awaitable, Callable, Sequence
 
 from backend.errors import ProtocolValidationError
 from backend.protocols import DiagnosisDecision, parse_diagnosis_decision, parse_profile, serialize_profile
-from backend.services.llm_service import user_block
+from backend.services.content_safety.prompt_boundary import untrusted_json_block
 
 CompleteCallable = Callable[[list[dict[str, str]], float], Awaitable[str]]
 
 
 def build_diagnosis_messages(history: Sequence[str], turn: int) -> list[dict[str, str]]:
     template = "\n".join([
-        f"当前诊断轮次：{turn}", user_block("\n".join(history)), "请严格输出：",
+        untrusted_json_block(
+            "diagnosis_data",
+            {"turn": turn, "history": list(history)},
+            field_limit=8_000,
+            total_limit=20_000,
+        ),
+        "请严格输出：",
         "【协议:diagnosis-decision/v1】", "状态：CONTINUE 或 COMPLETE", "当前轮次：", "已确认字段：",
         "缺失字段：", "置信度：0 到 1 的小数（例如 0.80）：", "下一问题：", "完成理由：", "【协议结束】",
     ])
@@ -23,7 +29,13 @@ def build_diagnosis_messages(history: Sequence[str], turn: int) -> list[dict[str
 
 def build_profile_messages(history: Sequence[str], profile_version: int) -> list[dict[str, str]]:
     template = "\n".join([
-        f"画像版本：{profile_version}", user_block("\n".join(history)), "严格输出字段：",
+        untrusted_json_block(
+            "profile_data",
+            {"profile_version": profile_version, "history": list(history)},
+            field_limit=8_000,
+            total_limit=20_000,
+        ),
+        "严格输出字段：",
         "【协议:learner-profile/v1】", "画像版本：", "年级：", "学科：", "当前水平：入门、基础、中等、熟练或未明确",
         "薄弱知识点：用｜分隔", "学习风格偏好：视觉型、听觉型、动觉型、读写型、复合型或未明确",
         "学习风格证据：", "认知层次：记忆、理解、应用、分析、评价、创造或未明确", "学习目标：",

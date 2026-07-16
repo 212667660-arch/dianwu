@@ -2,7 +2,7 @@
 
 from backend.protocols.v2.models import ArtifactType, ArtifactStatus, ResourceArtifact, ResourceBrief
 from backend.services.resource_bundle.safety import check_dangerous_content
-from backend.services.resource_bundle.specialists.base import Specialist, SpecialistResult
+from backend.services.resource_bundle.specialists.base import Specialist, SpecialistResult, build_specialist_prompt
 
 _COURSE_SECTIONS = ["学习目标", "核心概念", "逐步讲解", "常见误区", "个性化建议"]
 
@@ -17,23 +17,14 @@ class CourseExplanationSpecialist(Specialist):
         learning_context: str, knowledge_context: str,
     ) -> list[dict[str, str]]:
         section_instruction = "\n".join(f"## {s}\n（在此填写{s}内容）" for s in _COURSE_SECTIONS)
-        system_msg = (
-            f"你是一位专业的课程讲解专家。请为主题「{brief.topic}」生成结构化的课程讲解。\n"
-            f"学习目标：{''.join(brief.learning_objectives)}\n"
-            f"目标难度：{brief.target_difficulty}\n"
-            f"薄弱知识点：{''.join(brief.weak_knowledge_points) if brief.weak_knowledge_points else '无'}\n"
-            f"风格约束：{brief.style_constraints or '无特殊约束'}\n\n"
-            f"请严格按照以下五个部分输出：\n{section_instruction}"
+        return build_specialist_prompt(
+            artifact_type=self.artifact_type,
+            static_instruction=f"请严格按照以下五个部分输出：\n{section_instruction}",
+            brief=brief,
+            profile_text=profile_text,
+            learning_context=learning_context,
+            knowledge_context=knowledge_context,
         )
-        user_msg = (
-            f"学习者画像：{profile_text}\n"
-            f"学习上下文：{learning_context}\n"
-            f"知识上下文：{knowledge_context}"
-        )
-        return [
-            {"role": "system", "content": system_msg},
-            {"role": "user", "content": user_msg},
-        ]
 
     def parse(
         self, raw_output: str, artifact_id: str, *,

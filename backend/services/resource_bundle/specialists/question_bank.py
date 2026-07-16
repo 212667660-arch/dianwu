@@ -4,7 +4,7 @@ import re
 
 from backend.protocols.v2.models import ArtifactType, ArtifactStatus, ResourceArtifact, ResourceBrief
 from backend.services.resource_bundle.safety import check_dangerous_content
-from backend.services.resource_bundle.specialists.base import Specialist, SpecialistResult
+from backend.services.resource_bundle.specialists.base import Specialist, SpecialistResult, build_specialist_prompt
 
 _QB_LEVELS = ["基础", "提高", "挑战"]
 
@@ -22,23 +22,17 @@ class QuestionBankSpecialist(Specialist):
             f"## {level}\n题目N：...\n答案N：...\n解析N：..."
             for level in _QB_LEVELS
         )
-        system_msg = (
-            f"你是一位专业的题库生成专家。请为主题「{brief.topic}」生成分层练习题。\n"
-            f"学习目标：{''.join(brief.learning_objectives)}\n"
-            f"目标难度：{brief.target_difficulty}\n"
-            f"薄弱知识点：{''.join(brief.weak_knowledge_points) if brief.weak_knowledge_points else '无'}\n"
-            f"风格约束：{brief.style_constraints or '无特殊约束'}\n\n"
-            f"请严格按照以下三个难度层级输出，每道题需包含题目、答案和解析：\n{level_instruction}"
+        return build_specialist_prompt(
+            artifact_type=self.artifact_type,
+            static_instruction=(
+                "请严格按照以下三个难度层级输出，每道题需包含题目、答案和解析：\n"
+                f"{level_instruction}"
+            ),
+            brief=brief,
+            profile_text=profile_text,
+            learning_context=learning_context,
+            knowledge_context=knowledge_context,
         )
-        user_msg = (
-            f"学习者画像：{profile_text}\n"
-            f"学习上下文：{learning_context}\n"
-            f"知识上下文：{knowledge_context}"
-        )
-        return [
-            {"role": "system", "content": system_msg},
-            {"role": "user", "content": user_msg},
-        ]
 
     def parse(
         self, raw_output: str, artifact_id: str, *,
