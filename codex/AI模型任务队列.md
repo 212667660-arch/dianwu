@@ -2,7 +2,7 @@
 
 > 项目：基于大模型的个性化资源生成与学习多智能体系统开发
 > 队列位置：E:\软件杯\codex\AI模型任务队列.md
-> 当前模型批次：Sol（S-027 审查完成；S-022 待按审查优先级修复；S-026 内容安全实施暂停）
+> 当前模型批次：Sol（S-022 五类资源端到端修复实施中；完成后自动转入 S-026）
 > 最后审视日期：2026-07-17
 
 ## 一、使用规则
@@ -78,7 +78,7 @@
 | S-021 | P0 | 完成 | 对照软件杯官网文件审计当前项目是否具备参赛提交条件 | S-020、比赛官网最新通知 | 官网资格与赛题要求、提交物清单、当前产物逐项对照、阻塞项与提交前行动清单 |
 | S-023 | P1 | 完成 | Code Quality Review: v2 Protocol Models (models.py, __init__.py, tests) | 无 | 审查报告 → 本轮对话 |
 | S-022 | P0 | 进行中 | 实现至少五类个性化学习资源生成与桌面端展示 | S-021、现有 learning-resource/v1 | 五类资源协议、按画像生成、结构化展示、质量门槛、兼容迁移与完整回归；本任务不导入课程数据集 |
-| S-026 | P0 | 保留 | 实现系统级分层内容安全过滤 | 现有诊断、辅导、知识库与五类资源模型链路；用户已批准设计并要求暂不实施 | `content-safety/v1`、输入/上下文/输出安全门、Reviewer Agent、可信引用、SafeMarkdown/SafeMermaid、安全审计与完整回归 |
+| S-026 | P0 | 阻塞 | 实现系统级分层内容安全过滤 | S-022 端到端修复与安全渲染基线；用户已批准完成 S-022 后自动继续 | `content-safety/v1`、输入/上下文/输出安全门、Reviewer Agent、可信引用、SafeMarkdown/SafeMermaid、安全审计与完整回归 |
 | S-027 | P0 | 完成 | 对照 `2026-07-16-deepseek-write.md` 核对五类资源架构、代码与可优化项 | S-022 当前实现；S-026 保持暂停 | 已确认独立管线、五类 specialist、v2 协议和组件骨架存在，但桌面端未接入、会话状态不恢复、取消/进度/重试未闭环、知识与来源未传入、bundle/artifact 持久化断层、类型门槛和渲染安全不足；证据与优化顺序见本轮对话 |
 | T-033 | P0 | 完成 | 实现多 API 配置、高可用切换、模型选择与推理强度控制 | S-017 | 版本 2 加密多配置、原子热应用与回滚、3 次/2 配置预算、Retry-After/熔断、普通与流式故障边界、全局/学习空间模型和思考强度选择、兼容迁移、真实桌面 5/5 连接及完整打包回归 |
 | T-035 | P0 | 完成 | 实现本地知识库与安全文件导入 | S-018 | 已完成文件选择/拖放、七格式与限额校验、隔离解析 worker、SQLite 元数据/FTS/可选语义索引、可追溯引用、学习助手绑定与隐私模式、删除/重建、恶意文件/性能/打包测试及 Windows 桌面安装包验收 |
@@ -294,3 +294,4 @@ S-016 已完成：本仓库提交身份已设置为 `Wei kb <212667660@qq.com>`�
 | 2026-07-16 | S-025-SAFEMERMAID | Sol | a3-front/a3-front/src/components/learning/SafeMermaid.vue、a3-front/a3-front/src/tests/components/SafeMermaid.test.ts、a3-front/a3-front/package.json、codex/AI模型任务队列.md | 创建 SafeMermaid Vue 3 组件：仅渲染 flowchart/graph 前缀安全代码、禁止 script/click/iframe 等注入模式、解析失败或非安全格式降级为文本大纲、动态 import mermaid 并设置 securityLevel:strict。vitest 4/4 通过，全量 12/12 通过。 |
 | 2026-07-17 | S-026-DESIGN | Sol | a3-front/a3-front/docs/superpowers/specs/2026-07-17-content-safety-filter-design.md、codex/AI模型任务队列.md | 用户批准分层内容安全设计：统一输入、上下文、生成后与渲染安全门，采用确定性检查、Safety Reviewer Agent、可信引用和安全 Markdown/Mermaid；按用户要求只保存设计，实施状态为保留。 |
 | 2026-07-17 | S-027-REVIEW | Sol | a3-front/a3-front/docs/superpowers/specs/2026-07-16-deepseek-write.md、五类资源后端/前端/Electron 当前代码、codex/AI模型任务队列.md | 针对性资源测试 85 passed；Electron/前端全量为 Node 138 passed、Vitest 98 passed；`build:desktop` 通过。后端全量 372 passed、7 skipped、1 failed，失败由复用持久测试库中的旧模型偏好数据导致，隔离 `A3_DATA_DIR` 后该用例 1 passed。最小复现确认 bundle 完成后会话仍为 GENERATING、仅发最终 bundle 无逐 artifact 事件、save_bundle 子表 0 条且 session_id 为空，以及 Planner 空字段串行污染和四类质量门放宽问题。 |
+| 2026-07-17 | S-022-REMEDIATION-PLAN | Sol | a3-front/a3-front/docs/superpowers/plans/2026-07-17-five-resource-remediation-plan.md、codex/AI模型任务队列.md | 用户批准全部推荐和必要操作。计划按 10 个 TDD 任务修复协议、五类质量门、会话归属持久化、可取消 Pipeline、统一服务、HTTP/SSE/历史/重试、前端与 IPC 契约、安全渲染、SmartTutor 接入和完整桌面验收；S-026 在 S-022 通过后自动恢复。 |
