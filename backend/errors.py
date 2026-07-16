@@ -200,6 +200,63 @@ class ClientCancelledError(AppError):
         super().__init__("CLIENT_CANCELLED", "生成已取消。", 499)
 
 
+class ContentSafetyInputBlockedError(AppError):
+    def __init__(self) -> None:
+        super().__init__(
+            "CONTENT_SAFETY_INPUT_BLOCKED",
+            "请求未通过内容安全检查，请调整后重试。",
+            422,
+        )
+
+
+class ContentSecretDetectedError(AppError):
+    def __init__(self) -> None:
+        super().__init__(
+            "CONTENT_SECRET_DETECTED",
+            "请求中可能包含密钥或凭据，已停止处理。",
+            422,
+        )
+
+
+class ContentArtifactBlockedError(AppError):
+    def __init__(self) -> None:
+        super().__init__(
+            "CONTENT_ARTIFACT_BLOCKED",
+            "内容未通过安全检查，可以修改请求后重试。",
+            422,
+            retryable=True,
+        )
+
+
+class ContentCitationNotAllowedError(AppError):
+    def __init__(self) -> None:
+        super().__init__(
+            "CONTENT_CITATION_NOT_ALLOWED",
+            "内容包含未获许可的来源引用，请重试。",
+            422,
+            retryable=True,
+        )
+
+
+class SafetyReviewUnavailableError(AppError):
+    def __init__(self) -> None:
+        super().__init__(
+            "SAFETY_REVIEW_UNAVAILABLE",
+            "内容安全审核暂时不可用，请稍后重试。",
+            503,
+            retryable=True,
+        )
+
+
+class UnsafeRenderPayloadError(AppError):
+    def __init__(self) -> None:
+        super().__init__(
+            "UNSAFE_RENDER_PAYLOAD",
+            "内容包含不安全的渲染结构，已停止展示。",
+            422,
+        )
+
+
 class KnowledgeFileTooLargeError(AppError):
     def __init__(self) -> None:
         super().__init__("KNOWLEDGE_FILE_TOO_LARGE", "单个文件不能超过 100 MB。", 422)
