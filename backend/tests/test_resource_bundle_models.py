@@ -192,7 +192,7 @@ class TestResourceBundle:
             topic="一次函数",
             profile_version=1,
             learning_state_version="abc",
-            mode="single",
+            mode="bundle",
             status=BundleStatus.PARTIAL,
             requested_types=[ArtifactType.COURSE_EXPLANATION, ArtifactType.MIND_MAP],
             artifacts=artifacts,
@@ -217,4 +217,74 @@ class TestResourceBundle:
                 artifacts=[],
                 aggregate_quality=0.0,
                 created_at="2026-07-16T10:00:00Z",
+            )
+
+    def test_rejects_requested_artifact_type_mismatch(self):
+        artifact = ResourceArtifact(
+            artifact_id="artifact-mismatch",
+            type=ArtifactType.MIND_MAP,
+            title="思维导图",
+            status=ArtifactStatus.SUCCEEDED,
+            body="flowchart TD\nA-->B",
+            quality_score=80,
+        )
+        with pytest.raises(ValidationError):
+            ResourceBundle(
+                bundle_id="bundle-mismatch",
+                topic="一次函数",
+                profile_version=1,
+                learning_state_version="1",
+                mode="single",
+                status=BundleStatus.COMPLETED,
+                requested_types=[ArtifactType.COURSE_EXPLANATION],
+                artifacts=[artifact],
+                aggregate_quality=80,
+                created_at="2026-07-17T00:00:00Z",
+            )
+
+    def test_rejects_duplicate_requested_types(self):
+        artifact = ResourceArtifact(
+            artifact_id="artifact-duplicate",
+            type=ArtifactType.COURSE_EXPLANATION,
+            title="课程讲解",
+            status=ArtifactStatus.SUCCEEDED,
+            body="内容",
+            quality_score=80,
+        )
+        with pytest.raises(ValidationError):
+            ResourceBundle(
+                bundle_id="bundle-duplicate",
+                topic="一次函数",
+                profile_version=1,
+                learning_state_version="1",
+                mode="bundle",
+                status=BundleStatus.COMPLETED,
+                requested_types=[ArtifactType.COURSE_EXPLANATION, ArtifactType.COURSE_EXPLANATION],
+                artifacts=[artifact],
+                aggregate_quality=80,
+                created_at="2026-07-17T00:00:00Z",
+            )
+
+    def test_rejects_unknown_protocol_version(self):
+        artifact = ResourceArtifact(
+            artifact_id="artifact-version",
+            type=ArtifactType.COURSE_EXPLANATION,
+            title="课程讲解",
+            status=ArtifactStatus.SUCCEEDED,
+            body="内容",
+            quality_score=80,
+        )
+        with pytest.raises(ValidationError):
+            ResourceBundle(
+                bundle_id="bundle-version",
+                protocol_version="learning-resource-bundle/v999",
+                topic="一次函数",
+                profile_version=1,
+                learning_state_version="1",
+                mode="single",
+                status=BundleStatus.COMPLETED,
+                requested_types=[ArtifactType.COURSE_EXPLANATION],
+                artifacts=[artifact],
+                aggregate_quality=80,
+                created_at="2026-07-17T00:00:00Z",
             )

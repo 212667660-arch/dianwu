@@ -90,7 +90,7 @@ class TestBundleValidation:
         validate_bundle(bundle)  # should not raise
 
     def test_bundle_missing_requested_type(self):
-        bundle = ResourceBundle(
+        bundle = ResourceBundle.model_construct(
             bundle_id="b1", protocol_version="learning-resource-bundle/v2",
             topic="test", profile_version=1, learning_state_version="v1",
             mode="bundle", status=BundleStatus.COMPLETED,
@@ -102,6 +102,31 @@ class TestBundleValidation:
         )
         with pytest.raises(ProtocolValidationError):
             validate_bundle(bundle)
+
+    def test_parse_bundle_rejects_cross_field_type_mismatch(self):
+        data = {
+            "bundle_id": "bundle-parse-mismatch",
+            "protocol_version": "learning-resource-bundle/v2",
+            "topic": "主题",
+            "profile_version": 1,
+            "learning_state_version": "1",
+            "mode": "single",
+            "status": "COMPLETED",
+            "requested_types": ["course_explanation"],
+            "artifacts": [{
+                "artifact_id": "artifact-parse-mismatch",
+                "type": "mind_map",
+                "title": "导图",
+                "status": "SUCCEEDED",
+                "body": "flowchart TD\nA-->B",
+                "quality_score": 80,
+            }],
+            "aggregate_quality": 80,
+            "created_at": "2026-07-17T00:00:00Z",
+        }
+        with pytest.raises(ProtocolValidationError) as exc_info:
+            parse_bundle_from_json(json.dumps(data, ensure_ascii=False))
+        assert exc_info.value.code == "BUNDLE_VALIDATION_ERROR"
 
 
 class TestSSEPayload:

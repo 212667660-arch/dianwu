@@ -74,7 +74,7 @@ class BundlePipeline:
         )
         try:
             plan_raw = await self._gateway.complete(plan_messages, temperature=0.3)
-            brief = parse_plan_output(plan_raw)
+            brief = parse_plan_output(plan_raw, source_allowlist=source_allowlist)
         except Exception as exc:
             cleanup_cancellation(bundle_id)
             return PipelineResult(

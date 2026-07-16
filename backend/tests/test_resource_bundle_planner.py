@@ -59,6 +59,48 @@ class TestParsePlanOutput:
         with pytest.raises(ProtocolValidationError):
             parse_plan_output("")
 
+    def test_empty_optional_lines_remain_empty(self):
+        raw = """[协议 resource-plan/v2]
+主题: 一次函数
+学习目标: 理解斜率
+目标难度: 基础
+薄弱知识点:
+风格约束:
+来源白名单:
+学科类别: math
+[协议结束]"""
+        brief = parse_plan_output(raw, source_allowlist=[])
+        assert brief.weak_knowledge_points == []
+        assert brief.style_constraints == ""
+        assert brief.source_allowlist == []
+
+    def test_sources_are_intersected_with_server_allowlist(self):
+        raw = """[协议 resource-plan/v2]
+主题: 一次函数
+学习目标: 理解斜率
+目标难度: 基础
+薄弱知识点:
+风格约束:
+来源白名单: 资料1|资料99
+学科类别: math
+[协议结束]"""
+        brief = parse_plan_output(raw, source_allowlist=["资料1"])
+        assert brief.source_allowlist == ["资料1"]
+
+    def test_invalid_subject_category_is_rejected(self):
+        raw = """[协议 resource-plan/v2]
+主题: 一次函数
+学习目标: 理解斜率
+目标难度: 基础
+薄弱知识点:
+风格约束:
+来源白名单:
+学科类别: invented
+[协议结束]"""
+        with pytest.raises(ProtocolValidationError) as exc_info:
+            parse_plan_output(raw, source_allowlist=[])
+        assert exc_info.value.code == "PLAN_SUBJECT_INVALID"
+
 
 class TestValidateBrief:
     def test_valid_brief_passes(self):

@@ -6,6 +6,26 @@ from backend.errors import ProtocolValidationError
 from backend.protocols.v2.models import ArtifactType, ResourceBrief, SubjectCategory
 
 
+_PLAN_LINE = re.compile(
+    r"^(主题|学习目标|目标难度|薄弱知识点|风格约束|来源白名单|学科类别)[：:]\s*(.*)$"
+)
+
+
+def _plan_fields(raw: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for line in raw.splitlines():
+        match = _PLAN_LINE.fullmatch(line.strip())
+        if match:
+            fields[match.group(1)] = match.group(2).strip()
+    return fields
+
+
+def _split_values(value: str) -> list[str]:
+    if not value or value == "无":
+        return []
+    return [item.strip() for item in value.split("|") if item.strip() and item.strip() != "无"]
+
+
 def build_planner_messages(
     profile_text: str, learning_context: str, knowledge_context: str,
     user_request: str, source_allowlist: list[str], subject_category_hint: str,
@@ -29,31 +49,30 @@ def build_planner_messages(
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
-def parse_plan_output(raw: str) -> ResourceBrief:
+def parse_plan_output(raw: str, source_allowlist: list[str] | None = None) -> ResourceBrief:
     if not raw.strip():
         raise ProtocolValidationError("PLAN_EMPTY", "规划输出为空")
-    def _field(pattern: str, default: str = "") -> str:
-        m = re.search(pattern, raw, re.IGNORECASE)
-        return m.group(1).strip() if m else default
-
-    topic = _field(r"主题[：:]\s*(.+)")
+    fields = _plan_fields(raw)
+    topic = fields.get("主题", "")
     if not topic:
         raise ProtocolValidationError("PLAN_NO_TOPIC", "规划缺少主题")
-    goals_str = _field(r"学习目标[：:]\s*(.+)")
-    goals = [g.strip() for g in goals_str.split("|") if g.strip()] if goals_str else []
+    goals = _split_values(fields.get("学习目标", ""))
     if not goals:
         raise ProtocolValidationError("PLAN_NO_GOALS", "规划缺少学习目标")
-    difficulty = _field(r"目标难度[：:]\s*(.+)", "基础")
-    weaknesses_str = _field(r"薄弱知识点[：:]\s*(.+)")
-    weaknesses = [w.strip() for w in weaknesses_str.split("|") if w.strip()] if weaknesses_str else []
-    style = _field(r"风格约束[：:]\s*(.+)")
-    allow_str = _field(r"来源白名单[：:]\s*(.+)")
-    allowlist = [a.strip() for a in allow_str.split("|") if a.strip()] if allow_str else []
-    category_str = _field(r"学科类别[：:]\s*(.+)", "other")
+    difficulty = fields.get("目标难度", "") or "基础"
+    weaknesses = _split_values(fields.get("薄弱知识点", ""))
+    style = fields.get("风格约束", "")
+    supplied_allowlist = _split_values(fields.get("来源白名单", ""))
+    if source_allowlist is None:
+        allowlist = supplied_allowlist
+    else:
+        trusted = set(source_allowlist)
+        allowlist = [item for item in supplied_allowlist if item in trusted]
+    category_str = fields.get("学科类别", "") or "other"
     try:
         category = SubjectCategory(category_str)
-    except ValueError:
-        category = SubjectCategory.OTHER
+    except ValueError as exc:
+        raise ProtocolValidationError("PLAN_SUBJECT_INVALID", "规划学科类别无效") from exc
 
     brief = ResourceBrief(
         topic=topic, learning_objectives=goals, target_difficulty=difficulty,
