@@ -1,0 +1,96 @@
+﻿from __future__ import annotations
+
+from enum import Enum
+from typing import Any, Optional
+
+from pydantic import BaseModel, Field, field_validator
+
+
+class ArtifactType(str, Enum):
+    COURSE_EXPLANATION = "course_explanation"
+    MIND_MAP = "mind_map"
+    QUESTION_BANK = "question_bank"
+    EXTENDED_READING = "extended_reading"
+    ADAPTIVE_PRACTICE = "adaptive_practice"
+
+
+class ArtifactStatus(str, Enum):
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+
+
+class BundleStatus(str, Enum):
+    COMPLETED = "COMPLETED"
+    PARTIAL = "PARTIAL"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+
+
+class SubjectCategory(str, Enum):
+    MATH = "math"
+    PHYSICS = "physics"
+    CHEMISTRY = "chemistry"
+    BIOLOGY = "biology"
+    CS = "cs"
+    LITERATURE = "literature"
+    HISTORY = "history"
+    GEOGRAPHY = "geography"
+    ENGLISH = "english"
+    POLITICS = "politics"
+    OTHER = "other"
+
+
+class ResourceBrief(BaseModel):
+    topic: str = Field(min_length=1, max_length=200)
+    learning_objectives: list[str] = Field(min_length=1, max_length=10)
+    target_difficulty: str = Field(min_length=1, max_length=20)
+    weak_knowledge_points: list[str] = Field(default_factory=list, max_length=20)
+    style_constraints: str = Field(default="", max_length=500)
+    source_allowlist: list[str] = Field(default_factory=list, max_length=50)
+    subject_category: SubjectCategory
+
+    @field_validator("learning_objectives")
+    @classmethod
+    def validate_learning_objectives(cls, value: list[str]) -> list[str]:
+        if not value:
+            raise ValueError("learning_objectives must contain at least one item")
+        if any(not item or not item.strip() for item in value):
+            raise ValueError("each learning_objective must be a non-empty string")
+        return value
+
+
+class ResourceArtifact(BaseModel):
+    artifact_id: str = Field(min_length=1, max_length=64)
+    type: ArtifactType
+    title: str = Field(min_length=1, max_length=300)
+    status: ArtifactStatus
+    body: str = Field(default="", max_length=100000)
+    type_specific_data: dict[str, Any] = Field(default_factory=dict)
+    quality_score: int = Field(ge=0, le=100)
+    quality_issues: list[str] = Field(default_factory=list)
+    error_code: Optional[str] = Field(default=None, max_length=100)
+    retryable: bool = False
+
+
+class ResourceBundle(BaseModel):
+    bundle_id: str = Field(min_length=1, max_length=64)
+    protocol_version: str = Field(default="learning-resource-bundle/v2")
+    topic: str = Field(min_length=1, max_length=200)
+    profile_version: int = Field(ge=1)
+    learning_state_version: str = Field(min_length=1, max_length=128)
+    mode: str
+    status: BundleStatus
+    requested_types: list[ArtifactType] = Field(min_length=1, max_length=5)
+    artifacts: list[ResourceArtifact] = Field(min_length=1, max_length=5)
+    aggregate_quality: float = Field(ge=0.0, le=100.0)
+    created_at: str = Field(min_length=1, max_length=64)
+    knowledge_sources: list[dict[str, Any]] = Field(default_factory=list)
+    public_sources: list[dict[str, Any]] = Field(default_factory=list)
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, value: str) -> str:
+        if value not in {"bundle", "single"}:
+            raise ValueError("mode must be ''bundle'' or ''single''")
+        return value
