@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -7,10 +8,11 @@ from fastapi.testclient import TestClient
 from backend.config import Settings
 from backend.main import app
 from backend.routers import model_settings as model_settings_router
-from backend.models.schemas import ModelSettingsResponse, ModelSettingsUpdate
+from backend.models.schemas import ModelRuntimeSnapshotInput, ModelSettingsResponse, ModelSettingsUpdate
 from backend.errors import ModelSettingsAccessError
 from backend.errors import ModelCredentialStoreRequiredError
 from backend.services import model_settings
+from backend.services.model_runtime import model_runtime_router
 
 
 def test_current_model_settings_masks_api_key(monkeypatch) -> None:
@@ -28,6 +30,81 @@ def test_current_model_settings_masks_api_key(monkeypatch) -> None:
     assert response.api_key_configured is True
     assert response.api_key_hint == "sk-1...7890"
     assert "1234567890" not in response.model_dump_json()
+
+
+def test_current_model_settings_prefers_explicit_environment_over_stale_runtime(monkeypatch) -> None:
+    class ConfiguredEnvironmentSettings:
+        resolved_provider = "anthropic"
+        resolved_base_url = "https://environment.example.test/v1"
+        resolved_model_name = "environment-model"
+        resolved_api_key = "environment-secret-key"
+        is_model_configured = True
+        anthropic_version = "2023-06-01"
+        request_timeout_seconds = 30.0
+
+    monkeypatch.setattr(model_settings, "get_settings", lambda: ConfiguredEnvironmentSettings())
+    monkeypatch.setattr(model_settings.model_runtime_router, "legacy_model_settings", lambda: ModelSettingsResponse(
+        provider="openai",
+        base_url="https://stale-runtime.example.test/v1",
+        model_name="stale-runtime-model",
+        api_key_configured=True,
+        api_key_hint="configured",
+        anthropic_version="2023-06-01",
+        request_timeout_seconds=60,
+    ))
+
+    response = model_settings.current_model_settings()
+
+    assert response.provider == "anthropic"
+    assert response.base_url == "https://environment.example.test/v1"
+    assert response.model_name == "environment-model"
+
+
+def test_current_model_settings_uses_bootstrapped_runtime_after_cold_start(monkeypatch) -> None:
+    class EmptyEnvironmentSettings:
+        resolved_provider = "openai"
+        resolved_base_url = "https://unused.example.test/v1"
+        resolved_model_name = "unused-model"
+        resolved_api_key = ""
+        is_model_configured = False
+        anthropic_version = "2023-06-01"
+        request_timeout_seconds = 60.0
+
+    monkeypatch.setattr(model_settings, "get_settings", lambda: EmptyEnvironmentSettings())
+    asyncio.run(model_runtime_router.apply_snapshot(ModelRuntimeSnapshotInput.model_validate({
+        "default_profile_id": "primary",
+        "auto_failover": True,
+        "fallback_profile_ids": [],
+        "profiles": [{
+            "id": "primary",
+            "label": "Primary",
+            "enabled": True,
+            "provider": "openai",
+            "base_url": "https://runtime.example.test/v1",
+            "api_key": "runtime-secret-key",
+            "anthropic_version": "2023-06-01",
+            "request_timeout_seconds": 45,
+            "default_model_id": "model-a",
+            "models": [{
+                "id": "model-a",
+                "provider_model_name": "runtime-model",
+                "label": "Runtime Model",
+                "max_output_tokens": 4096,
+                "supported_reasoning_efforts": ["auto", "off"],
+                "reasoning_adapter": "none",
+            }],
+        }],
+    })))
+    try:
+        response = model_settings.current_model_settings()
+    finally:
+        asyncio.run(model_runtime_router.apply_snapshot(ModelRuntimeSnapshotInput()))
+
+    assert response.api_key_configured is True
+    assert response.api_key_hint == "configured"
+    assert response.base_url == "https://runtime.example.test/v1"
+    assert response.model_name == "runtime-model"
+    assert "runtime-secret-key" not in response.model_dump_json()
 
 
 def test_save_model_settings_writes_generic_variables(monkeypatch, tmp_path: Path) -> None:

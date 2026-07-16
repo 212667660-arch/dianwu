@@ -4,6 +4,12 @@ contextBridge.exposeInMainWorld('a3Desktop', Object.freeze({
   request: (input) => ipcRenderer.invoke('a3:api-request', input),
   modelConfigTest: (input) => ipcRenderer.invoke('a3:model-config-test', input),
   modelConfigSave: (input) => ipcRenderer.invoke('a3:model-config-save', input),
+  modelProfilesList: () => ipcRenderer.invoke('a3:model-profiles-list'),
+  modelProfileTest: (input) => ipcRenderer.invoke('a3:model-profile-test', input),
+  modelProfileUpsert: (input) => ipcRenderer.invoke('a3:model-profile-upsert', input),
+  modelProfileDelete: (id) => ipcRenderer.invoke('a3:model-profile-delete', id),
+  modelProfilePolicySave: (input) => ipcRenderer.invoke('a3:model-profile-policy-save', input),
+  modelRuntimeStatus: () => ipcRenderer.invoke('a3:model-runtime-status'),
   knowledgeChooseFiles: (collectionId) => ipcRenderer.invoke('a3:knowledge-choose-files', collectionId),
   knowledgeImportDroppedFiles: (files, collectionId) => {
     const paths = Array.from(files || [], file => webUtils.getPathForFile(file))

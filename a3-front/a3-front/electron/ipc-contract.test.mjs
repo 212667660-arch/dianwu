@@ -9,6 +9,9 @@ import {
   validateKnowledgeDroppedPaths,
   validateKnowledgeLocator,
   validateModelConfigInput,
+  validateModelProfileId,
+  validateModelProfileInput,
+  validateModelProfilePolicyInput,
   validateDesktopRequest,
 } from './ipc-contract.mjs'
 
@@ -19,6 +22,26 @@ const validModelConfig = {
   model_name: 'test-model',
   anthropic_version: '2023-06-01',
   request_timeout_seconds: 60,
+}
+
+const validModelProfile = {
+  id: 'primary',
+  label: '主模型',
+  enabled: true,
+  provider: 'openai',
+  base_url: 'https://api.example.test/v1',
+  api_key: 'test-secret-key',
+  anthropic_version: '2023-06-01',
+  request_timeout_seconds: 60,
+  default_model_id: 'model-a',
+  models: [{
+    id: 'model-a',
+    provider_model_name: 'provider-model-a',
+    label: 'Model A',
+    max_output_tokens: 4096,
+    supported_reasoning_efforts: ['auto', 'off', 'medium'],
+    reasoning_adapter: 'openai_reasoning_effort',
+  }],
 }
 
 function expectAccepted(input, options) {
@@ -60,6 +83,76 @@ test('模型配置候选拒绝非法 provider、地址、超时和控制字符',
     const result = validateModelConfigInput(input)
     assert.equal(result.ok, false, JSON.stringify(result))
     assert.equal(result.error.code, 'DESKTOP_REQUEST_INVALID')
+  }
+})
+
+test('多模型配置 IPC 只接受固定的配置、模型和能力字段', () => {
+  const accepted = validateModelProfileInput(validModelProfile)
+  assert.equal(accepted.ok, true, JSON.stringify(accepted))
+  assert.deepEqual(accepted.value, validModelProfile)
+
+  for (const input of [
+    { ...validModelProfile, token: 'desktop-token' },
+    { ...validModelProfile, runtime_status: { ready: true } },
+    { ...validModelProfile, circuit_breaker: { state: 'closed' } },
+    { ...validModelProfile, headers: { authorization: 'secret' } },
+    {
+      ...validModelProfile,
+      models: [{ ...validModelProfile.models[0], adapter_options: { arbitrary: true } }],
+    },
+  ]) {
+    const result = validateModelProfileInput(input)
+    assert.equal(result.ok, false, JSON.stringify(result))
+    assert.equal(result.error.code, 'DESKTOP_REQUEST_DENIED')
+  }
+})
+
+test('多模型配置 IPC 拒绝非法 ID、地址、默认模型和推理能力', () => {
+  for (const input of [
+    { ...validModelProfile, id: '../primary' },
+    { ...validModelProfile, base_url: 'file:///secret' },
+    { ...validModelProfile, default_model_id: 'missing' },
+    { ...validModelProfile, request_timeout_seconds: Number.NaN },
+    {
+      ...validModelProfile,
+      models: [{ ...validModelProfile.models[0], supported_reasoning_efforts: ['off'] }],
+    },
+    {
+      ...validModelProfile,
+      models: [{ ...validModelProfile.models[0], reasoning_adapter: 'arbitrary_json' }],
+    },
+  ]) {
+    const result = validateModelProfileInput(input)
+    assert.equal(result.ok, false, JSON.stringify(result))
+    assert.equal(result.error.code, 'DESKTOP_REQUEST_INVALID')
+  }
+
+  assert.deepEqual(validateModelProfileId('backup_2'), { ok: true, value: 'backup_2' })
+  assert.equal(validateModelProfileId('backup/2').ok, false)
+  assert.equal(validateModelProfileId({ id: 'backup' }).ok, false)
+})
+
+test('多模型策略 IPC 只允许默认配置、自动备用和唯一备用顺序', () => {
+  assert.deepEqual(validateModelProfilePolicyInput({
+    default_profile_id: 'primary',
+    auto_failover: true,
+    fallback_profile_ids: ['backup-1', 'backup-2'],
+  }), {
+    ok: true,
+    value: {
+      default_profile_id: 'primary',
+      auto_failover: true,
+      fallback_profile_ids: ['backup-1', 'backup-2'],
+    },
+  })
+
+  for (const input of [
+    { default_profile_id: 'primary', auto_failover: true, fallback_profile_ids: ['backup', 'backup'] },
+    { default_profile_id: 'primary', auto_failover: true, fallback_profile_ids: ['primary'] },
+    { default_profile_id: 'primary', auto_failover: 'yes', fallback_profile_ids: [] },
+    { default_profile_id: 'primary', auto_failover: true, fallback_profile_ids: [], runtime_status: {} },
+  ]) {
+    assert.equal(validateModelProfilePolicyInput(input).ok, false)
   }
 })
 

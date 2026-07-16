@@ -16,7 +16,7 @@ from backend.errors import (
     ModelProfileNotFoundError,
     ModelRuntimeApplyFailedError,
 )
-from backend.models.schemas import ModelConnectionTestResponse, ModelDefinition, ModelProfileSecret, ModelRuntimeSnapshotInput
+from backend.models.schemas import ModelConnectionTestResponse, ModelDefinition, ModelProfileSecret, ModelRuntimeSnapshotInput, ModelSettingsResponse
 from backend.services.llm_service import ModelGateway
 from backend.services.model_capabilities import ReasoningEffort, effective_effort, reasoning_payload
 from backend.services.model_resilience import AttemptBudget, CircuitBreaker, RetryClass, classify_error
@@ -191,6 +191,31 @@ class ModelRuntimeRouter:
                 )
                 for profile in snapshot.value.profiles
             ),
+        )
+
+    def legacy_model_settings(self) -> ModelSettingsResponse | None:
+        snapshot = self._snapshot
+        profile_id = snapshot.value.default_profile_id
+        if profile_id is None:
+            return None
+        runtime_profile = snapshot.profiles.get(profile_id)
+        if runtime_profile is None:
+            return None
+        profile = runtime_profile.definition
+        model = next(
+            (value for value in profile.models if value.id == profile.default_model_id),
+            None,
+        )
+        if model is None:
+            return None
+        return ModelSettingsResponse(
+            provider=profile.provider,
+            base_url=profile.base_url,
+            model_name=model.provider_model_name,
+            api_key_configured=True,
+            api_key_hint="configured",
+            anthropic_version=profile.anthropic_version,
+            request_timeout_seconds=profile.request_timeout_seconds,
         )
 
     @asynccontextmanager

@@ -13,11 +13,16 @@ import {
   validateKnowledgeCollectionId,
   validateKnowledgeDroppedPaths,
   validateKnowledgeLocator,
+  validateModelConfigInput,
+  validateModelProfileId,
+  validateModelProfileInput,
+  validateModelProfilePolicyInput,
 } from './ipc-contract.mjs'
 import { createKnowledgeImporter } from './knowledge-import.mjs'
 import { createKnowledgeController } from './knowledge-controller.mjs'
-import { createModelConfigStore, modelEnvironment, sanitizeModelEnvironment } from './model-config.mjs'
-import { createBackendModelTester, createModelConfigController } from './model-config-controller.mjs'
+import { createModelConfigStore, sanitizeModelEnvironment } from './model-config.mjs'
+import { createModelProfileVault } from './model-profile-vault.mjs'
+import { createModelProfileController } from './model-profile-controller.mjs'
 import { backendCommand, electronUserDataPath, navigationAction } from './runtime.mjs'
 
 const mainDir = path.dirname(fileURLToPath(import.meta.url))
@@ -34,12 +39,16 @@ let mainWindow = null
 let backendProcess = null
 let backendRuntime = null
 let backendProxy = null
-let activeModelConfig = null
 let isQuitting = false
 
 const modelConfigStore = createModelConfigStore({
   safeStorage,
   filePath: path.join(app.getPath('userData'), 'model-settings.enc'),
+})
+const modelProfileVault = createModelProfileVault({
+  safeStorage,
+  filePath: path.join(app.getPath('userData'), 'model-profiles.enc'),
+  legacyStore: modelConfigStore,
 })
 const knowledgeImporter = createKnowledgeImporter({ userDataDir: app.getPath('userData') })
 const knowledgeController = createKnowledgeController({
@@ -70,18 +79,30 @@ const knowledgeController = createKnowledgeController({
     }
   },
 })
-const testModelCandidate = createBackendModelTester({ getRuntime: () => backendRuntime })
-const modelConfigController = createModelConfigController({
-  validateSender: event => Boolean(
-    backendRuntime
-    && isTrustedDesktopSender(event, mainWindow?.webContents, backendRuntime.indexUrl)
-  ),
-  configStore: modelConfigStore,
-  testCandidate: testModelCandidate,
-  restart: restartBackendWithConfig,
-  getCurrentSettings: readCurrentModelSettings,
-  log,
+const modelProfileController = createModelProfileController({
+  validateSender: event => trustedKnowledgeSender(event),
+  vault: modelProfileVault,
+  testProfile: profile => internalRuntimeRequest('POST', '/internal/model-runtime/test', profile),
+  bootstrapSnapshot: snapshot => internalRuntimeRequest('POST', '/internal/model-runtime/bootstrap', snapshot, true),
+  applySnapshot: snapshot => internalRuntimeRequest('PUT', '/internal/model-runtime/snapshot', snapshot, true),
+  runtimeStatus: () => internalRuntimeRequest('GET', '/internal/model-runtime/status', undefined, true),
+  log: entry => log(`model profile ${entry.event}${entry.code ? `: ${entry.code}` : ''}`),
 })
+
+async function internalRuntimeRequest(method, route, body, raw = false) {
+  if (!backendRuntime) throw Object.assign(new Error('Backend runtime unavailable.'), { code: 'DESKTOP_BACKEND_UNAVAILABLE' })
+  const response = await fetch(new URL(route, `${backendRuntime.baseUrl}/`), {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-A3-Desktop-Token': backendRuntime.token,
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  const value = await response.json().catch(() => null)
+  if (!response.ok) throw Object.assign(new Error('Model runtime request failed.'), { code: value?.code || 'MODEL_RUNTIME_APPLY_FAILED' })
+  return raw ? value : { ok: true, status: response.status, data: value }
+}
 
 function electronLogPath() {
   return path.join(app.getPath('userData'), 'logs', 'electron.log')
@@ -121,25 +142,7 @@ async function waitForBackend(baseUrl) {
   throw new Error(lastError)
 }
 
-async function waitForBackendReady(baseUrl, token) {
-  const timeoutAt = Date.now() + 20_000
-  let lastError = '模型配置尚未就绪。'
-  while (Date.now() < timeoutAt) {
-    try {
-      const response = await fetch(`${baseUrl}/health/ready`, {
-        headers: { 'X-A3-Desktop-Token': token },
-      })
-      if (response.ok) return
-      lastError = `模型配置未就绪（${response.status}）。`
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : '模型配置检查失败。'
-    }
-    await new Promise(resolve => setTimeout(resolve, 300))
-  }
-  throw Object.assign(new Error(lastError), { code: 'MODEL_RESTART_FAILED' })
-}
-
-async function startBackend(modelConfig = activeModelConfig) {
+async function startBackend() {
   const port = await reservePort()
   const token = crypto.randomBytes(32).toString('base64url')
   const command = backendCommand({
@@ -165,7 +168,6 @@ async function startBackend(modelConfig = activeModelConfig) {
       DESKTOP_TOKEN: token,
       APP_ENV: app.isPackaged ? 'production' : 'development',
       CORS_ORIGINS: 'null,http://127.0.0.1:5173',
-      ...(modelConfig ? modelEnvironment(modelConfig) : {}),
     },
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -201,26 +203,6 @@ async function startBackend(modelConfig = activeModelConfig) {
     log: entry => log(`backend proxy ${entry.event ?? 'event'}${entry.code ? `: ${entry.code}` : ''}`),
   })
   await log(`backend ready on port ${port}`)
-}
-
-async function restartBackendWithConfig(modelConfig) {
-  await stopBackend()
-  activeModelConfig = modelConfig
-  await startBackend(modelConfig)
-  await waitForBackendReady(backendRuntime.baseUrl, backendRuntime.token)
-}
-
-async function readCurrentModelSettings() {
-  if (!backendRuntime) throw new Error('Backend runtime is unavailable.')
-  const response = await fetch(`${backendRuntime.baseUrl}/api/settings/model`, {
-    headers: { 'X-A3-Desktop-Token': backendRuntime.token },
-  })
-  if (!response.ok) throw new Error('Model settings could not be read.')
-  const value = await response.json()
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('Model settings response is invalid.')
-  }
-  return value
 }
 
 async function stopBackend() {
@@ -305,8 +287,14 @@ ipcMain.handle('a3:api-request', (event, input) => backendProxy?.request(event, 
   status: 503,
   error: desktopError('DESKTOP_BACKEND_UNAVAILABLE', '本地学习服务暂时不可用，请稍后重试。', true),
 }))
-ipcMain.handle('a3:model-config-test', (event, input) => modelConfigController.test(event, input))
-ipcMain.handle('a3:model-config-save', (event, input) => modelConfigController.save(event, input))
+ipcMain.handle('a3:model-config-test', (event, input) => withValidatedInput(validateModelConfigInput(input), value => modelProfileController.testLegacy(event, value)))
+ipcMain.handle('a3:model-config-save', (event, input) => withValidatedInput(validateModelConfigInput(input), value => modelProfileController.upsertLegacy(event, value)))
+ipcMain.handle('a3:model-profiles-list', event => modelProfileController.list(event))
+ipcMain.handle('a3:model-profile-test', (event, input) => withValidatedInput(validateModelProfileInput(input), value => modelProfileController.test(event, value)))
+ipcMain.handle('a3:model-profile-upsert', (event, input) => withValidatedInput(validateModelProfileInput(input), value => modelProfileController.upsert(event, value)))
+ipcMain.handle('a3:model-profile-delete', (event, id) => withValidatedInput(validateModelProfileId(id), value => modelProfileController.delete(event, value)))
+ipcMain.handle('a3:model-profile-policy-save', (event, input) => withValidatedInput(validateModelProfilePolicyInput(input), value => modelProfileController.savePolicy(event, value)))
+ipcMain.handle('a3:model-runtime-status', event => modelProfileController.status(event))
 ipcMain.handle('a3:knowledge-choose-files', (event, collectionId) => {
   const validated = validateKnowledgeCollectionId(collectionId)
   return validated.ok ? knowledgeController.chooseFiles(event, validated.value) : validated
@@ -337,8 +325,8 @@ app.on('second-instance', () => {
 app.whenReady().then(async () => {
   try {
     await knowledgeImporter.prepare()
-    activeModelConfig = await modelConfigStore.load()
-    await startBackend(activeModelConfig)
+    await startBackend()
+    await modelProfileController.bootstrap()
     createWindow()
   } catch (error) {
     await log(`startup failed: ${error instanceof Error ? error.message : String(error)}`)
@@ -347,3 +335,12 @@ app.whenReady().then(async () => {
 })
 app.on('before-quit', () => { isQuitting = true; void knowledgeController.shutdown(); stopBackend() })
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
+
+function withValidatedInput(validation, invoke) {
+  if (validation.ok) return invoke(validation.value)
+  return {
+    ok: false,
+    status: validation.error.code === 'DESKTOP_REQUEST_DENIED' ? 403 : 400,
+    error: validation.error,
+  }
+}

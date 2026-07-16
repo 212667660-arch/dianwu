@@ -16,6 +16,7 @@ _MODEL_ENV_KEYS = {
 }
 from backend.errors import DesktopAuthRequiredError, ModelCredentialStoreRequiredError, ModelSettingsAccessError
 from backend.services.llm_service import ModelGateway
+from backend.services.model_runtime import model_runtime_router
 from backend.models.schemas import ModelConnectionTestResponse, ModelSettingsResponse, ModelSettingsUpdate
 from backend.services.security import is_production, require_desktop_token, validate_model_base_url
 
@@ -30,6 +31,10 @@ def _mask_key(value: str) -> str:
 
 def current_model_settings() -> ModelSettingsResponse:
     current = get_settings()
+    if not current.is_model_configured:
+        runtime_settings = model_runtime_router.legacy_model_settings()
+        if runtime_settings is not None:
+            return runtime_settings
     return ModelSettingsResponse(
         provider=current.resolved_provider,
         base_url=current.resolved_base_url,

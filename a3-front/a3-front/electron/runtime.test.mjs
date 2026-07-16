@@ -136,7 +136,7 @@ test('preload and renderer client do not contain runtime token or backend addres
   assert.doesNotMatch(client, /desktopToken|window\.a3Desktop\?\.apiBaseUrl/)
 })
 
-test('preload exposes fixed request, stream, model config, and knowledge bridge methods only', () => {
+test('preload exposes fixed request, stream, model profile, and knowledge bridge methods only', () => {
   const preload = fs.readFileSync(path.join(projectDir, 'electron', 'preload.cjs'), 'utf8')
 
   for (const name of [
@@ -147,6 +147,12 @@ test('preload exposes fixed request, stream, model config, and knowledge bridge 
     'onBackendExit:',
     'modelConfigTest:',
     'modelConfigSave:',
+    'modelProfilesList:',
+    'modelProfileTest:',
+    'modelProfileUpsert:',
+    'modelProfileDelete:',
+    'modelProfilePolicySave:',
+    'modelRuntimeStatus:',
     'knowledgeChooseFiles:',
     'knowledgeImportDroppedFiles:',
     'knowledgeRevealSource:',
@@ -165,17 +171,37 @@ test('sandboxed renderer uses a CommonJS preload bridge', () => {
   assert.match(main, /preload:\s*path\.join\(mainDir, 'preload\.cjs'\)/)
 })
 
-test('main process owns encrypted model config, startup injection, and fixed config IPC', () => {
+test('main process owns encrypted model profiles, validates fixed IPC, and hot applies without backend restart', () => {
   const main = fs.readFileSync(path.join(projectDir, 'electron', 'main.mjs'), 'utf8')
 
   assert.match(main, /safeStorage/)
   assert.match(main, /createModelConfigStore/)
-  assert.match(main, /modelEnvironment/)
-  assert.match(main, /createModelConfigController/)
+  assert.match(main, /createModelProfileVault/)
+  assert.match(main, /createModelProfileController/)
   assert.match(main, /a3:model-config-test/)
   assert.match(main, /a3:model-config-save/)
+  assert.match(main, /modelProfileController\.testLegacy/)
+  assert.match(main, /modelProfileController\.upsertLegacy/)
+  assert.match(main, /a3:model-profile-upsert/)
+  assert.match(main, /validateModelProfileInput/)
+  assert.match(main, /validateModelProfilePolicyInput/)
   assert.match(main, /model-settings\.enc/)
+  assert.match(main, /model-profiles\.enc/)
+  assert.match(main, /'POST', '\/internal\/model-runtime\/bootstrap'/)
+  assert.match(main, /'PUT', '\/internal\/model-runtime\/snapshot'/)
+  assert.doesNotMatch(main, /modelEnvironment/)
+  assert.doesNotMatch(main, /restartBackendWithConfig/)
+  assert.doesNotMatch(main, /createModelConfigController/)
   assert.doesNotMatch(main, /console\.(?:log|error)\([^\n]*api_key/i)
+})
+
+test('startup bootstraps the encrypted profile snapshot before creating the renderer', () => {
+  const main = fs.readFileSync(path.join(projectDir, 'electron', 'main.mjs'), 'utf8')
+  const startup = main.match(/app\.whenReady\(\)\.then\(async \(\) => \{[\s\S]*?\n\}\)/)?.[0]
+
+  assert.ok(startup, 'startup handler must exist')
+  assert.ok(startup.indexOf('await startBackend()') < startup.indexOf('await modelProfileController.bootstrap()'))
+  assert.ok(startup.indexOf('await modelProfileController.bootstrap()') < startup.indexOf('createWindow()'))
 })
 
 test('renderer, preload, and desktop bundle do not receive token or backend address injection', () => {

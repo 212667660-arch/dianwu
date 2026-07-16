@@ -14,6 +14,13 @@ const MODEL_CONFIG_FIELDS = new Set([
   'anthropic_version',
   'request_timeout_seconds',
 ])
+const MODEL_PROFILE_FIELDS = new Set(['id', 'label', 'enabled', 'provider', 'base_url', 'api_key', 'anthropic_version', 'request_timeout_seconds', 'default_model_id', 'models'])
+const MODEL_DEFINITION_FIELDS = new Set(['id', 'provider_model_name', 'label', 'max_output_tokens', 'supported_reasoning_efforts', 'reasoning_adapter'])
+const MODEL_PROFILE_POLICY_FIELDS = new Set(['default_profile_id', 'auto_failover', 'fallback_profile_ids'])
+const MODEL_PROFILE_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
+const MODEL_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/
+const REASONING_EFFORTS = new Set(['auto', 'off', 'low', 'medium', 'high', 'xhigh'])
+const REASONING_ADAPTERS = new Set(['none', 'openai_reasoning_effort', 'anthropic_thinking'])
 const KNOWLEDGE_DROPPED_FIELDS = new Set(['collectionId', 'paths'])
 const KNOWLEDGE_LOCATOR_FIELDS = new Set(['type', 'start', 'end', 'sheet_name'])
 const KNOWLEDGE_LOCATOR_TYPES = new Set(['page', 'slide', 'sheet_rows', 'paragraph'])
@@ -72,6 +79,112 @@ export function validateModelConfigInput(input) {
       model_name: modelName,
       anthropic_version: anthropicVersion,
       request_timeout_seconds: timeout,
+    },
+  }
+}
+
+export function validateModelProfileId(value) {
+  if (typeof value !== 'string' || !MODEL_PROFILE_ID_PATTERN.test(value)) {
+    return invalid('Model profile ID is invalid.')
+  }
+  return { ok: true, value }
+}
+
+export function validateModelProfileInput(input) {
+  if (!isPlainObject(input)) return invalid('Model profile must be an object.')
+  for (const field of Object.keys(input)) {
+    if (!MODEL_PROFILE_FIELDS.has(field)) return denied('Model profile contains an unsupported field.')
+  }
+
+  const profileId = validateModelProfileId(input.id)
+  if (!profileId.ok) return profileId
+  const label = normalizedString(input.label, 1, 64)
+  const apiKey = normalizedString(input.api_key, 0, 512)
+  const baseUrl = normalizedHttpUrl(input.base_url)
+  const anthropicVersion = normalizedString(input.anthropic_version, 1, 32)
+  const timeout = input.request_timeout_seconds
+  if (
+    label === null
+    || typeof input.enabled !== 'boolean'
+    || !['openai', 'anthropic'].includes(input.provider)
+    || baseUrl === null
+    || apiKey === null
+    || anthropicVersion === null
+    || typeof timeout !== 'number'
+    || !Number.isFinite(timeout)
+    || timeout < 5
+    || timeout > 300
+    || !MODEL_ID_PATTERN.test(input.default_model_id ?? '')
+    || !Array.isArray(input.models)
+    || input.models.length < 1
+    || input.models.length > 64
+  ) return invalid('Model profile is invalid.')
+
+  const models = []
+  for (const model of input.models) {
+    const result = validateModelDefinition(model)
+    if (!result.ok) return result
+    models.push(result.value)
+  }
+  const modelIds = models.map(model => model.id)
+  if (new Set(modelIds).size !== modelIds.length || !modelIds.includes(input.default_model_id)) {
+    return invalid('Model profile default model is invalid.')
+  }
+
+  return {
+    ok: true,
+    value: {
+      id: profileId.value,
+      label,
+      enabled: input.enabled,
+      provider: input.provider,
+      base_url: baseUrl,
+      api_key: apiKey,
+      anthropic_version: anthropicVersion,
+      request_timeout_seconds: timeout,
+      default_model_id: input.default_model_id,
+      models,
+    },
+  }
+}
+
+export function validateModelProfilePolicyInput(input) {
+  if (!isPlainObject(input)) return invalid('Model profile policy must be an object.')
+  for (const field of Object.keys(input)) {
+    if (!MODEL_PROFILE_POLICY_FIELDS.has(field)) return denied('Model profile policy contains an unsupported field.')
+  }
+  if (
+    !Object.hasOwn(input, 'default_profile_id')
+    || !Object.hasOwn(input, 'auto_failover')
+    || !Object.hasOwn(input, 'fallback_profile_ids')
+    || typeof input.auto_failover !== 'boolean'
+    || !Array.isArray(input.fallback_profile_ids)
+    || input.fallback_profile_ids.length > 16
+  ) return invalid('Model profile policy is invalid.')
+
+  let defaultProfileId = null
+  if (input.default_profile_id !== null) {
+    const result = validateModelProfileId(input.default_profile_id)
+    if (!result.ok) return result
+    defaultProfileId = result.value
+  }
+  const fallbackProfileIds = []
+  for (const value of input.fallback_profile_ids) {
+    const result = validateModelProfileId(value)
+    if (!result.ok) return result
+    fallbackProfileIds.push(result.value)
+  }
+  if (
+    new Set(fallbackProfileIds).size !== fallbackProfileIds.length
+    || (defaultProfileId !== null && fallbackProfileIds.includes(defaultProfileId))
+  ) return invalid('Model profile fallback order is invalid.')
+
+  return {
+    ok: true,
+    value: {
+      default_profile_id: defaultProfileId,
+      auto_failover: input.auto_failover,
+      fallback_profile_ids: fallbackProfileIds,
     },
   }
 }
@@ -377,6 +490,55 @@ function normalizedString(value, minLength, maxLength) {
     || /[\0\r\n]/.test(normalized)
   ) return null
   return normalized
+}
+
+function normalizedHttpUrl(value) {
+  const normalized = normalizedString(value, 8, 512)
+  if (normalized === null) return null
+  try {
+    const parsed = new URL(normalized)
+    return ['http:', 'https:'].includes(parsed.protocol) && !parsed.username && !parsed.password
+      ? normalized
+      : null
+  } catch {
+    return null
+  }
+}
+
+function validateModelDefinition(input) {
+  if (!isPlainObject(input)) return invalid('Model definition must be an object.')
+  for (const field of Object.keys(input)) {
+    if (!MODEL_DEFINITION_FIELDS.has(field)) return denied('Model definition contains an unsupported field.')
+  }
+  const providerModelName = normalizedString(input.provider_model_name, 1, 128)
+  const label = normalizedString(input.label, 1, 128)
+  const efforts = input.supported_reasoning_efforts
+  if (
+    !MODEL_ID_PATTERN.test(input.id ?? '')
+    || providerModelName === null
+    || label === null
+    || !Number.isInteger(input.max_output_tokens)
+    || input.max_output_tokens < 512
+    || input.max_output_tokens > 32_768
+    || !Array.isArray(efforts)
+    || efforts.length < 1
+    || efforts.length > REASONING_EFFORTS.size
+    || !efforts.includes('auto')
+    || efforts.some(value => !REASONING_EFFORTS.has(value))
+    || new Set(efforts).size !== efforts.length
+    || !REASONING_ADAPTERS.has(input.reasoning_adapter)
+  ) return invalid('Model definition is invalid.')
+  return {
+    ok: true,
+    value: {
+      id: input.id,
+      provider_model_name: providerModelName,
+      label,
+      max_output_tokens: input.max_output_tokens,
+      supported_reasoning_efforts: [...efforts],
+      reasoning_adapter: input.reasoning_adapter,
+    },
+  }
 }
 
 function normalizeUrlWithoutHash(value) {
