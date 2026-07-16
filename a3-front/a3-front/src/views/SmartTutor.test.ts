@@ -18,7 +18,8 @@ const DesktopApiErrorMock = vi.hoisted(() => class DesktopApiError extends Error
 })
 const storeMock = vi.hoisted(() => ({
   ready: true, modelConfigured: true, sessionId: 'test-session', session: null, progress: null, nextAction: null,
-  refreshSession: vi.fn(),
+  refreshSession: vi.fn(), modelProfiles: [], modelPolicy: null, sessionModelPreference: null, modelProfileBusy: false,
+  refreshModelProfiles: vi.fn(), loadSessionModelPreference: vi.fn(), saveSessionModelPreference: vi.fn(),
   knowledgeCollections: [{ id: 3, name: '高数' }], boundKnowledgeCollectionIds: [], knowledgePrivacyMode: 'allow_model_context',
   refreshKnowledge: vi.fn(), saveSessionKnowledgeCollections: vi.fn(),
 }))
@@ -46,6 +47,7 @@ const stubs = {
   ElInput: { props: ['modelValue'], emits: ['update:modelValue'], template: '<textarea :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />' },
   ElButton: { props: ['disabled'], emits: ['click'], template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>' },
   ElSwitch: { template: '<input type="checkbox" />' },
+  ModelSelectionPopover: { props: ['profiles', 'policy', 'preference', 'busy', 'effectiveProfileId', 'effectiveModelId', 'effectiveReasoningEffort'], emits: ['save'], template: '<button data-testid="model-selector-stub">model {{ effectiveProfileId }}</button>' },
 }
 
 describe('SmartTutor failure recovery', () => {
@@ -54,6 +56,9 @@ describe('SmartTutor failure recovery', () => {
     backendStore.modelConfigured = true
     backendStore.sessionId = 'test-session'
     backendStore.refreshSession.mockResolvedValue(undefined)
+    backendStore.refreshModelProfiles.mockResolvedValue(undefined)
+    backendStore.loadSessionModelPreference.mockResolvedValue(undefined)
+    backendStore.saveSessionModelPreference.mockResolvedValue(undefined)
     apiMock.streamChat.mockImplementation(async (_sessionId, _message, onEvent) => {
       onEvent({ event: 'error', code: 'FIELD_REQUIRED', message: '模型输出缺少必填字段，请重试。' })
     })
@@ -196,5 +201,57 @@ describe('SmartTutor failure recovery', () => {
     expect(router.currentRoute.value.path).toBe('/knowledge')
     expect(router.currentRoute.value.query).toMatchObject({ document: '9', type: 'page', start: '3', end: '3' })
     expect(apiMock.openKnowledgeSource).not.toHaveBeenCalled()
+  })
+
+  it('keeps partial text after a stream interruption and continues through a new request', async () => {
+    let calls = 0
+    apiMock.streamChat.mockImplementation(async (_sessionId, message, onEvent) => {
+      calls += 1
+      if (calls === 1) {
+        onEvent({ event: 'meta', profile_id: 'backup', model_id: 'model-b', requested_reasoning_effort: 'high', effective_reasoning_effort: 'medium', failover_used: true })
+        onEvent({ event: 'delta', content: '已经写出的部分。' })
+        onEvent({ event: 'interrupted', code: 'MODEL_STREAM_INTERRUPTED', can_continue_with_backup: true })
+        return
+      }
+      expect(message).toContain('刚才的回答因连接中断')
+      expect(message).not.toContain('API Key')
+      onEvent({ event: 'delta', content: '备用连接补完。' })
+    })
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/tutor', component: SmartTutor }] })
+    await router.push('/tutor'); await router.isReady()
+    const wrapper = mount(SmartTutor, { global: { plugins: [router], stubs } })
+    await wrapper.get('textarea').setValue('请解释导数')
+    await wrapper.findAll('button').find(button => button.text() === '发送')!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('已自动切换到备用连接')
+    expect(wrapper.get('.message-list [data-testid="failover-notice"]').text()).toContain('已自动切换到备用连接')
+    expect(wrapper.text()).toContain('已经写出的部分。')
+    expect(wrapper.text()).not.toContain('正在组织思绪')
+    const continueButton = wrapper.findAll('button').find(button => button.text() === '使用备用配置继续')
+    expect(continueButton).toBeDefined()
+    await continueButton!.trigger('click')
+    await flushPromises()
+
+    expect(apiMock.streamChat).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('已经写出的部分。')
+  })
+
+  it('clears the previous space effective model when switching sessions', async () => {
+    apiMock.streamChat.mockImplementation(async (_sessionId, _message, onEvent) => {
+      onEvent({ event: 'meta', profile_id: 'backup', model_id: 'model-b', effective_reasoning_effort: 'medium', failover_used: true })
+      onEvent({ event: 'delta', content: '完成。' })
+    })
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/tutor', component: SmartTutor }] })
+    await router.push('/tutor'); await router.isReady()
+    const wrapper = mount(SmartTutor, { global: { plugins: [router], stubs } })
+    await wrapper.get('textarea').setValue('测试空间模型')
+    await wrapper.findAll('button').find(button => button.text() === '发送')!.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="model-selector-stub"]').text()).toContain('backup')
+
+    backendStore.sessionId = 'next-space'
+    await flushPromises()
+    expect(wrapper.get('[data-testid="model-selector-stub"]').text()).not.toContain('backup')
   })
 })

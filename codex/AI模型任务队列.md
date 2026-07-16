@@ -176,6 +176,8 @@ T-033 Task 10 已完成：renderer 新增多配置、模型能力、运行状态
 
 T-033 Task 11 已完成：模型设置页重做为 openhanako 风格暖色连接工作台，左侧配置卡片支持选择、新建、复制、默认星标、启停、测试、删除确认和备用顺序，中间编辑器支持多模型、固定推理适配器与 `auto/off/low/medium/high/xhigh` 白名单档位，右侧显示运行、安全与切换说明。新配置必须输入 Key，旧配置不回填 Key，草稿修改后必须重新测试，测试/保存失败和保存完成均清空 Key；默认配置不能直接停用或删除。主进程允许故障中的已有非默认配置直接停用，重新启用仍必须通过连接测试。浏览器在 1440px 与 375px 验证无横向溢出，窄屏菜单和首配引导可见，控制台无错误；完整前端为 Electron Node 104 passed、Vitest 71 passed，`build:desktop` 与 `git diff --check` 通过。下一项为 Task 12 学习空间模型与推理强度选择器。
 
+T-033 Task 12 已完成：学习助手输入区新增本空间模型选择器，支持跟随全局或手动配置/模型、`auto/off/low/medium/high/xhigh` 思考强度及继承/开启/关闭单空间自动备用；按钮显示实际模型与按能力降档后的生效强度，不支持档位在弹层中禁用。SSE `meta` 更新实际配置、模型、推理档位与自动切换提示；输出后 `interrupted` 保留已有文字并提供“使用备用配置继续”，点击后把中断内容固定为只读历史并发起新的普通学习请求，不拼接旧消息或携带 API 配置。会话切换清除上一空间的实际模型与中断状态。浏览器在 1440px 与 375px 验证输入区无横向溢出、选择按钮可见且控制台无错误；完整前端为 Electron Node 104 passed、Vitest 75 passed，`build:desktop` 与 `git diff --check` 通过。下一项为 Task 13 兼容迁移、故障注入和完整桌面验收。
+
 Luna 批次已完成并通过复审。README、API 示例、协议说明、评测样例和开发总结已同步当前代码。L-007、L-008、L-009 已完成：快捷测试入口和浏览器测试台均已通过自动化测试、浏览器检查及打包启动自检；竞品对照和后端优化方案已形成。S-009 已就绪，等待切换 Sol 后实施跨模块学习闭环代码。
 
 INBOX-002 已联调：后端已支持用户自定义 OpenAI 兼容或 Anthropic 网关。DeepSeek OpenAI 兼容路径已完成真实普通调用、SSE 分片与协议联调；后续可转入前端或 Electron 集成阶段。
@@ -202,6 +204,7 @@ S-016 已完成：本仓库提交身份已设置为 `Wei kb <212667660@qq.com>`�
 
 | 日期 | 任务 ID | 模型 | 修改文件 | 验证结果 |
 | --- | --- | --- | --- | --- |
+| 2026-07-16 | T-033 Task 12 | Sol | a3-front/a3-front/src/components/model/ModelSelectionPopover.vue 及测试、src/views/SmartTutor.vue 及测试、src/api/types.ts、codex/AI模型任务队列.md | 输入区新增学习空间配置/模型/思考强度/自动备用偏好；模型能力过滤与 `xhigh→high` 实际显示有回归。SSE 自动切换显示非阻断提示，输出后中断保留文字并通过新请求续写，会话切换清除旧空间实际模型。浏览器 1440px/375px 无横向溢出、控制台无错误；完整 `npm test` 为 Electron Node 104 passed、Vitest 75 passed；`build:desktop` 和 `git diff --check` 通过。 |
 | 2026-07-16 | T-033 Task 11 | Sol | a3-front/a3-front/src/components/model/ModelProfileList.vue 及测试、ModelProfileEditor.vue 及测试、src/views/ModelSettings.vue 及测试；electron/model-profile-controller.mjs 及测试；codex/AI模型任务队列.md | 以暖色连接工作台替换单配置页面，支持配置选择、新建、复制、默认、启停、测试、删除、备用排序、多模型与推理能力白名单；Key 不回填，未测试草稿不能保存，失败/保存后清空。故障中的非默认配置可离线停用，重新启用仍需测试。浏览器 1440px 与 375px 无横向溢出且控制台无错误；完整 `npm test` 为 Electron Node 104 passed、Vitest 71 passed；`build:desktop` 和 `git diff --check` 通过。 |
 | 2026-07-16 | T-033 Task 10 | Sol | a3-front/a3-front/src/api/types.ts、backend.ts、backend.test.ts、transport.ts；src/stores/backend.ts、backend.test.ts；electron/ipc-contract.mjs、ipc-contract.test.mjs；codex/AI模型任务队列.md | renderer 已具备脱敏多配置、运行状态与学习空间偏好类型/API/Pinia 状态；桌面固定桥接缺失时安全拒绝，Web 仅走公开兼容接口。配置刷新与变更串行，A→B→A 加载、重叠保存、失败回滚与忙碌计数均有并发回归。聚焦 API/store 21 passed，IPC 20 passed；完整 `npm test` 为 Electron Node 103 passed、Vitest 65 passed；`build:desktop` 和 `git diff --check` 通过。 |
 | 2026-07-16 | T-033 Task 9 | Sol | a3-front/a3-front/electron/model-profile-controller.mjs 及测试、electron/ipc-contract.mjs 及测试、electron/main.mjs、electron/preload.cjs、electron/runtime.test.mjs、package.json；backend/services/model_runtime.py、backend/services/model_settings.py、backend/tests/test_model_settings.py；codex/AI模型任务队列.md | 完成版本 2 保险库启动 bootstrap、固定多配置 IPC、严格输入白名单、无重启热应用、串行配置事务、失败回滚与恢复锁。旧设置页复用同一事务队列并保留多模型/推理能力元数据；冷启动 GET 读取运行时默认配置且不返回 Key。三轮代码审查的并发覆盖、回滚误报和旧 UI 破坏性兼容问题均已修复，最终复审无 Critical/Important。`npm test` 为 Electron Node 103 passed、Vitest 56 passed；隔离 `A3_DATA_DIR` 的完整后端为 257 passed、7 skipped；`git diff --check` 通过。 |

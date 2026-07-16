@@ -155,6 +155,12 @@ export interface StreamEvent {
   profile_version?: number
   cached?: boolean
   provisional?: boolean
+  profile_id?: string
+  model_id?: string
+  requested_reasoning_effort?: ReasoningEffort
+  effective_reasoning_effort?: ReasoningEffort
+  failover_used?: boolean
+  can_continue_with_backup?: boolean
 }
 
 export interface ModelSettings {

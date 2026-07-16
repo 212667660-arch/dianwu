@@ -8,6 +8,7 @@
 
     <article class="chat-panel">
       <div ref="messageList" class="message-list">
+        <div v-if="failoverNotice" class="connection-notice" data-testid="failover-notice">↝ {{ failoverNotice }}，这次回答仍保持同一条清晰的上下文。</div>
         <div v-if="!messages.length && !pendingUser" class="welcome" :data-companion-id="companionId">
           <div class="companion-portrait" aria-hidden="true"><span>学</span></div>
           <h1>今天想一起学点什么？</h1>
@@ -26,6 +27,9 @@
           <div class="message-meta">{{ message.role === 'user' ? '你' : '学习伙伴' }}</div>
           <pre>{{ message.content }}</pre>
         </div>
+        <div v-for="item in retainedInterruptions" :key="item.id" class="message assistant retained-interruption">
+          <div class="message-meta">学习伙伴 · 中断前保留</div><pre>{{ item.content }}</pre>
+        </div>
         <div v-if="pendingUser" class="message user transient"><div class="message-meta">你</div><pre>{{ pendingUser }}</pre></div>
         <div v-if="generating || streamText" class="message assistant transient">
           <div class="message-meta">{{ activePhase }} Agent <span v-if="generating" class="typing">正在组织思绪…</span></div>
@@ -34,6 +38,10 @@
         <div v-if="streamError" class="stream-error" role="alert">
           <div><strong>本次请求未完成</strong><p>{{ streamError }}</p></div>
           <el-button text type="primary" @click="restoreFailedMessage">重新编辑</el-button>
+        </div>
+        <div v-if="streamInterrupted" class="stream-interruption" role="status">
+          <div><strong>连接在回答途中轻轻断开了</strong><p>已经出现的文字会留在这里，不会与另一个模型的内容静默拼接。</p></div>
+          <el-button v-if="canContinueWithBackup" text type="primary" data-testid="continue-with-backup" @click="continueWithBackup">使用备用配置继续</el-button>
         </div>
         <div v-if="sources.length" class="inline-sources">
           <span>这次参考了</span>
@@ -46,7 +54,19 @@
         <div class="composer">
           <el-input v-model="editor" type="textarea" :rows="3" maxlength="8000" show-word-limit resize="none" placeholder="说点什么…" @keydown.ctrl.enter.prevent="send" />
           <div class="composer-actions">
-            <div class="composer-left"><span class="gentle-tip">写下目标、问题，或此刻的困惑</span><span class="stream-toggle">流式 <el-switch v-model="useStream" /></span></div>
+            <div class="composer-left">
+              <ModelSelectionPopover
+                :profiles="backend.modelProfiles"
+                :policy="backend.modelPolicy"
+                :preference="backend.sessionModelPreference"
+                :busy="backend.modelProfileBusy"
+                :effective-profile-id="effectiveProfileId"
+                :effective-model-id="effectiveModelId"
+                :effective-reasoning-effort="effectiveReasoningEffort"
+                @save="saveModelPreference"
+              />
+              <span class="gentle-tip">写下目标、问题，或此刻的困惑</span><span class="stream-toggle">流式 <el-switch v-model="useStream" /></span>
+            </div>
             <div class="toolbar">
               <el-button v-if="generating" type="danger" plain :icon="Close" @click="cancel">取消</el-button>
               <el-button type="primary" :icon="Promotion" :loading="generating" :disabled="!editor.trim() || !backend.modelConfigured" @click="send">发送</el-button>
@@ -67,13 +87,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Close, Promotion } from '@element-plus/icons-vue'
-import { backendApi, DesktopApiError, errorMessage, type KnowledgeSource, type SourceItem, type StreamEvent } from '@/api'
+import { backendApi, DesktopApiError, errorMessage, type KnowledgeSource, type ReasoningEffort, type SessionModelPreferenceInput, type SourceItem, type StreamEvent } from '@/api'
 import { useBackendStore } from '@/stores/backend'
 import KnowledgeSourceList from '@/components/knowledge/KnowledgeSourceList.vue'
+import ModelSelectionPopover from '@/components/model/ModelSelectionPopover.vue'
 
 const backend = useBackendStore()
 const route = useRoute()
@@ -89,6 +110,13 @@ const streamText = ref('')
 const pendingUser = ref('')
 const streamError = ref('')
 const failedMessage = ref('')
+const failoverNotice = ref('')
+const streamInterrupted = ref(false)
+const canContinueWithBackup = ref(false)
+const effectiveProfileId = ref('')
+const effectiveModelId = ref('')
+const effectiveReasoningEffort = ref<ReasoningEffort>()
+const retainedInterruptions = ref<Array<{ id: number; content: string }>>([])
 const sources = ref<SourceItem[]>([])
 const knowledgeSources = ref<KnowledgeSource[]>([])
 const knowledgeSpaceOpen = ref(false)
@@ -96,6 +124,7 @@ const bindingIds = ref<number[]>([])
 const bindingPrivacy = ref<'allow_model_context' | 'local_search_only'>('allow_model_context')
 const messageList = ref<HTMLElement>()
 let controller: AbortController | null = null
+let interruptionId = 0
 
 const messages = computed(() => backend.session?.messages || [])
 const phaseLabel = computed(() => generating.value ? `${activePhase.value}中` : backend.session?.state || '等待开始')
@@ -111,11 +140,22 @@ function handleEvent(event: StreamEvent) {
   if (event.phase) activePhase.value = event.phase === 'profile' ? '画像' : event.phase === 'resource' ? '资源' : '诊断'
   if (event.event === 'delta' && event.content) streamText.value += event.content
   if (event.event === 'replace' && event.content) streamText.value = event.content
+  if (event.event === 'meta') {
+    effectiveProfileId.value = event.profile_id || ''
+    effectiveModelId.value = event.model_id || ''
+    effectiveReasoningEffort.value = event.effective_reasoning_effort
+    failoverNotice.value = event.failover_used ? '已自动切换到备用连接' : ''
+  }
   if (event.event === 'sources') sources.value = (event.sources || []).filter((item): item is SourceItem => 'url' in item)
   if (event.event === 'knowledge_sources') knowledgeSources.value = (event.sources || []).filter((item): item is KnowledgeSource => 'reference_id' in item)
   if (event.event === 'error') {
     streamError.value = event.message || event.code || '生成失败，请检查后重试。'
     ElMessage.error(streamError.value)
+  }
+  if (event.event === 'interrupted') {
+    generating.value = false
+    streamInterrupted.value = true
+    canContinueWithBackup.value = event.can_continue_with_backup === true
   }
   scrollBottom()
 }
@@ -125,11 +165,15 @@ function restoreFailedMessage() { editor.value = failedMessage.value; streamErro
 async function send() {
   const message = editor.value.trim()
   if (!message || generating.value || !backend.modelConfigured) return
+  if (streamInterrupted.value) preserveInterruptedText()
   generating.value = true
   pendingUser.value = message
   editor.value = ''
   streamText.value = ''
   streamError.value = ''
+  failoverNotice.value = ''
+  streamInterrupted.value = false
+  canContinueWithBackup.value = false
   failedMessage.value = ''
   generationId.value = ''
   const requestSessionId = backend.sessionId
@@ -149,7 +193,8 @@ async function send() {
       activePhase.value = response.phase === 'profile' ? '画像' : response.phase === 'resource' ? '资源' : '诊断'
     }
     if (backend.sessionId === requestSessionId) await backend.refreshSession()
-    if (streamError.value) { failedMessage.value = message; pendingUser.value = '' }
+    if (streamInterrupted.value) { failedMessage.value = message; pendingUser.value = '' }
+    else if (streamError.value) { failedMessage.value = message; pendingUser.value = '' }
     else { pendingUser.value = ''; streamText.value = '' }
   } catch (error) {
     if (!isCancellationError(error)) {
@@ -165,6 +210,27 @@ async function send() {
     activeSessionId.value = ''
     await scrollBottom()
   }
+}
+
+function preserveInterruptedText() {
+  const content = streamText.value.trim()
+  if (content) retainedInterruptions.value.push({ id: ++interruptionId, content })
+  streamText.value = ''
+  streamInterrupted.value = false
+  canContinueWithBackup.value = false
+}
+
+async function continueWithBackup() {
+  const original = failedMessage.value || pendingUser.value || '刚才的问题'
+  const partial = streamText.value.trim().slice(-1200)
+  preserveInterruptedText()
+  editor.value = `刚才的回答因连接中断而停止。请继续完成对“${original}”的解答，避免重复已经给出的内容。\n已给出的内容：${partial}`
+  await send()
+}
+
+async function saveModelPreference(input: SessionModelPreferenceInput) {
+  try { await backend.saveSessionModelPreference(input); ElMessage.success('本空间模型偏好已保存') }
+  catch (error) { ElMessage.error(errorMessage(error)) }
 }
 
 function isCancellationError(error: unknown) {
@@ -196,10 +262,20 @@ watch(() => backend.sessionId, currentSessionId => {
   knowledgeSources.value = []
   streamError.value = ''
   failedMessage.value = ''
+  failoverNotice.value = ''
+  streamInterrupted.value = false
+  canContinueWithBackup.value = false
+  retainedInterruptions.value = []
+  effectiveProfileId.value = ''
+  effectiveModelId.value = ''
+  effectiveReasoningEffort.value = undefined
   if (shouldCancel) {
     generating.value = false
     void cancel()
   }
+})
+onMounted(async () => {
+  await Promise.allSettled([backend.refreshModelProfiles(), backend.loadSessionModelPreference()])
 })
 onBeforeUnmount(() => controller?.abort())
 </script>
@@ -235,6 +311,10 @@ onBeforeUnmount(() => controller?.abort())
 .stream-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 16px; padding: 12px 14px; color: #7d2734; background: #fff0f2; border-left: 4px solid var(--danger); border-radius: 8px; }
 .stream-error strong { font-size: 13px; }
 .stream-error p { margin: 4px 0 0; font-size: 12px; line-height: 1.55; }
+.stream-interruption { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 16px; padding: 12px 14px; color: #755f3d; background: #fff6e7; border-left: 4px solid #d5a568; border-radius: 8px; }
+.stream-interruption strong { font-size: 13px; }.stream-interruption p { margin: 4px 0 0; font-size: 11px; line-height: 1.55; }
+.retained-interruption pre { border-style: dashed; background: #fffaf0; }
+.connection-notice { margin: 2px auto 12px; padding: 8px 11px; border: 1px solid #ead7b6; border-radius: 999px; color: #7b623f; background: #fff6e6; text-align: center; font-size: 10px; }
 .inline-sources { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; color: #9b8f82; font-size: 10px; }
 .inline-sources a { color: #648c8d; text-decoration: none; }
 .composer-wrap { margin-top: auto; padding: 0 16px 4px; }
