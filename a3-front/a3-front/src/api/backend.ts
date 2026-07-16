@@ -1,5 +1,5 @@
 import { createDesktopTransport } from './desktop-transport'
-import { desktopEnvelope, type BackendTransport } from './transport'
+import { BackendApiError, desktopEnvelope, type BackendTransport } from './transport'
 import { createWebTransport, parseSseBlock, readSseBody } from './web-transport'
 import type {
   AttemptResponse,
@@ -17,11 +17,18 @@ import type {
   MistakeItem,
   ModelConfigInput,
   ModelConnectionTest,
+  ModelProfileInput,
+  ModelProfileMutationResult,
+  ModelProfilePolicy,
+  ModelProfileVault,
+  ModelRuntimeStatus,
   ModelSettings,
   NextAction,
   ProgressSnapshot,
   ReviewTask,
   SessionHistory,
+  SessionModelPreference,
+  SessionModelPreferenceInput,
   StreamEvent,
 } from './types'
 
@@ -56,6 +63,71 @@ export const backendApi = {
     }
     return activeTransport().request<ModelSettings>({
       method: 'PUT', path: '/api/settings/model', body: input,
+    })
+  },
+  async modelProfilesList(): Promise<ModelProfileVault> {
+    const bridge = window.a3Desktop
+    if (bridge) {
+      if (!bridge.modelProfilesList) throw desktopBridgeUnavailableError()
+      return desktopEnvelope<ModelProfileVault>(await bridge.modelProfilesList())
+    }
+    return legacyVault(await activeTransport().request<ModelSettings>({ method: 'GET', path: '/api/settings/model' }))
+  },
+  async testModelProfile(input: ModelProfileInput) {
+    const bridge = window.a3Desktop
+    if (bridge) {
+      if (!bridge.modelProfileTest) throw desktopBridgeUnavailableError()
+      return desktopEnvelope<ModelConnectionTest>(await bridge.modelProfileTest(input))
+    }
+    return activeTransport().request<ModelConnectionTest>({
+      method: 'POST', path: '/api/settings/model/test', body: legacyConfig(input),
+    })
+  },
+  async upsertModelProfile(input: ModelProfileInput): Promise<ModelProfileMutationResult> {
+    const bridge = window.a3Desktop
+    if (bridge) {
+      if (!bridge.modelProfileUpsert) throw desktopBridgeUnavailableError()
+      return desktopEnvelope<ModelProfileMutationResult>(await bridge.modelProfileUpsert(input))
+    }
+    const settings = await activeTransport().request<ModelSettings>({
+      method: 'PUT', path: '/api/settings/model', body: legacyConfig(input),
+    })
+    return legacyMutation(settings)
+  },
+  async deleteModelProfile(profileId: string): Promise<ModelProfileMutationResult> {
+    const bridge = window.a3Desktop
+    if (bridge) {
+      if (!bridge.modelProfileDelete) throw desktopBridgeUnavailableError()
+      return desktopEnvelope<ModelProfileMutationResult>(await bridge.modelProfileDelete(profileId))
+    }
+    throw desktopOnlyError()
+  },
+  async saveModelProfilePolicy(input: ModelProfilePolicy): Promise<ModelProfileMutationResult> {
+    const bridge = window.a3Desktop
+    if (bridge) {
+      if (!bridge.modelProfilePolicySave) throw desktopBridgeUnavailableError()
+      return desktopEnvelope<ModelProfileMutationResult>(await bridge.modelProfilePolicySave(input))
+    }
+    throw desktopOnlyError()
+  },
+  async modelRuntimeStatus(): Promise<ModelRuntimeStatus> {
+    const bridge = window.a3Desktop
+    if (bridge) {
+      if (!bridge.modelRuntimeStatus) throw desktopBridgeUnavailableError()
+      return desktopEnvelope<ModelRuntimeStatus>(await bridge.modelRuntimeStatus())
+    }
+    const ready = await activeTransport().request<HealthStatus>({ method: 'GET', path: '/health/ready' })
+    const vault = await backendApi.modelProfilesList()
+    return legacyRuntime(vault, ready.status === 'ready')
+  },
+  async sessionModelPreference(sessionId: string) {
+    return activeTransport().request<SessionModelPreference>({
+      method: 'GET', path: `/api/sessions/${encodeURIComponent(sessionId)}/model-preference`,
+    })
+  },
+  async saveSessionModelPreference(sessionId: string, input: SessionModelPreferenceInput) {
+    return activeTransport().request<SessionModelPreference>({
+      method: 'PUT', path: `/api/sessions/${encodeURIComponent(sessionId)}/model-preference`, body: input,
     })
   },
   async chat(sessionId: string, message: string) {
@@ -143,4 +215,64 @@ export const backendApi = {
     if (!window.a3Desktop?.knowledgeOpenSource) throw new Error('来源预览仅桌面版可用。')
     return desktopEnvelope<{ mode: string; displayName: string }>(await window.a3Desktop.knowledgeOpenSource(documentId, locator))
   },
+}
+
+function legacyConfig(input: ModelProfileInput): ModelConfigInput {
+  const model = input.models.find(value => value.id === input.default_model_id)
+  if (!model) throw new BackendApiError(400, 'MODEL_PROFILE_DEFAULT_MODEL_INVALID', '默认模型配置无效。')
+  return {
+    provider: input.provider,
+    api_key: input.api_key,
+    base_url: input.base_url,
+    model_name: model.provider_model_name,
+    anthropic_version: input.anthropic_version,
+    request_timeout_seconds: input.request_timeout_seconds,
+  }
+}
+
+function legacyVault(settings: ModelSettings): ModelProfileVault {
+  if (!settings.api_key_configured) {
+    return { version: 2, global: { default_profile_id: null, auto_failover: false, fallback_profile_ids: [] }, profiles: [] }
+  }
+  return {
+    version: 2,
+    global: { default_profile_id: 'web-default', auto_failover: false, fallback_profile_ids: [] },
+    profiles: [{
+      id: 'web-default', label: '默认模型', enabled: true, provider: settings.provider,
+      base_url: settings.base_url, api_key_configured: true,
+      anthropic_version: settings.anthropic_version,
+      request_timeout_seconds: settings.request_timeout_seconds,
+      default_model_id: 'web-model',
+      models: [{
+        id: 'web-model', provider_model_name: settings.model_name, label: settings.model_name,
+        max_output_tokens: 4096, supported_reasoning_efforts: ['auto', 'off'], reasoning_adapter: 'none',
+      }],
+    }],
+  }
+}
+
+function legacyRuntime(vault: ModelProfileVault, ready: boolean): ModelRuntimeStatus {
+  return {
+    ready,
+    default_profile_id: vault.global.default_profile_id,
+    auto_failover: false,
+    fallback_profile_ids: [],
+    profiles: vault.profiles.map(profile => ({
+      profile_id: profile.id, enabled: profile.enabled, needs_attention: false,
+      circuit_state: 'closed', cooldown_until: 0, consecutive_failures: 0,
+    })),
+  }
+}
+
+function legacyMutation(settings: ModelSettings): ModelProfileMutationResult {
+  const vault = legacyVault(settings)
+  return { vault, runtime: legacyRuntime(vault, settings.api_key_configured) }
+}
+
+function desktopOnlyError() {
+  return new BackendApiError(400, 'DESKTOP_ONLY', '多模型配置管理仅桌面版可用。')
+}
+
+function desktopBridgeUnavailableError() {
+  return new BackendApiError(503, 'DESKTOP_BRIDGE_UNAVAILABLE', '桌面模型配置桥接尚未就绪，请重启应用。', true)
 }

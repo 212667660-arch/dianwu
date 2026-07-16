@@ -408,6 +408,15 @@ function matchAllowedRoute(method, path, stream) {
     return { ok: true, kind: 'knowledge-binding' }
   }
 
+  const modelPreferenceMatch = /^\/api\/sessions\/([^/]+)\/model-preference$/.exec(path)
+  if (
+    modelPreferenceMatch
+    && SESSION_ID_PATTERN.test(modelPreferenceMatch[1])
+    && ['GET', 'PUT'].includes(method)
+  ) {
+    return { ok: true, kind: 'model-preference' }
+  }
+
   const attemptMatch = /^\/api\/sessions\/([^/]+)\/questions\/([^/]+)\/attempts$/.exec(path)
   if (
     method === 'POST'

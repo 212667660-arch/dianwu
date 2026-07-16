@@ -182,3 +182,78 @@ export interface ModelConnectionTest {
   status: 'connected'
   latency_ms: number
 }
+
+export type ReasoningEffort = 'auto' | 'off' | 'low' | 'medium' | 'high' | 'xhigh'
+export type ReasoningAdapter = 'none' | 'openai_reasoning_effort' | 'anthropic_thinking'
+
+export interface ModelDefinition {
+  id: string
+  provider_model_name: string
+  label: string
+  max_output_tokens: number
+  supported_reasoning_efforts: ReasoningEffort[]
+  reasoning_adapter: ReasoningAdapter
+}
+
+export interface ModelProfileSummary {
+  id: string
+  label: string
+  enabled: boolean
+  provider: 'openai' | 'anthropic'
+  base_url: string
+  api_key_configured: boolean
+  anthropic_version: string
+  request_timeout_seconds: number
+  default_model_id: string
+  models: ModelDefinition[]
+}
+
+export interface ModelProfileInput extends Omit<ModelProfileSummary, 'api_key_configured'> {
+  api_key: string
+}
+
+export interface ModelProfilePolicy {
+  default_profile_id: string | null
+  auto_failover: boolean
+  fallback_profile_ids: string[]
+}
+
+export interface ModelProfileVault {
+  version: 2
+  global: ModelProfilePolicy
+  profiles: ModelProfileSummary[]
+}
+
+export interface ModelRuntimeProfileStatus {
+  profile_id: string
+  enabled: boolean
+  needs_attention: boolean
+  circuit_state: 'closed' | 'open' | 'half_open'
+  cooldown_until: number
+  consecutive_failures: number
+}
+
+export interface ModelRuntimeStatus {
+  ready: boolean
+  default_profile_id: string | null
+  auto_failover: boolean
+  fallback_profile_ids: string[]
+  profiles: ModelRuntimeProfileStatus[]
+}
+
+export interface ModelProfileMutationResult {
+  vault: ModelProfileVault
+  runtime: ModelRuntimeStatus
+}
+
+export interface SessionModelPreferenceInput {
+  profile_mode: 'auto' | 'manual'
+  preferred_profile_id: string | null
+  model_id: string | null
+  reasoning_effort: ReasoningEffort
+  failover_override: 'inherit' | 'on' | 'off'
+}
+
+export interface SessionModelPreference extends SessionModelPreferenceInput {
+  session_id: string
+}

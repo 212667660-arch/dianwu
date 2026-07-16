@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { backendApi, parseSseBlock, readSseBody } from './backend'
+import type { ModelProfileInput } from './types'
+
+const webRequest = vi.hoisted(() => vi.fn())
+vi.mock('axios', () => ({ default: { create: () => ({ request: webRequest }) } }))
 
 const modelInput = {
   provider: 'openai' as const,
@@ -10,8 +14,32 @@ const modelInput = {
   request_timeout_seconds: 60,
 }
 
+const profileInput: ModelProfileInput = {
+  id: 'primary', label: '主模型', enabled: true, provider: 'openai' as const,
+  base_url: 'https://api.example.test/v1', api_key: 'test-secret-key',
+  anthropic_version: '2023-06-01', request_timeout_seconds: 60,
+  default_model_id: 'model-a',
+  models: [{
+    id: 'model-a', provider_model_name: 'test-model', label: 'Test Model',
+    max_output_tokens: 4096, supported_reasoning_efforts: ['auto', 'off'],
+    reasoning_adapter: 'none' as const,
+  }],
+}
+
+const profileVault = {
+  version: 2 as const,
+  global: { default_profile_id: 'primary', auto_failover: true, fallback_profile_ids: [] },
+  profiles: [{ ...profileInput, api_key_configured: true, api_key: undefined }],
+}
+
+const runtimeStatus = {
+  ready: true, default_profile_id: 'primary', auto_failover: true, fallback_profile_ids: [],
+  profiles: [{ profile_id: 'primary', enabled: true, needs_attention: false, circuit_state: 'closed', cooldown_until: 0, consecutive_failures: 0 }],
+}
+
 beforeEach(() => {
   delete window.a3Desktop
+  webRequest.mockReset()
 })
 
 function streamFrom(chunks: string[]) {
@@ -101,6 +129,68 @@ describe('model settings API', () => {
       code: 'MODEL_AUTHENTICATION_ERROR',
       status: 401,
     })
+  })
+})
+
+describe('multi-profile model API', () => {
+  it('uses only the six fixed desktop bridge methods', async () => {
+    const request = vi.fn()
+    const modelProfilesList = vi.fn().mockResolvedValue({ ok: true, status: 200, data: profileVault })
+    const modelProfileTest = vi.fn().mockResolvedValue({ ok: true, status: 200, data: { provider: 'openai', model_name: 'test-model', status: 'connected', latency_ms: 10 } })
+    const mutation = { vault: profileVault, runtime: runtimeStatus }
+    const modelProfileUpsert = vi.fn().mockResolvedValue({ ok: true, status: 200, data: mutation })
+    const modelProfileDelete = vi.fn().mockResolvedValue({ ok: true, status: 200, data: mutation })
+    const modelProfilePolicySave = vi.fn().mockResolvedValue({ ok: true, status: 200, data: mutation })
+    const modelRuntimeStatus = vi.fn().mockResolvedValue({ ok: true, status: 200, data: runtimeStatus })
+    window.a3Desktop = {
+      request, modelConfigTest: vi.fn(), modelConfigSave: vi.fn(),
+      modelProfilesList, modelProfileTest, modelProfileUpsert, modelProfileDelete,
+      modelProfilePolicySave, modelRuntimeStatus,
+      startStream: vi.fn(), cancelStream: vi.fn(),
+      onStreamEvent: vi.fn(() => () => {}), onBackendExit: vi.fn(() => () => {}),
+    }
+
+    await backendApi.modelProfilesList()
+    await backendApi.testModelProfile(profileInput)
+    await backendApi.upsertModelProfile(profileInput)
+    await backendApi.deleteModelProfile('primary')
+    await backendApi.saveModelProfilePolicy(profileVault.global)
+    await backendApi.modelRuntimeStatus()
+
+    expect(modelProfilesList).toHaveBeenCalledOnce()
+    expect(modelProfileTest).toHaveBeenCalledWith(profileInput)
+    expect(modelProfileUpsert).toHaveBeenCalledWith(profileInput)
+    expect(modelProfileDelete).toHaveBeenCalledWith('primary')
+    expect(modelProfilePolicySave).toHaveBeenCalledWith(profileVault.global)
+    expect(modelRuntimeStatus).toHaveBeenCalledOnce()
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it('uses public compatibility routes in web mode and never requests internal control paths', async () => {
+    webRequest
+      .mockResolvedValueOnce({ status: 200, data: { provider: 'openai', base_url: 'https://api.example.test/v1', model_name: 'test-model', api_key_configured: true, api_key_hint: 'configured', anthropic_version: '2023-06-01', request_timeout_seconds: 60 } })
+      .mockResolvedValueOnce({ status: 200, data: { status: 'ready' } })
+      .mockResolvedValueOnce({ status: 200, data: { provider: 'openai', base_url: 'https://api.example.test/v1', model_name: 'test-model', api_key_configured: true, api_key_hint: 'configured', anthropic_version: '2023-06-01', request_timeout_seconds: 60 } })
+
+    await backendApi.modelProfilesList()
+    await backendApi.modelRuntimeStatus()
+
+    expect(webRequest.mock.calls.map(call => call[0].url)).toEqual(['/api/settings/model', '/health/ready', '/api/settings/model'])
+    expect(JSON.stringify(webRequest.mock.calls)).not.toContain('/internal/')
+  })
+
+  it('does not fall back to generic desktop requests when a fixed bridge method is unavailable', async () => {
+    const request = vi.fn()
+    window.a3Desktop = {
+      request, modelConfigTest: vi.fn(), modelConfigSave: vi.fn(),
+      startStream: vi.fn(), cancelStream: vi.fn(),
+      onStreamEvent: vi.fn(() => () => {}), onBackendExit: vi.fn(() => () => {}),
+    }
+
+    await expect(backendApi.modelProfilesList()).rejects.toMatchObject({
+      code: 'DESKTOP_BRIDGE_UNAVAILABLE',
+    })
+    expect(request).not.toHaveBeenCalled()
   })
 })
 
