@@ -95,6 +95,10 @@ def _sqlite_migrate() -> None:
         connection.execute(text(
             "CREATE INDEX IF NOT EXISTS ix_artifacts_bundle_id ON resource_artifacts(bundle_id)"
         ))
+        connection.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_resource_bundles_session_created "
+            "ON resource_bundles(session_id, created_at)"
+        ))
 
 
 def init_db() -> None:

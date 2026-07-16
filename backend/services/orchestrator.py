@@ -479,7 +479,7 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
                 bundle_dict = result.bundle.model_dump()
                 yield {"event": "resource_bundle", **bundle_dict}
 
-                save_bundle(db, result.bundle)
+                save_bundle(db, session_id, result.bundle)
 
                 yield {"event": "persisted", "bundle_id": bundle_id}
 

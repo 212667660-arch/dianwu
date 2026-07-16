@@ -11,6 +11,7 @@ from backend.services.resource_db import (
     save_artifact,
     save_bundle,
 )
+from backend.services import resource_db
 from backend.protocols.v2.models import (
     ArtifactStatus,
     ArtifactType,
@@ -45,7 +46,7 @@ def test_save_and_retrieve_bundle():
         created_at="2026-07-16T10:00:00Z",
     )
     with SessionLocal() as db:
-        save_bundle(db, bundle)
+        save_bundle(db, f"session-{bundle_id}", bundle)
         db.commit()
     with SessionLocal() as db:
         loaded = get_bundle(db, bundle_id)
@@ -72,7 +73,7 @@ def test_save_partial_and_retry_artifact():
         created_at="2026-07-16T10:00:00Z",
     )
     with SessionLocal() as db:
-        save_bundle(db, bundle)
+        save_bundle(db, f"session-{bundle_id}", bundle)
         db.commit()
     retry_artifact = ResourceArtifact(
         artifact_id=aid, type=ArtifactType.MIND_MAP,
@@ -105,7 +106,7 @@ def test_delete_bundle():
         created_at="2026-07-16T10:00:00Z",
     )
     with SessionLocal() as db:
-        save_bundle(db, bundle)
+        save_bundle(db, f"session-{bundle_id}", bundle)
         db.commit()
     with SessionLocal() as db:
         delete_bundle(db, bundle_id)
@@ -123,3 +124,82 @@ def test_v1_tables_unchanged():
         assert session.session_id == sid
         repo.delete_session(db, sid)
         db.commit()
+
+
+def test_save_bundle_writes_session_and_all_artifacts():
+    bundle_id = _make_bundle_id()
+    session_id = f"owner-{uuid.uuid4().hex[:8]}"
+    artifacts = [
+        ResourceArtifact(
+            artifact_id=f"{bundle_id}-course",
+            type=ArtifactType.COURSE_EXPLANATION,
+            title="讲解",
+            status=ArtifactStatus.SUCCEEDED,
+            body="内容",
+            quality_score=85,
+        ),
+        ResourceArtifact(
+            artifact_id=f"{bundle_id}-mind",
+            type=ArtifactType.MIND_MAP,
+            title="导图",
+            status=ArtifactStatus.SUCCEEDED,
+            body="flowchart TD\nA-->B",
+            quality_score=90,
+        ),
+    ]
+    bundle = ResourceBundle(
+        bundle_id=bundle_id,
+        topic="测试",
+        profile_version=1,
+        learning_state_version="1",
+        mode="bundle",
+        status=BundleStatus.COMPLETED,
+        requested_types=[ArtifactType.COURSE_EXPLANATION, ArtifactType.MIND_MAP],
+        artifacts=artifacts,
+        aggregate_quality=87.5,
+        created_at="2026-07-17T00:00:00Z",
+    )
+    with SessionLocal() as db:
+        save_bundle(db, session_id, bundle)
+        db.commit()
+        loaded = resource_db.get_bundle_for_session(db, session_id, bundle_id)
+        assert loaded is not None
+        assert loaded["session_id"] == session_id
+        assert len(loaded["artifacts"]) == 2
+        assert resource_db.get_bundle_for_session(db, "other", bundle_id) is None
+        delete_bundle(db, bundle_id)
+        db.commit()
+
+
+def test_delete_session_removes_owned_bundles():
+    from backend.services import db as repo
+
+    bundle_id = _make_bundle_id()
+    session_id = f"bundle-session-{uuid.uuid4().hex[:8]}"
+    artifact = ResourceArtifact(
+        artifact_id=f"{bundle_id}-artifact",
+        type=ArtifactType.COURSE_EXPLANATION,
+        title="讲解",
+        status=ArtifactStatus.SUCCEEDED,
+        body="内容",
+        quality_score=80,
+    )
+    bundle = ResourceBundle(
+        bundle_id=bundle_id,
+        topic="测试",
+        profile_version=1,
+        learning_state_version="1",
+        mode="single",
+        status=BundleStatus.COMPLETED,
+        requested_types=[ArtifactType.COURSE_EXPLANATION],
+        artifacts=[artifact],
+        aggregate_quality=80,
+        created_at="2026-07-17T00:00:00Z",
+    )
+    with SessionLocal() as db:
+        repo.get_or_create_session(db, session_id)
+        save_bundle(db, session_id, bundle)
+        db.commit()
+        assert len(resource_db.list_bundles(db, session_id)) == 1
+        repo.delete_session(db, session_id)
+        assert resource_db.list_bundles(db, session_id) == []

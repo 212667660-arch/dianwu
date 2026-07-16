@@ -631,6 +631,9 @@ def delete_session(db: Session, session_id: str) -> bool:
     db.query(SessionKnowledgeCollection).filter_by(session_id=session_id).delete(
         synchronize_session=False
     )
+    from backend.services.resource_db import delete_bundles_for_session
+
+    delete_bundles_for_session(db, session_id)
     db.delete(session)
     _commit(db)
     return True

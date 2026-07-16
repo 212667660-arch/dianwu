@@ -61,7 +61,7 @@ async def resource_bundle_endpoint(req: ChatRequest, db: Session = Depends(get_d
         subject_category_hint="other", profile_version=1, learning_state_version="v1",
     )
 
-    save_bundle(db, result.bundle)
+    save_bundle(db, req.session_id, result.bundle)
     db.commit()
 
     return BundleResponse(
