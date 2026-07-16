@@ -236,6 +236,18 @@ export const backendApi = {
     if (!bridge.petSetTaskState) throw desktopBridgeUnavailableError()
     return desktopEnvelope<PetTaskState>(await bridge.petSetTaskState(state))
   },
+  async choosePetCharacter(): Promise<PetSnapshot> {
+    const bridge = window.a3Desktop
+    if (!bridge) throw desktopOnlyError()
+    if (!bridge.petChooseCharacter) throw desktopBridgeUnavailableError()
+    return desktopEnvelope<PetSnapshot>(await bridge.petChooseCharacter())
+  },
+  async resetPetCharacter(): Promise<PetSnapshot> {
+    const bridge = window.a3Desktop
+    if (!bridge) throw desktopOnlyError()
+    if (!bridge.petResetCharacter) throw desktopBridgeUnavailableError()
+    return desktopEnvelope<PetSnapshot>(await bridge.petResetCharacter())
+  },
 }
 
 function legacyConfig(input: ModelProfileInput): ModelConfigInput {
@@ -302,7 +314,10 @@ function unavailablePetSnapshot(): PetSnapshot {
   return {
     available: false,
     pet: null,
-    settings: { visible: false, scale: 1, speed: 1 },
+    settings: {
+      visible: false, scale: 1, speed: 1,
+      soundEnabled: false, soundVolume: 0.5, voiceEnabled: false, voiceVolume: 0.75,
+    },
     state: 'idle',
   }
 }

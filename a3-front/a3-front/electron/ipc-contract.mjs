@@ -24,9 +24,10 @@ const REASONING_ADAPTERS = new Set(['none', 'openai_reasoning_effort', 'anthropi
 const KNOWLEDGE_DROPPED_FIELDS = new Set(['collectionId', 'paths'])
 const KNOWLEDGE_LOCATOR_FIELDS = new Set(['type', 'start', 'end', 'sheet_name'])
 const KNOWLEDGE_LOCATOR_TYPES = new Set(['page', 'slide', 'sheet_rows', 'paragraph'])
-const PET_SETTINGS_FIELDS = new Set(['visible', 'scale', 'speed'])
+const PET_SETTINGS_FIELDS = new Set(['visible', 'scale', 'speed', 'soundEnabled', 'soundVolume', 'voiceEnabled', 'voiceVolume'])
 const PET_SCALE_VALUES = new Set([0.5, 0.75, 1, 1.25, 1.5])
 const PET_SPEED_VALUES = new Set([0.5, 0.75, 1, 1.25, 1.5, 2])
+const PET_VOLUME_VALUES = new Set([0, 0.25, 0.5, 0.75, 1])
 const PET_TASK_STATES = new Set(['idle', 'running', 'waiting', 'review', 'failed'])
 
 export function desktopError(code, message, retryable = false, requestId) {
@@ -268,6 +269,18 @@ export function validatePetSettingsInput(input) {
   if (Object.hasOwn(input, 'speed')) {
     if (!PET_SPEED_VALUES.has(input.speed)) return invalid('Pet speed is invalid.')
     value.speed = input.speed
+  }
+  for (const field of ['soundEnabled', 'voiceEnabled']) {
+    if (Object.hasOwn(input, field)) {
+      if (typeof input[field] !== 'boolean') return invalid(`Pet ${field} is invalid.`)
+      value[field] = input[field]
+    }
+  }
+  for (const field of ['soundVolume', 'voiceVolume']) {
+    if (Object.hasOwn(input, field)) {
+      if (!PET_VOLUME_VALUES.has(input[field])) return invalid(`Pet ${field} is invalid.`)
+      value[field] = input[field]
+    }
   }
   return { ok: true, value }
 }

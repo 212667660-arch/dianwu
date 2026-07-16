@@ -25,6 +25,8 @@ contextBridge.exposeInMainWorld('a3Desktop', Object.freeze({
   petGet: () => ipcRenderer.invoke('a3:pet-get'),
   petUpdateSettings: input => ipcRenderer.invoke('a3:pet-update-settings', input),
   petSetTaskState: state => ipcRenderer.invoke('a3:pet-set-task-state', state),
+  petChooseCharacter: () => ipcRenderer.invoke('a3:pet-choose-character'),
+  petResetCharacter: () => ipcRenderer.invoke('a3:pet-reset-character'),
   startStream: (streamId, input) => ipcRenderer.send('a3:stream-start', streamId, input),
   cancelStream: (streamId) => ipcRenderer.send('a3:stream-cancel', streamId),
   onStreamEvent: (listener) => {

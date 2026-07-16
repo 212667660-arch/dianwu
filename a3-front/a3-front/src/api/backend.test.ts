@@ -252,9 +252,11 @@ describe('desktop pet API', () => {
     const petGet = vi.fn().mockResolvedValue({ ok: true, status: 200, data: snapshot })
     const petUpdateSettings = vi.fn().mockResolvedValue({ ok: true, status: 200, data: snapshot })
     const petSetTaskState = vi.fn().mockResolvedValue({ ok: true, status: 200, data: 'review' })
+    const petChooseCharacter = vi.fn().mockResolvedValue({ ok: true, status: 200, data: snapshot })
+    const petResetCharacter = vi.fn().mockResolvedValue({ ok: true, status: 200, data: snapshot })
     window.a3Desktop = {
       request, modelConfigTest: vi.fn(), modelConfigSave: vi.fn(),
-      petGet, petUpdateSettings, petSetTaskState,
+      petGet, petUpdateSettings, petSetTaskState, petChooseCharacter, petResetCharacter,
       startStream: vi.fn(), cancelStream: vi.fn(),
       onStreamEvent: vi.fn(() => () => {}), onBackendExit: vi.fn(() => () => {}),
     }
@@ -262,9 +264,13 @@ describe('desktop pet API', () => {
     await expect(backendApi.pet()).resolves.toEqual(snapshot)
     await backendApi.updatePetSettings({ scale: 1.25 })
     await backendApi.setPetTaskState('review')
+    await backendApi.choosePetCharacter()
+    await backendApi.resetPetCharacter()
 
     expect(petUpdateSettings).toHaveBeenCalledWith({ scale: 1.25 })
     expect(petSetTaskState).toHaveBeenCalledWith('review')
+    expect(petChooseCharacter).toHaveBeenCalledOnce()
+    expect(petResetCharacter).toHaveBeenCalledOnce()
     expect(request).not.toHaveBeenCalled()
   })
 

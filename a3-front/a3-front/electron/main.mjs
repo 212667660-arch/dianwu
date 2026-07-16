@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, screen, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, safeStorage, screen, shell } from 'electron'
 import { spawn } from 'node:child_process'
 import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
@@ -26,6 +26,7 @@ import { createModelConfigStore, sanitizeModelEnvironment } from './model-config
 import { createModelProfileVault } from './model-profile-vault.mjs'
 import { createModelProfileController } from './model-profile-controller.mjs'
 import { createPetController } from './pet-controller.mjs'
+import { createPetCharacterImporter, validatePetAtlasBitmap } from './pet-character-import.mjs'
 import { backendCommand, electronUserDataPath, navigationAction } from './runtime.mjs'
 
 const mainDir = path.dirname(fileURLToPath(import.meta.url))
@@ -53,6 +54,11 @@ const petController = createPetController({
   petIndex: path.join(mainDir, 'pet', 'index.html'),
   petPreload: path.join(mainDir, 'pet-preload.cjs'),
   pathToFileURL,
+})
+const petCharacterImporter = createPetCharacterImporter({
+  fs,
+  userDataDir: app.getPath('userData'),
+  inspectAtlas: inspectPetAtlas,
 })
 
 const modelConfigStore = createModelConfigStore({
@@ -346,6 +352,33 @@ ipcMain.handle('a3:pet-set-task-state', (event, input) => {
     data: petController.setTaskState(value),
   }))
 })
+ipcMain.handle('a3:pet-choose-character', async event => {
+  if (!trustedPetMainSender(event)) return deniedPetRequest()
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: '选择桌宠角色包文件夹',
+    properties: ['openDirectory'],
+  })
+  if (result.canceled || !result.filePaths[0]) return { ok: true, status: 200, data: publicPetSnapshot() }
+  try {
+    await petCharacterImporter.importFromDirectory(result.filePaths[0])
+    await petController.reloadPet({ forceHidden: process.env.A3_ELECTRON_TEST_MODE === '1' })
+    return { ok: true, status: 200, data: publicPetSnapshot() }
+  } catch (error) {
+    void log(`pet character import failed: ${error instanceof Error ? error.message : String(error)}`)
+    return petImportError()
+  }
+})
+ipcMain.handle('a3:pet-reset-character', async event => {
+  if (!trustedPetMainSender(event)) return deniedPetRequest()
+  try {
+    await petCharacterImporter.reset()
+    await petController.reloadPet({ forceHidden: process.env.A3_ELECTRON_TEST_MODE === '1' })
+    return { ok: true, status: 200, data: publicPetSnapshot() }
+  } catch (error) {
+    void log(`pet character reset failed: ${error instanceof Error ? error.message : String(error)}`)
+    return petImportError()
+  }
+})
 ipcMain.handle('a3:pet-ready', event => petController.isPetSender(event)
   ? petController.readyPayload()
   : deniedPetRequest())
@@ -428,4 +461,21 @@ function publicPetSnapshot() {
     settings: value.settings,
     state: value.state,
   }
+}
+
+function petImportError() {
+  return {
+    ok: false,
+    status: 400,
+    error: desktopError('PET_CHARACTER_IMPORT_FAILED', '角色包无效，请检查 pet.json 和 spritesheet.webp。'),
+  }
+}
+
+async function inspectPetAtlas(filePath) {
+  const image = nativeImage.createFromPath(filePath)
+  if (image.isEmpty()) return { width: 0, height: 0, validTransparency: false }
+  const { width, height } = image.getSize()
+  if (width !== 1536 || height !== 1872) return { width, height, validTransparency: false }
+  const bitmap = image.toBitmap({ scaleFactor: 1 })
+  return { width, height, validTransparency: validatePetAtlasBitmap(bitmap, width, height) }
 }

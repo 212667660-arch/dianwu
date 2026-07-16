@@ -48,6 +48,8 @@ export interface DesktopBridge {
   petGet?(): Promise<DesktopResponse>
   petUpdateSettings?(input: Partial<PetSettings>): Promise<DesktopResponse>
   petSetTaskState?(state: PetTaskState): Promise<DesktopResponse>
+  petChooseCharacter?(): Promise<DesktopResponse>
+  petResetCharacter?(): Promise<DesktopResponse>
   startStream(streamId: string, input: TransportRequest): void
   cancelStream(streamId: string): void
   onStreamEvent(listener: (message: DesktopStreamMessage) => void): () => void

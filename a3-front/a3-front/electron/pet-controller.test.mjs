@@ -136,6 +136,10 @@ test('controller persists visibility scale speed and restores the saved position
   assert.equal(window.getBounds().width, 288)
   assert.equal(window.getBounds().height, 312)
   assert.equal(controller.snapshot().settings.speed, 0.75)
+  assert.equal(controller.snapshot().settings.soundEnabled, true)
+  assert.equal(controller.snapshot().settings.soundVolume, 0.5)
+  assert.equal(controller.snapshot().settings.voiceEnabled, false)
+  assert.equal(controller.snapshot().settings.voiceVolume, 0.75)
 
   controller.beginDrag({ screenX: 900, screenY: 500 })
   await controller.moveDrag({ screenX: 2500, screenY: 950 })
@@ -203,4 +207,19 @@ test('controller exposes separate sender checks for main and pet windows', async
   assert.equal(controller.isMainSender({ sender: petWindow.webContents }), false)
   assert.equal(controller.isPetSender({ sender: petWindow.webContents }), true)
   assert.equal(controller.isPetSender({ sender: mainContents }), false)
+})
+
+test('controller reloads a changed character without losing the main sender', async () => {
+  const { controller, userDataDir } = await fixture()
+  await controller.prepare()
+  const first = controller.createWindow()
+  const mainContents = new FakeWebContents()
+  controller.setMainWebContents(mainContents)
+  await writePet(path.join(userDataDir, 'pets', 'current'), manifest('custom-friend'))
+
+  const second = await controller.reloadPet()
+  assert.equal(first.destroyed, true)
+  assert.notEqual(second, first)
+  assert.equal(controller.snapshot().pet.id, 'custom-friend')
+  assert.equal(controller.isMainSender({ sender: mainContents }), true)
 })

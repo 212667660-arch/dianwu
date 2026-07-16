@@ -1,3 +1,5 @@
+import { createBrowserPetAudioRuntime } from './pet-audio.js'
+
 const DIRECTIONAL_STATES = new Set(['running-left', 'running-right'])
 const CLICK_DELAY_MS = 220
 const IDLE_THROTTLE_MS = 60_000
@@ -85,6 +87,9 @@ async function startPetRenderer() {
   if (!context) return
 
   let settings = { ...payload.settings }
+  const audio = createBrowserPetAudioRuntime(window)
+  audio.updateSettings(settings)
+  audio.setHidden(document.hidden)
   let taskState = payload.state || 'idle'
   let interactionState = null
   let dragState = null
@@ -119,6 +124,7 @@ async function startPetRenderer() {
   function playInteraction(state) {
     lastInteractionAt = Date.now()
     interactionState = state
+    audio.playInteraction(state)
     setState()
     if (interactionTimer !== null) clearTimeout(interactionTimer)
     const total = payload.pet.animations[state].durations.reduce((sum, value) => sum + value, 0) / settings.speed
@@ -232,9 +238,11 @@ async function startPetRenderer() {
   })
   document.addEventListener('visibilitychange', () => {
     lastTick = performance.now()
+    audio.setHidden(document.hidden)
     schedule()
   })
   bridge.onState(({ state }) => {
+    audio.handleState(state)
     if (DIRECTIONAL_STATES.has(state) && pointer) dragState = state
     else {
       taskState = state
@@ -244,6 +252,7 @@ async function startPetRenderer() {
   })
   bridge.onSettings(({ settings: next }) => {
     settings = { ...settings, ...next }
+    audio.updateSettings(settings)
     lastInteractionAt = Date.now()
     schedule()
   })

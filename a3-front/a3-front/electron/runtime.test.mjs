@@ -161,6 +161,8 @@ test('preload exposes fixed request, stream, model profile, knowledge, and pet b
     'petGet:',
     'petUpdateSettings:',
     'petSetTaskState:',
+    'petChooseCharacter:',
+    'petResetCharacter:',
   ]) {
     assert.match(preload, new RegExp(name))
   }
@@ -179,6 +181,7 @@ test('desktop pet uses a separate sandbox preload and main-process controller', 
   assert.match(main, /petController\.destroy\(\)/)
   for (const channel of [
     'a3:pet-get', 'a3:pet-update-settings', 'a3:pet-set-task-state',
+    'a3:pet-choose-character', 'a3:pet-reset-character',
     'a3:pet-ready', 'a3:pet-drag-begin', 'a3:pet-drag-move', 'a3:pet-drag-end',
   ]) assert.match(main, new RegExp(channel))
 
@@ -187,6 +190,19 @@ test('desktop pet uses a separate sandbox preload and main-process controller', 
   }
   assert.doesNotMatch(petPreload, /(?:^|[,{]\s*)ipcRenderer\s*:/m)
   assert.doesNotMatch(petPreload, /request:|modelConfig|knowledge/)
+})
+
+test('character import is owned by the main process and renderer sends no paths', () => {
+  const main = fs.readFileSync(path.join(projectDir, 'electron', 'main.mjs'), 'utf8')
+  const preload = fs.readFileSync(path.join(projectDir, 'electron', 'preload.cjs'), 'utf8')
+  assert.match(main, /createPetCharacterImporter/)
+  assert.match(main, /properties:\s*\['openDirectory'\]/)
+  assert.match(main, /petCharacterImporter\.importFromDirectory/)
+  assert.match(main, /petCharacterImporter\.reset/)
+  assert.match(main, /petController\.reloadPet/)
+  assert.match(preload, /petChooseCharacter:\s*\(\)\s*=>/)
+  assert.match(preload, /petResetCharacter:\s*\(\)\s*=>/)
+  assert.doesNotMatch(preload, /petChooseCharacter:\s*\([^)]*[a-z]/i)
 })
 
 test('sandboxed renderer uses a CommonJS preload bridge', () => {

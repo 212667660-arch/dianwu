@@ -4,11 +4,19 @@ import {
   PET_TASK_STATES,
   clampPetBounds,
   defaultPetBounds,
-  validatePetManifest,
+  parsePetManifestText,
   validatePetSettingsPatch,
 } from './pet-config.mjs'
 
-const DEFAULT_SETTINGS = Object.freeze({ visible: true, scale: 1, speed: 1 })
+const DEFAULT_SETTINGS = Object.freeze({
+  visible: true,
+  scale: 1,
+  speed: 1,
+  soundEnabled: true,
+  soundVolume: 0.5,
+  voiceEnabled: false,
+  voiceVolume: 0.75,
+})
 const SETTINGS_FILE = 'pet-settings.json'
 const CUSTOM_PET_PATH = Object.freeze(['pets', 'current'])
 
@@ -78,7 +86,8 @@ export function createPetController({
       },
     })
     petWindow.loadFile(petIndex)
-    petWindow.on('closed', () => { petWindow = null })
+    const createdWindow = petWindow
+    petWindow.on('closed', () => { if (petWindow === createdWindow) petWindow = null })
     if (settings.visible && !forceHidden) petWindow.showInactive()
     return petWindow
   }
@@ -201,6 +210,14 @@ export function createPetController({
     drag = null
   }
 
+  async function reloadPet({ forceHidden = false } = {}) {
+    pet = await loadAvailablePet()
+    const previous = petWindow
+    petWindow = null
+    if (previous && !previous.isDestroyed()) previous.destroy()
+    return createWindow({ forceHidden })
+  }
+
   async function loadAvailablePet() {
     const customDir = path.join(userDataDir, ...CUSTOM_PET_PATH)
     const custom = await tryLoadPet(customDir)
@@ -212,7 +229,7 @@ export function createPetController({
 
   async function tryLoadPet(directory) {
     try {
-      const manifest = validatePetManifest(await readJson(path.join(directory, 'pet.json')))
+      const manifest = parsePetManifestText(await fs.readFile(path.join(directory, 'pet.json'), 'utf8'))
       const spritesheet = path.join(directory, manifest.spritesheetPath)
       await fs.access(spritesheet)
       return { manifest, spritesheetUrl: pathToFileURL(spritesheet).href }
@@ -275,6 +292,7 @@ export function createPetController({
     isMainSender,
     isPetSender,
     destroy,
+    reloadPet,
   }
 }
 

@@ -5,9 +5,11 @@ import {
   PET_ANIMATION_SPECS,
   PET_SCALE_VALUES,
   PET_SPEED_VALUES,
+  PET_VOLUME_VALUES,
   PET_TASK_STATES,
   clampPetBounds,
   defaultPetBounds,
+  parsePetManifestText,
   validatePetManifest,
   validatePetSettingsPatch,
 } from './pet-config.mjs'
@@ -50,9 +52,15 @@ test('pet manifest requires the fixed nine animation rows and safe relative spri
   assert.throws(() => validatePetManifest(wrongRow))
 })
 
+test('pet manifest text accepts an optional UTF-8 BOM', () => {
+  assert.equal(parsePetManifestText(`\uFEFF${JSON.stringify(manifest())}`).id, 'motuan')
+  assert.throws(() => parsePetManifestText('\uFEFF{"broken":true}'))
+})
+
 test('pet settings accept only fixed visibility scale and speed values', () => {
   assert.deepEqual(PET_SCALE_VALUES, [0.5, 0.75, 1, 1.25, 1.5])
   assert.deepEqual(PET_SPEED_VALUES, [0.5, 0.75, 1, 1.25, 1.5, 2])
+  assert.deepEqual(PET_VOLUME_VALUES, [0, 0.25, 0.5, 0.75, 1])
   assert.deepEqual(PET_TASK_STATES, ['idle', 'running', 'waiting', 'review', 'failed'])
   assert.deepEqual(validatePetSettingsPatch({ visible: false, scale: 1.25, speed: 1.5 }), {
     visible: false,
@@ -60,9 +68,16 @@ test('pet settings accept only fixed visibility scale and speed values', () => {
     speed: 1.5,
   })
   assert.deepEqual(validatePetSettingsPatch({ visible: true }), { visible: true })
+  assert.deepEqual(validatePetSettingsPatch({
+    soundEnabled: false, soundVolume: 0.25, voiceEnabled: true, voiceVolume: 0.75,
+  }), {
+    soundEnabled: false, soundVolume: 0.25, voiceEnabled: true, voiceVolume: 0.75,
+  })
   assert.throws(() => validatePetSettingsPatch({ scale: 1.1 }))
   assert.throws(() => validatePetSettingsPatch({ speed: Infinity }))
   assert.throws(() => validatePetSettingsPatch({ visible: true, path: 'C:\\secret' }))
+  assert.throws(() => validatePetSettingsPatch({ soundVolume: 0.4 }))
+  assert.throws(() => validatePetSettingsPatch({ voiceEnabled: 'yes' }))
 })
 
 test('pet bounds clamp inside the nearest display including negative desktop coordinates', () => {

@@ -14,12 +14,13 @@ export const PET_ANIMATION_SPECS = Object.freeze({
 
 export const PET_SCALE_VALUES = Object.freeze([0.5, 0.75, 1, 1.25, 1.5])
 export const PET_SPEED_VALUES = Object.freeze([0.5, 0.75, 1, 1.25, 1.5, 2])
+export const PET_VOLUME_VALUES = Object.freeze([0, 0.25, 0.5, 0.75, 1])
 export const PET_TASK_STATES = Object.freeze(['idle', 'running', 'waiting', 'review', 'failed'])
 
 const MANIFEST_FIELDS = new Set([
   'id', 'displayName', 'description', 'spritesheetPath', 'cell', 'grid', 'animations',
 ])
-const SETTINGS_FIELDS = new Set(['visible', 'scale', 'speed'])
+const SETTINGS_FIELDS = new Set(['visible', 'scale', 'speed', 'soundEnabled', 'soundVolume', 'voiceEnabled', 'voiceVolume'])
 
 export function validatePetManifest(input) {
   if (!isPlainObject(input) || !hasOnlyFields(input, MANIFEST_FIELDS)) {
@@ -74,6 +75,11 @@ export function validatePetManifest(input) {
   }
 }
 
+export function parsePetManifestText(input) {
+  if (typeof input !== 'string') throw new TypeError('Pet manifest text is invalid.')
+  return validatePetManifest(JSON.parse(input.replace(/^\uFEFF/, '')))
+}
+
 export function validatePetSettingsPatch(input) {
   if (!isPlainObject(input) || !hasNoUnknownFields(input, SETTINGS_FIELDS) || Object.keys(input).length === 0) {
     throw new TypeError('Pet settings fields are invalid.')
@@ -90,6 +96,18 @@ export function validatePetSettingsPatch(input) {
   if (Object.hasOwn(input, 'speed')) {
     if (!PET_SPEED_VALUES.includes(input.speed)) throw new TypeError('Pet speed is invalid.')
     value.speed = input.speed
+  }
+  for (const field of ['soundEnabled', 'voiceEnabled']) {
+    if (Object.hasOwn(input, field)) {
+      if (typeof input[field] !== 'boolean') throw new TypeError(`Pet ${field} is invalid.`)
+      value[field] = input[field]
+    }
+  }
+  for (const field of ['soundVolume', 'voiceVolume']) {
+    if (Object.hasOwn(input, field)) {
+      if (!PET_VOLUME_VALUES.includes(input[field])) throw new TypeError(`Pet ${field} is invalid.`)
+      value[field] = input[field]
+    }
   }
   return value
 }

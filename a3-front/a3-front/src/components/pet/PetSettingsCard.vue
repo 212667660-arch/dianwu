@@ -6,9 +6,26 @@
       <span class="pet-state" :class="{ offline: !snapshot.available }">{{ snapshot.available ? stateLabel : '仅桌面端' }}</span>
     </header>
     <p>{{ snapshot.available ? (snapshot.pet?.description || '在桌边陪你学习。') : '请在 Electron 桌面应用中使用显示、拖动与动画控制。' }}</p>
+    <div class="pet-actions">
+      <button data-test="pet-import" type="button" :disabled="busy || !snapshot.available" @click="chooseCharacter">导入角色包</button>
+      <button data-test="pet-reset" type="button" :disabled="busy || !snapshot.available" @click="resetCharacter">恢复墨团</button>
+    </div>
     <div class="pet-control visible-control">
       <label for="pet-visible">显示伙伴</label>
       <input id="pet-visible" data-test="pet-visible" type="checkbox" :checked="snapshot.settings.visible" :disabled="busy || !snapshot.available" @change="changeVisible">
+    </div>
+    <div class="audio-block">
+      <div class="pet-control"><label for="pet-sound-enabled">动作音效</label><input id="pet-sound-enabled" data-test="pet-sound-enabled" type="checkbox" :checked="snapshot.settings.soundEnabled" :disabled="busy || !snapshot.available" @change="changeSoundEnabled"></div>
+      <select data-test="pet-sound-volume" :value="snapshot.settings.soundVolume" :disabled="busy || !snapshot.available || !snapshot.settings.soundEnabled" @change="changeSoundVolume">
+        <option v-for="value in volumes" :key="`sound-${value}`" :value="value">音量 {{ Math.round(value * 100) }}%</option>
+      </select>
+    </div>
+    <div class="audio-block">
+      <div class="pet-control"><label for="pet-voice-enabled">语音鼓励</label><input id="pet-voice-enabled" data-test="pet-voice-enabled" type="checkbox" :checked="snapshot.settings.voiceEnabled" :disabled="busy || !snapshot.available" @change="changeVoiceEnabled"></div>
+      <select data-test="pet-voice-volume" :value="snapshot.settings.voiceVolume" :disabled="busy || !snapshot.available || !snapshot.settings.voiceEnabled" @change="changeVoiceVolume">
+        <option v-for="value in volumes" :key="`voice-${value}`" :value="value">音量 {{ Math.round(value * 100) }}%</option>
+      </select>
+      <small>使用系统本地语音，不上传文字或音频。</small>
     </div>
     <div class="pet-control-grid">
       <label>大小
@@ -28,11 +45,16 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { backendApi, type PetSettings, type PetSnapshot } from '@/api'
+import { backendApi, type PetSettings, type PetSnapshot, type PetVolume } from '@/api'
 
 const scales: PetSettings['scale'][] = [0.5, 0.75, 1, 1.25, 1.5]
 const speeds: PetSettings['speed'][] = [0.5, 0.75, 1, 1.25, 1.5, 2]
-const snapshot = reactive<PetSnapshot>({ available: false, pet: null, settings: { visible: false, scale: 1, speed: 1 }, state: 'idle' })
+const volumes: PetVolume[] = [0, 0.25, 0.5, 0.75, 1]
+const snapshot = reactive<PetSnapshot>({
+  available: false, pet: null,
+  settings: { visible: false, scale: 1, speed: 1, soundEnabled: false, soundVolume: 0.5, voiceEnabled: false, voiceVolume: 0.75 },
+  state: 'idle',
+})
 const busy = ref(false)
 const message = ref('')
 const stateLabel = computed(() => ({ idle: '安静陪伴', running: '正在努力', waiting: '等你回来', review: '认真检查', failed: '需要安慰' }[snapshot.state]))
@@ -44,6 +66,19 @@ onMounted(async () => {
 function changeVisible(event: Event) { void update({ visible: (event.target as HTMLInputElement).checked }) }
 function changeScale(event: Event) { void update({ scale: Number((event.target as HTMLSelectElement).value) as PetSettings['scale'] }) }
 function changeSpeed(event: Event) { void update({ speed: Number((event.target as HTMLSelectElement).value) as PetSettings['speed'] }) }
+function changeSoundEnabled(event: Event) { void update({ soundEnabled: (event.target as HTMLInputElement).checked }) }
+function changeSoundVolume(event: Event) { void update({ soundVolume: Number((event.target as HTMLSelectElement).value) as PetVolume }) }
+function changeVoiceEnabled(event: Event) { void update({ voiceEnabled: (event.target as HTMLInputElement).checked }) }
+function changeVoiceVolume(event: Event) { void update({ voiceVolume: Number((event.target as HTMLSelectElement).value) as PetVolume }) }
+async function chooseCharacter() { await runAction(() => backendApi.choosePetCharacter()) }
+async function resetCharacter() { await runAction(() => backendApi.resetPetCharacter()) }
+async function runAction(action: () => Promise<PetSnapshot>) {
+  busy.value = true
+  message.value = ''
+  try { applySnapshot(await action()) }
+  catch { message.value = '角色包没有应用，请检查文件规格。' }
+  finally { busy.value = false }
+}
 async function update(patch: Partial<PetSettings>) {
   busy.value = true
   message.value = ''
@@ -74,6 +109,9 @@ function speedLabel(value: number) {
 .pet-state { padding: 3px 7px; color: #668b82; font-size: 9px; background: #e2efe8; border-radius: 999px; }
 .pet-state.offline { color: #9d8d7d; background: #eee7de; }
 .pet-card > p { margin: 10px 0 12px; color: #8b8176; font-size: 10px; line-height: 1.55; }
+.pet-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 10px; }
+.pet-actions button { padding: 6px; color: #587b77; font-size: 9px; background: rgba(255,255,255,.7); border: 1px solid #d8e4dd; border-radius: 8px; cursor: pointer; }
+.pet-actions button:disabled { cursor: not-allowed; opacity: .45; }
 .pet-control { display: flex; align-items: center; justify-content: space-between; }
 .pet-control, .pet-control-grid label { color: #81766b; font-size: 10px; }
 .visible-control { padding: 9px 0; border-top: 1px dashed #dce5df; border-bottom: 1px dashed #dce5df; }
@@ -81,5 +119,8 @@ function speedLabel(value: number) {
 .pet-control-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
 .pet-control-grid label { display: grid; gap: 5px; }
 .pet-control-grid select { min-width: 0; padding: 6px 7px; color: #526f6e; font-size: 10px; background: rgba(255,255,255,.72); border: 1px solid #d9e4dd; border-radius: 8px; outline: 0; }
+.audio-block { display: grid; gap: 6px; margin-top: 10px; padding-top: 9px; border-top: 1px dashed #dce5df; }
+.audio-block select { padding: 6px 7px; color: #526f6e; font-size: 10px; background: rgba(255,255,255,.72); border: 1px solid #d9e4dd; border-radius: 8px; }
+.audio-block small { color: #9b9186; font-size: 8px; line-height: 1.45; }
 .pet-message { display: block; margin-top: 8px; color: #aa6c5f; font-size: 9px; }
 </style>

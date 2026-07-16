@@ -211,12 +211,18 @@ test('桌宠 IPC 只接受固定设置值和任务状态', () => {
     ok: true,
     value: { visible: false, scale: 1.25, speed: 1.5 },
   })
+  assert.deepEqual(validatePetSettingsInput({ soundEnabled: true, soundVolume: 0.5, voiceEnabled: false, voiceVolume: 1 }), {
+    ok: true,
+    value: { soundEnabled: true, soundVolume: 0.5, voiceEnabled: false, voiceVolume: 1 },
+  })
   assert.deepEqual(validatePetTaskStateInput('review'), { ok: true, value: 'review' })
 
   for (const input of [
     { visible: true, assetPath: 'C:\\secret' },
     { scale: 1.1 },
     { speed: Number.NaN },
+    { soundVolume: 0.4 },
+    { voiceEnabled: 'yes' },
     {},
   ]) assert.equal(validatePetSettingsInput(input).ok, false)
   for (const input of ['waving', 'running-left', '../failed', { state: 'idle' }]) {

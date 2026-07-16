@@ -2,7 +2,7 @@
 
 > 项目：基于大模型的个性化资源生成与学习多智能体系统开发
 > 队列位置：E:\软件杯\codex\AI模型任务队列.md
-> 当前模型批次：Sol（S-019/T-036 第二阶段角色导入与独立声音控制进行中）
+> 当前模型批次：Sol（S-019/T-036 第二阶段已完成；桌宠后续 QA 保留）
 > 最后审视日期：2026-07-16
 
 ## 一、使用规则
@@ -73,10 +73,10 @@
 | S-016 | P1 | 完成 | 连接 GitHub 私有远程仓库 | S-015 | 本地提交身份、`origin`、`main` 上游分支、远程提交一致性和推送验收 |
 | S-017 | P0 | 完成 | 设计稳定优先的多 API 配置、故障转移、模型切换与推理强度架构 | S-014、T-032、用户已确认“手动主配置 + 自动备用切换 + 可关闭自动切换” | Electron 版本 2 加密保险库、后端内存路由器、原子热应用、主备与熔断、普通/流式边界、全局与学习空间覆盖、模型能力和推理强度适配、13 项 TDD 实施计划 |
 | S-018 | P0 | 完成 | 设计本地知识库、文件导入、解析、索引与学习流程接入 | 现有 FastAPI/SQLite/Electron、安全边界、用户新增需求 | 支持格式与限额、文件存储和解析隔离、文本切片/检索、引用溯源、会话/资源接入、删除与重建、接口/UI、测试和打包方案 |
-| S-019 | P1 | 进行中 | 设计可扩展桌宠、用户形象导入、学习进度感知与语音鼓励 | S-009、S-010、T-030、用户新增需求 | 第一阶段 MVP 已完成；第二阶段采用主进程受控角色目录导入、本地 Web Audio 动作音效、系统 speechSynthesis 语音鼓励，音效与语音独立开关/音量且不联网 |
+| S-019 | P1 | 完成 | 设计可扩展桌宠、用户形象导入、学习进度感知与语音鼓励 | S-009、S-010、T-030、用户新增需求 | 两阶段均已完成：透明桌宠与任务状态联动、主进程安全角色包导入/恢复、本地 Web Audio 动作音效、系统 speechSynthesis 语音鼓励，以及音效/语音独立开关与音量 |
 | T-033 | P0 | 完成 | 实现多 API 配置、高可用切换、模型选择与推理强度控制 | S-017 | 版本 2 加密多配置、原子热应用与回滚、3 次/2 配置预算、Retry-After/熔断、普通与流式故障边界、全局/学习空间模型和思考强度选择、兼容迁移、真实桌面 5/5 连接及完整打包回归 |
 | T-035 | P0 | 完成 | 实现本地知识库与安全文件导入 | S-018 | 已完成文件选择/拖放、七格式与限额校验、隔离解析 worker、SQLite 元数据/FTS/可选语义索引、可追溯引用、学习助手绑定与隐私模式、删除/重建、恶意文件/性能/打包测试及 Windows 桌面安装包验收 |
-| T-036 | P1 | 进行中 | 实现桌宠形象包、用户上传、进度事件与语音鼓励 | S-019 | 第一阶段可用 MVP 已完成并打包验收；自定义 `userData/pets/current` 角色目录与安全回退已具备，用户上传管理 UI、语音鼓励和全面素材审计保留后续 |
+| T-036 | P1 | 完成 | 实现桌宠形象包、用户上传、进度事件与语音鼓励 | S-019 | 已完成角色包目录选择、固定文件/atlas 校验、原子替换、失败保留旧角色、恢复墨团、热重载、动作音效和本地语音鼓励；全面素材/许可证、逐帧视觉与主观音色 QA 保留后续 |
 
 ## 五、Terra 队列
 
@@ -182,7 +182,9 @@ T-033 Task 13 与整项任务已完成：旧 `GET /api/settings/model` 返回运
 
 用户已于 2026-07-16 恢复桌宠任务并明确授权按建议直接设计。Sol 当前在 `codex/desktop-pet-mvp` 分支执行 S-019/T-036 第一阶段：参考 Apache-2.0 的 openai/skills `hatch-pet` 固定 8×9、192×208 精灵图契约和校验思路，创建本项目原创角色；优先交付独立透明置顶窗口、拖动位置、多屏/DPI、九动画状态、任务联动、点击/双击、显示/隐藏/缩放/速度及空闲节流。全面许可证审计、完整视觉 QA、全部状态人工核对、用户形象导入和语音鼓励按用户要求保留后续。
 
-S-019/T-036 第一阶段桌宠 MVP 已完成：Electron 独立 sandbox 窗口与 preload、pet.json/spritesheet.webp 严格读取和非法自定义回退、原创“墨团”九行动画、拖动与位置持久化、多显示器/DPI 约束、点击挥手/双击跳跃、显示/隐藏/缩放/速度、隐藏暂停与长空闲降频均已落地。主应用书桌卡可控制设置，SmartTutor 的生成/校验/完成/失败及全局加载可自动驱动 running/review/waiting/failed/idle。真实 Windows unpacked 验收发现并修复缩放后立即拖动可能读取原生瞬态 bounds 的问题；最终显示隐藏、缩放恢复、立即拖动、双击和五任务状态均通过。后续保留角色导入 UI、语音鼓励、全面许可证审计、完整视觉 QA 和九状态逐帧人工核对。
+S-019/T-036 第一阶段桌宠 MVP 已完成：Electron 独立 sandbox 窗口与 preload、pet.json/spritesheet.webp 严格读取和非法自定义回退、原创“墨团”九行动画、拖动与位置持久化、多显示器/DPI 约束、点击挥手/双击跳跃、显示/隐藏/缩放/速度、隐藏暂停与长空闲降频均已落地。主应用书桌卡可控制设置，SmartTutor 的生成/校验/完成/失败及全局加载可自动驱动 running/review/waiting/failed/idle。真实 Windows unpacked 验收发现并修复缩放后立即拖动可能读取原生瞬态 bounds 的问题；最终显示隐藏、缩放恢复、立即拖动、双击和五任务状态均通过。第一阶段保留的角色导入与语音已由下一段第二阶段完成；全面许可证审计、完整视觉 QA 和九状态逐帧人工核对仍保留。
+
+S-019/T-036 第二阶段已完成：书桌卡新增角色包导入、恢复墨团、动作音效和语音鼓励的独立开关/音量；主进程只接受目录选择器返回的 `pet.json` 与 `spritesheet.webp`，拒绝链接、超限文件、空白/近乎整格不透明的已使用动画格和其他非法 atlas，并通过 staging/backup 原子替换，失败不覆盖旧角色。桌宠 renderer 使用本地 Web Audio 与系统 `speechSynthesis`，语音默认关闭、30 秒冷却、隐藏时停止且不联网；音效结束后自动挂起音频上下文，隐藏期间会取消尚未开始的异步音效。真实 unpacked 验收加载带 UTF-8 BOM 的“验收伙伴”，验证音效 100% 与语音 25% 独立持久化、可见状态失败鼓励为 `zh-CN`/0.25、恢复墨团后窗口热重建且 current 目录删除；完整 `npm test` 为 Electron/Node 138 passed、Vitest 86 passed，atlas 校验错误 0，`build:desktop`、`desktop:pack` 和隔离 userData 包启动退出均通过。临时进程、角色和声音设置已清理。全面素材/许可证、逐帧视觉和主观音色 QA 保留后续。
 
 Luna 批次已完成并通过复审。README、API 示例、协议说明、评测样例和开发总结已同步当前代码。L-007、L-008、L-009 已完成：快捷测试入口和浏览器测试台均已通过自动化测试、浏览器检查及打包启动自检；竞品对照和后端优化方案已形成。S-009 已就绪，等待切换 Sol 后实施跨模块学习闭环代码。
 
@@ -210,6 +212,7 @@ S-016 已完成：本仓库提交身份已设置为 `Wei kb <212667660@qq.com>`�
 
 | 日期 | 任务 ID | 模型 | 修改文件 | 验证结果 |
 | --- | --- | --- | --- | --- |
+| 2026-07-16 | S-019 / T-036 第二阶段 | Sol | a3-front/a3-front/electron/pet-audio.test.mjs、pet-character-import.mjs 及测试、pet-config.mjs、pet-controller.mjs、pet/pet-audio.js、pet-renderer.js、main.mjs、preload.cjs、ipc-contract.mjs、runtime.test.mjs、src/api/、src/components/pet/PetSettingsCard.vue 及测试、README.md、src/api/README.md、codex/AI模型任务队列.md | 交付受控角色包导入/恢复和独立声音控制：链接/大小/清单/atlas 像素验证、staging 原子替换、失败保留旧角色、热重载、Web Audio 动作音效、系统本地语音、默认静音语音和 30 秒冷却；审查补齐同名自定义角色恢复、异步音效取消和结束后音频挂起。真实 unpacked 加载带 BOM 自定义角色，验证音效 1.0 与语音 0.25 独立保存、`zh-CN` 鼓励、恢复墨团和窗口重建；Electron/Node 138 passed、Vitest 86 passed，atlas 错误 0，桌面构建/打包和隔离启动退出码 0；临时数据与进程已清理。全面素材/许可证、逐帧视觉与主观音色 QA 保留。 |
 | 2026-07-16 | S-019 / T-036 第一阶段 | Sol | a3-front/a3-front/electron/pet-*、electron/pet/、electron/pets/motuan/、tools/pet/、src/components/pet/、src/pet/、electron/main.mjs、preload.cjs、ipc-contract.mjs、src/api/、DeskPanel.vue、AppLayout.vue、SmartTutor.vue 及测试；README.md、src/api/README.md、codex/AI模型任务队列.md | 交付原创“墨团”透明置顶桌宠 MVP：严格 8×9 atlas 清单、非法自定义回退、拖动/位置、多屏/DPI、九状态、任务联动、点击/双击、显示/隐藏/缩放/速度及资源节流。上游 Apache-2.0 validator 验证 1536×1872 RGBA WebP、透明残留 0、错误 0；完整 `npm test` 为 Electron 121 passed、Vitest 84 passed，修复真实 Windows 缩放后立即拖动的瞬态 bounds 回归并新增控制器测试；`build:desktop`、`desktop:pack` 通过。unpacked 同时加载主界面/学习伙伴，canvas 非透明像素 25,043，DPI 1.5 backing 288×312；显示隐藏、1.25×/1.5×设置、恢复后立即拖动、双击事件和 running/review/waiting/failed/idle 固定 IPC 均通过，测试进程和临时设置已清理。完整视觉/许可证 QA、逐帧状态核对、导入 UI 与语音留后续。 |
 | 2026-07-16 | T-033 Task 13 / T-033 完成 | Sol | backend/errors.py、services/llm_service.py、model_resilience.py、model_runtime.py、model_settings.py 及测试；README.md、backend/API示例.md、a3-front/a3-front/src/api/README.md、codex/AI模型任务队列.md | 旧接口兼容测试转接统一运行时；新增有界 Retry-After、同配置一次等待重试、截止时间切备用和熔断冷却；认证/权限失败后主配置进入 needs_attention，避免重复无效调用。故障矩阵覆盖连接/超时、408/429/502/503/504、401/403/404、流边界、half-open、取消与尝试预算。隔离后端 281 passed/7 skipped，Electron 104 passed、Vitest 75 passed，桌面构建、后端七格式打包和启动检查通过；unpacked 测试启动无残留，最终真实加密配置 5/5 成功，P50 1519 ms、P95 2105 ms；密钥与回复正文未输出。 |
 | 2026-07-16 | T-033 Task 12 | Sol | a3-front/a3-front/src/components/model/ModelSelectionPopover.vue 及测试、src/views/SmartTutor.vue 及测试、src/api/types.ts、codex/AI模型任务队列.md | 输入区新增学习空间配置/模型/思考强度/自动备用偏好；模型能力过滤与 `xhigh→high` 实际显示有回归。SSE 自动切换显示非阻断提示，输出后中断保留文字并通过新请求续写，会话切换清除旧空间实际模型。浏览器 1440px/375px 无横向溢出、控制台无错误；完整 `npm test` 为 Electron Node 104 passed、Vitest 75 passed；`build:desktop` 和 `git diff --check` 通过。 |

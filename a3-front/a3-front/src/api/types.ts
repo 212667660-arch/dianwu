@@ -272,7 +272,13 @@ export interface PetSettings {
   visible: boolean
   scale: PetScale
   speed: PetSpeed
+  soundEnabled: boolean
+  soundVolume: PetVolume
+  voiceEnabled: boolean
+  voiceVolume: PetVolume
 }
+
+export type PetVolume = 0 | 0.25 | 0.5 | 0.75 | 1
 
 export interface PetSummary {
   id: string
