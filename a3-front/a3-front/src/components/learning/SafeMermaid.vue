@@ -35,6 +35,8 @@ let renderVersion = 0;
 
 const MAX_SOURCE_CHARACTERS = 20_000;
 const MAX_SOURCE_LINES = 250;
+const MAX_NODES = 200;
+const MAX_EDGES = 300;
 const SAFE_PREFIX = /^(flowchart|graph)(?:\s|$)/;
 const UNSAFE_PATTERNS = [
   /%%\s*\{/i,
@@ -62,7 +64,18 @@ const safeToRender = computed(() => {
   if (!mermaidCode.value || normalized.length > MAX_SOURCE_CHARACTERS) return false;
   if (normalized.split("\n").length > MAX_SOURCE_LINES) return false;
   if (!SAFE_PREFIX.test(mermaidCode.value)) return false;
-  return !UNSAFE_PATTERNS.some(pattern => pattern.test(normalized));
+  if (UNSAFE_PATTERNS.some(pattern => pattern.test(normalized))) return false;
+  const edgeCount = (mermaidCode.value.match(/-->|---|-.->|==>/g) || []).length;
+  if (edgeCount > MAX_EDGES) return false;
+  const nodeIds = new Set<string>();
+  const edgePattern = /([A-Za-z_][A-Za-z0-9_-]*)\s*(?:\[[^\]]*\]|\([^)]*\)|\{[^}]*\})?\s*(?:-->|---|-.->|==>)\s*([A-Za-z_][A-Za-z0-9_-]*)/g;
+  for (const match of mermaidCode.value.matchAll(edgePattern)) {
+    nodeIds.add(match[1]);
+    nodeIds.add(match[2]);
+  }
+  const definitionPattern = /(?:^|[;\n])\s*([A-Za-z_][A-Za-z0-9_-]*)\s*[\[({]/g;
+  for (const match of mermaidCode.value.matchAll(definitionPattern)) nodeIds.add(match[1]);
+  return nodeIds.size <= MAX_NODES;
 });
 
 const canRender = computed(() => safeToRender.value && !renderFailed.value);
@@ -72,6 +85,57 @@ const outlineText = computed(() => {
   const match = props.content.match(/##\s*大纲\n([\s\S]*?)(?=\n##|$)/);
   return match ? match[1].trim() : "大纲不可用";
 });
+
+const ALLOWED_SVG_TAGS = new Set([
+  "svg", "g", "path", "rect", "circle", "ellipse", "line", "polyline",
+  "polygon", "text", "tspan", "defs", "marker", "style",
+]);
+const ALLOWED_SVG_ATTRIBUTES = new Set([
+  "xmlns", "viewbox", "preserveaspectratio", "id", "class", "d", "fill",
+  "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin", "opacity",
+  "fill-opacity", "stroke-opacity", "transform", "x", "y", "x1", "y1",
+  "x2", "y2", "cx", "cy", "r", "rx", "ry", "width", "height", "points",
+  "marker-start", "marker-end", "marker-mid", "refx", "refy", "markerwidth",
+  "markerheight", "orient", "text-anchor", "dominant-baseline", "font-family",
+  "font-size", "font-weight", "style",
+]);
+
+function safeSvgAttribute(name: string, value: string): boolean {
+  const lowerName = name.toLowerCase();
+  const lowerValue = value.toLowerCase().replace(/\s+/g, "");
+  if (!ALLOWED_SVG_ATTRIBUTES.has(lowerName) || lowerName.startsWith("on")) return false;
+  if (/javascript:|data:|file:|https?:|vbscript:|@import/.test(lowerValue)) return false;
+  if (lowerValue.includes("url(") && !/^url\(#[A-Za-z_][A-Za-z0-9_.:-]*\)$/.test(value.trim())) return false;
+  return true;
+}
+
+function sanitizeSvg(svg: string): string | null {
+  const parser = new DOMParser();
+  const document = parser.parseFromString(svg, "image/svg+xml");
+  if (document.querySelector("parsererror")) return null;
+  const root = document.documentElement;
+  if (root.localName.toLowerCase() !== "svg") return null;
+  for (const element of Array.from(root.querySelectorAll("*"))) {
+    const tag = element.localName.toLowerCase();
+    if (!ALLOWED_SVG_TAGS.has(tag)) {
+      element.remove();
+      continue;
+    }
+    if (tag === "style" && /url\s*\(|@import|javascript:|https?:/i.test(element.textContent || "")) {
+      element.remove();
+      continue;
+    }
+    for (const attribute of Array.from(element.attributes)) {
+      if (!safeSvgAttribute(attribute.name, attribute.value)) {
+        element.removeAttribute(attribute.name);
+      }
+    }
+  }
+  for (const attribute of Array.from(root.attributes)) {
+    if (!safeSvgAttribute(attribute.name, attribute.value)) root.removeAttribute(attribute.name);
+  }
+  return new XMLSerializer().serializeToString(root);
+}
 
 async function renderDiagram() {
   const version = ++renderVersion;
@@ -92,7 +156,9 @@ async function renderDiagram() {
       mermaidCode.value,
     );
     if (version !== renderVersion || !mermaidEl.value) return;
-    mermaidEl.value.innerHTML = svg;
+    const safeSvg = sanitizeSvg(svg);
+    if (!safeSvg) throw new Error("unsafe svg");
+    mermaidEl.value.innerHTML = safeSvg;
   } catch {
     if (version === renderVersion) {
       if (mermaidEl.value) mermaidEl.value.textContent = "";

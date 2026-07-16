@@ -11,8 +11,11 @@
     </div>
     <div v-if="expanded" class="card-body">
       <div v-if="artifact.status !== 'SUCCEEDED'" class="card-error">
-        <p>错误码: {{ artifact.error_code }}</p>
-        <p v-if="artifact.quality_issues.length">问题: {{ artifact.quality_issues.join(', ') }}</p>
+        <p v-if="publicSafetyMessage" class="safety-message">{{ publicSafetyMessage }}</p>
+        <template v-else>
+          <p>错误码: {{ artifact.error_code }}</p>
+          <p v-if="artifact.quality_issues.length">问题: {{ artifact.quality_issues.join(', ') }}</p>
+        </template>
         <button v-if="artifact.retryable" class="retry-btn" :disabled="retrying" @click.stop="$emit('retry', artifact.artifact_id)">
           {{ retrying ? '重试中…' : '重试' }}
         </button>
@@ -56,6 +59,20 @@ const typeLabels: Record<string, string> = {
 };
 
 const typeLabel = computed(() => typeLabels[props.artifact.type] || props.artifact.type);
+
+const publicSafetyMessage = computed(() => {
+  switch (props.artifact.error_code) {
+    case "CONTENT_ARTIFACT_BLOCKED":
+    case "CONTENT_CITATION_NOT_ALLOWED":
+      return "内容未通过安全检查，请修改请求后重试。";
+    case "SAFETY_REVIEW_UNAVAILABLE":
+      return "内容安全审核暂时不可用，请稍后重试。";
+    case "UNSAFE_RENDER_PAYLOAD":
+      return "内容包含不安全的展示结构，已停止渲染。";
+    default:
+      return "";
+  }
+});
 
 const mindMapOutline = computed(() => {
   const outline = props.artifact.type_specific_data?.outline;

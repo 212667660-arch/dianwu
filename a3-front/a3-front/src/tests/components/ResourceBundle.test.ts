@@ -97,4 +97,39 @@ describe("ResourceBundle", () => {
     expect(failedCard.find(".copy-btn").exists()).toBe(false);
     expect(failedCard.find("script").exists()).toBe(false);
   });
+
+  it("shows a safe message for content safety blocks without exposing reason details", async () => {
+    const partialBundle: ResourceBundleType = {
+      ...mockBundle,
+      status: "PARTIAL",
+      artifacts: [
+        {
+          ...mockBundle.artifacts[0],
+          status: "FAILED",
+          body: "",
+          quality_score: 0,
+          quality_issues: ["ACTIVE_CONTENT_BLOCKED"],
+          error_code: "CONTENT_ARTIFACT_BLOCKED",
+          retryable: true,
+          safety: {
+            stage: "ARTIFACT",
+            decision: "BLOCK",
+            risk_level: "HIGH",
+            categories: ["ACTIVE_CONTENT_OR_UNSAFE_RENDERING"],
+            reason_codes: ["ACTIVE_CONTENT_BLOCKED"],
+            policy_version: "content-safety/v1",
+            reviewer_profile_id: "reviewer",
+            checked_at: "2026-07-17T00:00:00Z",
+          },
+        },
+        mockBundle.artifacts[1],
+      ],
+    };
+    const wrapper = mount(ResourceBundle, { props: { bundle: partialBundle } });
+    const blockedCard = wrapper.findAll(".resource-card")[0];
+    await blockedCard.find(".card-header").trigger("click");
+
+    expect(blockedCard.text()).toContain("内容未通过安全检查");
+    expect(blockedCard.text()).not.toContain("ACTIVE_CONTENT_BLOCKED");
+  });
 });

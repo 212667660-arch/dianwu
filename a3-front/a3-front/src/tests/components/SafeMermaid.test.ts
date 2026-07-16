@@ -78,4 +78,28 @@ describe("SafeMermaid", () => {
     expect(directive.find(".outline-fallback").exists()).toBe(true);
     expect(oversized.find(".outline-fallback").exists()).toBe(true);
   });
+
+  it("sanitizes unsafe nodes and attributes from rendered SVG", async () => {
+    mermaidRender.mockResolvedValue({
+      svg: '<svg onload="alert(1)"><foreignObject><div>bad</div></foreignObject><g id="safe"><text>ok</text></g></svg>',
+    });
+    const wrapper = mount(SafeMermaid, {
+      props: { content: "flowchart TD\nA-->B", outline: "- A\n- B" },
+    });
+
+    await flushPromises();
+
+    expect(wrapper.html()).not.toContain("onload");
+    expect(wrapper.html()).not.toContain("foreignObject");
+    expect(wrapper.text()).toContain("ok");
+  });
+
+  it("falls back when node or edge budgets are exceeded", () => {
+    const edges = Array.from({ length: 301 }, (_, index) => `N${index}-->N${index + 1}`).join(";");
+    const wrapper = mount(SafeMermaid, {
+      props: { content: `flowchart TD\n${edges}`, outline: "- fallback" },
+    });
+
+    expect(wrapper.find(".outline-fallback").exists()).toBe(true);
+  });
 });

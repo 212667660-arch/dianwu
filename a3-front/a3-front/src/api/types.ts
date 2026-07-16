@@ -23,6 +23,37 @@ export interface KnowledgeSearchResult { mode: 'keyword' | 'hybrid'; items: Arra
 
 export type ArtifactType = 'course_explanation' | 'mind_map' | 'question_bank' | 'extended_reading' | 'adaptive_practice'
 
+export type SafetyStage = 'REQUEST' | 'CONTEXT' | 'PLAN' | 'ARTIFACT' | 'RENDER'
+export type SafetyDecision = 'ALLOW' | 'REDACT' | 'REGENERATE' | 'BLOCK'
+export type SafetyRiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+export type SafetyRiskCategory =
+  | 'PROMPT_INJECTION'
+  | 'SECRET_OR_CREDENTIAL'
+  | 'PERSONAL_DATA'
+  | 'MINOR_SAFETY'
+  | 'SELF_HARM'
+  | 'VIOLENCE_OR_WEAPONS'
+  | 'ILLEGAL_WRONGDOING'
+  | 'CYBER_ABUSE'
+  | 'FRAUD_OR_DECEPTION'
+  | 'HATE_OR_HARASSMENT'
+  | 'DRUG_OR_DANGEROUS_EXPERIMENT'
+  | 'ACADEMIC_INTEGRITY'
+  | 'HIGH_STAKES_ADVICE'
+  | 'FABRICATED_OR_UNTRUSTED_CITATION'
+  | 'ACTIVE_CONTENT_OR_UNSAFE_RENDERING'
+
+export interface SafetyMetadata {
+  stage: SafetyStage
+  decision: SafetyDecision
+  risk_level: SafetyRiskLevel
+  categories: SafetyRiskCategory[]
+  reason_codes: string[]
+  policy_version: 'content-safety/v1'
+  reviewer_profile_id: string | null
+  checked_at: string
+}
+
 export type ResourceSelection =
   | { mode: 'bundle' }
   | { mode: 'single'; resourceType: ArtifactType }
@@ -38,6 +69,7 @@ export interface ResourceArtifact {
   quality_issues: string[]
   error_code: string | null
   retryable: boolean
+  safety?: SafetyMetadata | null
 }
 
 export interface ResourceBundle {

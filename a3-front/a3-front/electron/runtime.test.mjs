@@ -17,6 +17,15 @@ test('runtime source no longer contains the legacy runtime-info authorization he
   assert.doesNotMatch(runtimeSource, /canAccessRuntimeInfo/)
 })
 
+test('main renderer declares a restrictive content security policy', () => {
+  const indexHtml = fs.readFileSync(path.join(projectDir, 'index.html'), 'utf8')
+
+  assert.match(indexHtml, /script-src 'self'/)
+  assert.match(indexHtml, /object-src 'none'/)
+  assert.match(indexHtml, /base-uri 'none'/)
+  assert.match(indexHtml, /frame-src 'none'/)
+})
+
 test('only test mode can override Electron userData for isolated package verification', async () => {
   const { electronUserDataPath } = await loadRuntime()
   const appData = 'C:\\Users\\student\\AppData\\Roaming'
