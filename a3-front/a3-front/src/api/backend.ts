@@ -28,6 +28,9 @@ import type {
   PetSnapshot,
   PetTaskState,
   ProgressSnapshot,
+  ResourceBundle,
+  ResourceSelection,
+  ArtifactType,
   ReviewTask,
   SessionHistory,
   SessionModelPreference,
@@ -38,6 +41,19 @@ import type {
 function activeTransport(): BackendTransport {
   if (window.a3Desktop) return createDesktopTransport(window.a3Desktop)
   return createWebTransport()
+}
+
+function chatBody(sessionId: string, message: string, selection?: ResourceSelection) {
+  if (!selection) return { session_id: sessionId, message }
+  if (selection.mode === 'bundle') {
+    return { session_id: sessionId, message, resource_mode: 'bundle' as const }
+  }
+  return {
+    session_id: sessionId,
+    message,
+    resource_mode: 'single' as const,
+    resource_type: selection.resourceType,
+  }
 }
 
 export { parseSseBlock, readSseBody }
@@ -133,16 +149,22 @@ export const backendApi = {
       method: 'PUT', path: `/api/sessions/${encodeURIComponent(sessionId)}/model-preference`, body: input,
     })
   },
-  async chat(sessionId: string, message: string) {
+  async chat(sessionId: string, message: string, selection?: ResourceSelection) {
     return activeTransport().request<ChatResponse>({
-      method: 'POST', path: '/api/chat', body: { session_id: sessionId, message },
+      method: 'POST', path: '/api/chat', body: chatBody(sessionId, message, selection),
     })
   },
-  async streamChat(sessionId: string, message: string, onEvent: (event: StreamEvent) => void, signal?: AbortSignal) {
+  async streamChat(
+    sessionId: string,
+    message: string,
+    onEvent: (event: StreamEvent) => void,
+    signal?: AbortSignal,
+    selection?: ResourceSelection,
+  ) {
     return activeTransport().stream({
       method: 'POST',
       path: '/api/chat/stream',
-      body: { session_id: sessionId, message },
+      body: chatBody(sessionId, message, selection),
     }, onEvent, signal)
   },
   async cancelGeneration(generationId: string, sessionId: string) {
@@ -155,6 +177,13 @@ export const backendApi = {
   async session(sessionId: string) {
     return activeTransport().request<SessionHistory>({
       method: 'GET', path: `/api/sessions/${encodeURIComponent(sessionId)}`,
+    })
+  },
+  async retryResourceArtifact(bundleId: string, artifactType: ArtifactType, sessionId: string) {
+    return activeTransport().request<{ bundle: ResourceBundle }>({
+      method: 'POST',
+      path: `/api/resource-bundles/${encodeURIComponent(bundleId)}/artifacts/${artifactType}/retry`,
+      body: { session_id: sessionId },
     })
   },
   async progress(sessionId: string) {

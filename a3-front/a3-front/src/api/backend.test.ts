@@ -71,6 +71,79 @@ describe('SSE response parsing', () => {
   })
 })
 
+describe('resource bundle API contracts', () => {
+  it('sends bundle and single selections through chat and stream', async () => {
+    const request = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: { reply: '', phase: 'resource', state: 'PROFILED', profile_version: 1, cached: false, sources: [], knowledge_sources: [], bundle: null },
+    })
+    let streamHandler: ((message: any) => void) | undefined
+    const startStream = vi.fn((streamId: string, input: unknown) => {
+      queueMicrotask(() => streamHandler?.({ streamId, type: 'done' }))
+      return input
+    })
+    window.a3Desktop = {
+      request,
+      modelConfigTest: vi.fn(),
+      modelConfigSave: vi.fn(),
+      startStream,
+      cancelStream: vi.fn(),
+      onStreamEvent: vi.fn(handler => {
+        streamHandler = handler
+        return () => {}
+      }),
+      onBackendExit: vi.fn(() => () => {}),
+    }
+
+    await backendApi.chat('s1', '生成全部', { mode: 'bundle' })
+    await backendApi.streamChat(
+      's1',
+      '生成导图',
+      vi.fn(),
+      undefined,
+      { mode: 'single', resourceType: 'mind_map' },
+    )
+
+    expect(request).toHaveBeenCalledWith({
+      method: 'POST',
+      path: '/api/chat',
+      body: { session_id: 's1', message: '生成全部', resource_mode: 'bundle' },
+    })
+    expect(startStream.mock.calls[0][1]).toMatchObject({
+      method: 'POST',
+      path: '/api/chat/stream',
+      body: {
+        session_id: 's1',
+        message: '生成导图',
+        resource_mode: 'single',
+        resource_type: 'mind_map',
+      },
+    })
+  })
+
+  it('uses the fixed history and artifact retry routes', async () => {
+    const request = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, data: { session_id: 's1', messages: [], resources: [], resource_bundles: [] } })
+      .mockResolvedValueOnce({ ok: true, status: 200, data: { bundle: { bundle_id: 'b1' } } })
+    window.a3Desktop = {
+      request,
+      modelConfigTest: vi.fn(), modelConfigSave: vi.fn(),
+      startStream: vi.fn(), cancelStream: vi.fn(),
+      onStreamEvent: vi.fn(() => () => {}), onBackendExit: vi.fn(() => () => {}),
+    }
+
+    await backendApi.session('s1')
+    await backendApi.retryResourceArtifact('b1', 'mind_map', 's1')
+
+    expect(request).toHaveBeenNthCalledWith(2, {
+      method: 'POST',
+      path: '/api/resource-bundles/b1/artifacts/mind_map/retry',
+      body: { session_id: 's1' },
+    })
+  })
+})
+
 describe('model settings API', () => {
   it('uses fixed desktop bridge methods for testing and saving model settings', async () => {
     const modelConfigTest = vi.fn().mockResolvedValue({

@@ -168,7 +168,7 @@ test('rejects invalid renderer transport inputs and routes before contacting the
   }
 })
 
-test('keeps main-process authentication authoritative over renderer body lookalikes', async () => {
+test('rejects renderer authentication lookalikes before contacting the backend', async () => {
   let call
   const rendererToken = 'renderer-forged-token'
   const { event, proxy, runtime } = createContext({
@@ -182,6 +182,7 @@ test('keeps main-process authentication authoritative over renderer body lookali
     method: 'POST',
     path: '/api/chat',
     body: {
+      session_id: 'student_1',
       message: 'hello',
       token: rendererToken,
       headers: {
@@ -191,10 +192,11 @@ test('keeps main-process authentication authoritative over renderer body lookali
     },
   })
 
-  assert.deepEqual(result, { ok: true, status: 200, data: { accepted: true } })
-  assert.equal(call.options.headers['X-A3-Desktop-Token'], runtime.token)
-  assert.notEqual(call.options.headers['X-A3-Desktop-Token'], rendererToken)
-  assert.equal(call.options.headers.Authorization, undefined)
+  assert.equal(result.ok, false)
+  assert.equal(result.status, 400)
+  assert.equal(result.error.code, 'DESKTOP_REQUEST_DENIED')
+  assert.equal(call, undefined)
+  assert.notEqual(rendererToken, runtime.token)
 })
 
 test('retains structured backend error metadata from a 401 response', async () => {
@@ -416,7 +418,7 @@ test('redacts runtime and JSON-body secrets from fetch failure envelopes and log
     log: async (entry) => { logEntries.push(entry) },
   })
 
-  const result = await proxy.request(event, { method: 'POST', path: '/api/chat', body })
+  const result = await proxy.request(event, { method: 'POST', path: '/api/knowledge/search', body })
   const serialized = JSON.stringify({ result, logEntries })
 
   assert.deepEqual(result, {

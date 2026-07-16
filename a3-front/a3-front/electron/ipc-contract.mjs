@@ -1,5 +1,6 @@
 const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
 const GENERATION_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
+const BUNDLE_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
 const QUESTION_ID_PATTERN = /^[1-9]\d*$/
 const FORBIDDEN_TRANSPORT_FIELDS = ['headers', 'url', 'baseUrl', 'token']
 const REQUEST_FIELDS = new Set(['method', 'path', 'query', 'body'])
@@ -29,6 +30,10 @@ const PET_SCALE_VALUES = new Set([0.5, 0.75, 1, 1.25, 1.5])
 const PET_SPEED_VALUES = new Set([0.5, 0.75, 1, 1.25, 1.5, 2])
 const PET_VOLUME_VALUES = new Set([0, 0.25, 0.5, 0.75, 1])
 const PET_TASK_STATES = new Set(['idle', 'running', 'waiting', 'review', 'failed'])
+const CHAT_BODY_FIELDS = new Set(['session_id', 'message', 'resource_mode', 'resource_type'])
+const RESOURCE_MODES = new Set(['bundle', 'single'])
+const ARTIFACT_TYPES = new Set(['course_explanation', 'mind_map', 'question_bank', 'extended_reading', 'adaptive_practice'])
+const RETRY_BODY_FIELDS = new Set(['session_id'])
 
 export function desktopError(code, message, retryable = false, requestId) {
   return {
@@ -329,6 +334,17 @@ export function validateDesktopRequest(input, { stream = false } = {}) {
   const route = matchAllowedRoute(method, path, isStream)
   if (!route.ok) return route
 
+  let normalizedBody = input.body
+  if (route.kind === 'chat' || route.kind === 'chat-stream') {
+    const chatBody = validateChatBody(input.body)
+    if (!chatBody.ok) return chatBody
+    normalizedBody = chatBody.value
+  } else if (route.kind === 'artifact-retry') {
+    const retryBody = validateRetryBody(input.body)
+    if (!retryBody.ok) return retryBody
+    normalizedBody = retryBody.value
+  }
+
   if (route.kind === 'generation-cancel') {
     const queryKeys = Object.keys(queryResult.value)
     if (queryKeys.length === 0 || !Object.hasOwn(queryResult.value, 'session_id')) {
@@ -346,7 +362,7 @@ export function validateDesktopRequest(input, { stream = false } = {}) {
     method,
     path,
     query: queryResult.value,
-    body: input.body,
+    body: normalizedBody,
     stream: isStream,
   }
   Object.defineProperty(value, VALIDATED_REQUEST, { value: true })
@@ -478,6 +494,16 @@ function matchAllowedRoute(method, path, stream) {
     return { ok: true, kind: 'generation-cancel' }
   }
 
+  const artifactRetryMatch = /^\/api\/resource-bundles\/([^/]+)\/artifacts\/([^/]+)\/retry$/.exec(path)
+  if (
+    method === 'POST'
+    && artifactRetryMatch
+    && BUNDLE_ID_PATTERN.test(artifactRetryMatch[1])
+    && ARTIFACT_TYPES.has(artifactRetryMatch[2])
+  ) {
+    return { ok: true, kind: 'artifact-retry' }
+  }
+
   return denied('Request method or route is not allowed.')
 }
 
@@ -518,6 +544,45 @@ function validateBody(body) {
     return invalid('Request body must be JSON serializable.')
   }
   return invalid('Request JSON body exceeds the size limit.')
+}
+
+function validateChatBody(body) {
+  if (!isPlainObject(body)) return invalid('Chat body must be an object.')
+  for (const field of Object.keys(body)) {
+    if (!CHAT_BODY_FIELDS.has(field)) return denied('Chat body contains an unsupported field.')
+  }
+  const sessionId = normalizedString(body.session_id, 1, 64)
+  const message = normalizedString(body.message, 1, 8_000)
+  if (sessionId === null || !SESSION_ID_PATTERN.test(sessionId) || message === null) {
+    return invalid('Chat body is invalid.')
+  }
+  const mode = body.resource_mode
+  const type = body.resource_type
+  if (mode === undefined && type === undefined) {
+    return { ok: true, value: { session_id: sessionId, message } }
+  }
+  if (!RESOURCE_MODES.has(mode)) return invalid('Chat resource mode is invalid.')
+  if (mode === 'bundle') {
+    if (type !== undefined) return invalid('Bundle mode does not accept resource_type.')
+    return { ok: true, value: { session_id: sessionId, message, resource_mode: mode } }
+  }
+  if (!ARTIFACT_TYPES.has(type)) return invalid('Single mode resource_type is invalid.')
+  return {
+    ok: true,
+    value: { session_id: sessionId, message, resource_mode: mode, resource_type: type },
+  }
+}
+
+function validateRetryBody(body) {
+  if (!isPlainObject(body)) return invalid('Artifact retry body must be an object.')
+  for (const field of Object.keys(body)) {
+    if (!RETRY_BODY_FIELDS.has(field)) return denied('Artifact retry body contains an unsupported field.')
+  }
+  const sessionId = normalizedString(body.session_id, 1, 64)
+  if (sessionId === null || !SESSION_ID_PATTERN.test(sessionId)) {
+    return invalid('Artifact retry session_id is invalid.')
+  }
+  return { ok: true, value: { session_id: sessionId } }
 }
 
 function hasUnsafePathSyntax(path) {

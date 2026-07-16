@@ -21,6 +21,41 @@ export interface KnowledgeBinding { session_id: string; collection_ids: number[]
 export interface KnowledgeImportBatch { jobs: KnowledgeImportJob[] }
 export interface KnowledgeSearchResult { mode: 'keyword' | 'hybrid'; items: Array<{ chunk_id: number; document_id: number; document_name: string; text: string; heading_path: string; locator: KnowledgeLocator; score: number; retrieval_mode: 'keyword' | 'hybrid' }> }
 
+export type ArtifactType = 'course_explanation' | 'mind_map' | 'question_bank' | 'extended_reading' | 'adaptive_practice'
+
+export type ResourceSelection =
+  | { mode: 'bundle' }
+  | { mode: 'single'; resourceType: ArtifactType }
+
+export interface ResourceArtifact {
+  artifact_id: string
+  type: ArtifactType
+  title: string
+  status: 'SUCCEEDED' | 'FAILED' | 'CANCELLED'
+  body: string
+  type_specific_data: Record<string, unknown>
+  quality_score: number
+  quality_issues: string[]
+  error_code: string | null
+  retryable: boolean
+}
+
+export interface ResourceBundle {
+  bundle_id: string
+  protocol_version: 'learning-resource-bundle/v2'
+  topic: string
+  profile_version: number
+  learning_state_version: string
+  mode: 'bundle' | 'single'
+  status: 'COMPLETED' | 'PARTIAL' | 'FAILED' | 'CANCELLED'
+  requested_types: ArtifactType[]
+  artifacts: ResourceArtifact[]
+  aggregate_quality: number
+  created_at: string
+  knowledge_sources: KnowledgeSource[]
+  public_sources: Array<SourceItem & { reference_id: string }>
+}
+
 export interface ChatResponse {
   reply: string
   phase: 'diagnosis' | 'profile' | 'resource'
@@ -29,6 +64,7 @@ export interface ChatResponse {
   cached: boolean
   sources: SourceItem[]
   knowledge_sources: KnowledgeSource[]
+  bundle: ResourceBundle | null
 }
 
 export interface SessionMessage {
@@ -65,6 +101,7 @@ export interface SessionHistory {
   profile_text: string | null
   messages: SessionMessage[]
   resources: LearningResource[]
+  resource_bundles: ResourceBundle[]
 }
 
 export interface KnowledgePoint {
@@ -161,6 +198,27 @@ export interface StreamEvent {
   effective_reasoning_effort?: ReasoningEffort
   failover_used?: boolean
   can_continue_with_backup?: boolean
+  bundle_id?: string
+  topic?: string
+  requested_types?: ArtifactType[]
+  current_type?: ArtifactType
+  completed_count?: number
+  total_count?: number
+  artifact_id?: string
+  type?: ArtifactType
+  title?: string
+  body?: string
+  type_specific_data?: Record<string, unknown>
+  quality_score?: number
+  quality_issues?: string[]
+  error_code?: string | null
+  retryable?: boolean
+  artifacts?: ResourceArtifact[]
+  aggregate_quality?: number
+  mode?: 'bundle' | 'single'
+  protocol_version?: 'learning-resource-bundle/v2'
+  created_at?: string
+  public_sources?: Array<SourceItem & { reference_id: string }>
 }
 
 export interface ModelSettings {

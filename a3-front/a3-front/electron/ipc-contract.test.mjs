@@ -58,6 +58,56 @@ function expectRejected(input, options, code) {
   assert.equal(result.error.code, code)
 }
 
+test('chat body permits only fixed resource selection fields', () => {
+  const bundle = expectAccepted({
+    method: 'POST',
+    path: '/api/chat/stream',
+    body: { session_id: 's1', message: '生成', resource_mode: 'bundle' },
+  }, { stream: true })
+  assert.deepEqual(bundle.body, {
+    session_id: 's1', message: '生成', resource_mode: 'bundle',
+  })
+
+  const single = expectAccepted({
+    method: 'POST',
+    path: '/api/chat',
+    body: {
+      session_id: 's1', message: '生成导图',
+      resource_mode: 'single', resource_type: 'mind_map',
+    },
+  })
+  assert.deepEqual(single.body, {
+    session_id: 's1', message: '生成导图',
+    resource_mode: 'single', resource_type: 'mind_map',
+  })
+
+  for (const body of [
+    { session_id: 's1', message: 'x', resource_mode: 'single', resource_type: 'unknown' },
+    { session_id: 's1', message: 'x', resource_mode: 'single' },
+    { session_id: 's1', message: 'x', resource_mode: 'bundle', resource_type: 'mind_map' },
+  ]) {
+    expectRejected({ method: 'POST', path: '/api/chat', body }, undefined, 'DESKTOP_REQUEST_INVALID')
+  }
+  expectRejected({
+    method: 'POST', path: '/api/chat',
+    body: { session_id: 's1', message: 'x', model_profile: 'secret' },
+  }, undefined, 'DESKTOP_REQUEST_DENIED')
+})
+
+test('artifact retry route accepts only session ownership', () => {
+  const accepted = expectAccepted({
+    method: 'POST',
+    path: '/api/resource-bundles/bundle-1/artifacts/mind_map/retry',
+    body: { session_id: 's1' },
+  })
+  assert.deepEqual(accepted.body, { session_id: 's1' })
+  expectRejected({
+    method: 'POST',
+    path: '/api/resource-bundles/bundle-1/artifacts/mind_map/retry',
+    body: { session_id: 's1', model_profile: 'secret' },
+  }, undefined, 'DESKTOP_REQUEST_DENIED')
+})
+
 test('模型配置候选只接受固定字段并拒绝安全边界字段', () => {
   const accepted = validateModelConfigInput(validModelConfig)
   assert.equal(accepted.ok, true, JSON.stringify(accepted))
@@ -254,7 +304,7 @@ test('permits the streaming chat route only when stream mode is explicitly enabl
   )
 
   const value = expectAccepted(
-    { method: 'POST', path: '/api/chat/stream', body: { message: 'hello' } },
+    { method: 'POST', path: '/api/chat/stream', body: { session_id: 's1', message: 'hello' } },
     { stream: true },
   )
   assert.equal(value.stream, true)
@@ -263,7 +313,7 @@ test('permits the streaming chat route only when stream mode is explicitly enabl
 test('applies independent encoded-query and JSON-body byte limits', () => {
   expectAccepted({
     method: 'POST',
-    path: '/api/chat',
+    path: '/api/knowledge/search',
     query: { q: 'x'.repeat(65_534) },
     body: 'x'.repeat(65_534),
   })
@@ -273,7 +323,7 @@ test('applies independent encoded-query and JSON-body byte limits', () => {
     'DESKTOP_REQUEST_INVALID',
   )
   expectRejected(
-    { method: 'POST', path: '/api/chat', body: 'x'.repeat(65_535) },
+    { method: 'POST', path: '/api/knowledge/search', body: 'x'.repeat(65_535) },
     undefined,
     'DESKTOP_REQUEST_INVALID',
   )
@@ -291,11 +341,11 @@ test('rejects non-JSON body values while retaining valid absent and JSON bodies'
     )
   }
 
-  assert.equal(expectAccepted({ method: 'POST', path: '/api/chat' }).body, undefined)
-  assert.equal(expectAccepted({ method: 'POST', path: '/api/chat', body: undefined }).body, undefined)
-  assert.equal(expectAccepted({ method: 'POST', path: '/api/chat', body: null }).body, null)
+  assert.equal(expectAccepted({ method: 'POST', path: '/api/knowledge/search' }).body, undefined)
+  assert.equal(expectAccepted({ method: 'POST', path: '/api/knowledge/search', body: undefined }).body, undefined)
+  assert.equal(expectAccepted({ method: 'POST', path: '/api/knowledge/search', body: null }).body, null)
   assert.deepEqual(
-    expectAccepted({ method: 'POST', path: '/api/chat', body: { message: 'valid JSON' } }).body,
+    expectAccepted({ method: 'POST', path: '/api/knowledge/search', body: { message: 'valid JSON' } }).body,
     { message: 'valid JSON' },
   )
 })
@@ -338,8 +388,8 @@ test('accepts every whitelisted route and rejects a wrong method for each one', 
     { method: 'GET', path: '/health/live' },
     { method: 'GET', path: '/health/ready' },
     { method: 'GET', path: '/api/settings/model' },
-    { method: 'POST', path: '/api/chat' },
-    { method: 'POST', path: '/api/chat/stream', options: { stream: true } },
+    { method: 'POST', path: '/api/chat', body: { session_id: 's1', message: 'hello' } },
+    { method: 'POST', path: '/api/chat/stream', body: { session_id: 's1', message: 'hello' }, options: { stream: true } },
     { method: 'GET', path: '/api/knowledge/status' },
     { method: 'GET', path: '/api/knowledge/collections' },
     { method: 'POST', path: '/api/knowledge/collections' },
@@ -364,6 +414,7 @@ test('accepts every whitelisted route and rejects a wrong method for each one', 
     { method: 'POST', path: '/api/sessions/session_42/rediagnose' },
     { method: 'POST', path: '/api/sessions/session_42/questions/7/attempts' },
     { method: 'DELETE', path: '/api/generations/generation_123', query: { session_id: 'session_42' } },
+    { method: 'POST', path: '/api/resource-bundles/bundle-1/artifacts/mind_map/retry', body: { session_id: 'session_42' } },
   ]
 
   for (const route of routes) {
@@ -371,6 +422,7 @@ test('accepts every whitelisted route and rejects a wrong method for each one', 
       method: route.method,
       path: route.path,
       ...(route.query === undefined ? {} : { query: route.query }),
+      ...(route.body === undefined ? {} : { body: route.body }),
     }
     expectAccepted(request, route.options)
     expectRejected({ ...request, method: 'PATCH' }, route.options, 'DESKTOP_REQUEST_DENIED')
@@ -549,7 +601,7 @@ test('buildBackendUrl revalidates marked requests after route, query, or body ta
   ]
 
   for (const mutate of mutations) {
-    const value = expectAccepted({ method: 'POST', path: '/api/chat', body: { message: 'valid' } })
+    const value = expectAccepted({ method: 'POST', path: '/api/chat', body: { session_id: 's1', message: 'valid' } })
     mutate(value)
     assert.throws(
       () => buildBackendUrl('http://127.0.0.1:8123/', value),
