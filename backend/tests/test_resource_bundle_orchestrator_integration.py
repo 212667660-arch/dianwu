@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,7 +16,7 @@ from backend.protocols.v2.models import (
     ResourceArtifact,
     ResourceBundle,
 )
-from backend.routers import resource
+from backend.routers import chat, resource
 from backend.services import db as repo
 from backend.services import orchestrator
 from backend.services.resource_db import save_bundle
@@ -71,7 +72,12 @@ def test_nonstream_chat_returns_typed_bundle(monkeypatch) -> None:
         async def generate(self, _db, _session_id, _message, _selection, **_kwargs):
             return bundle
 
+    class AllowSafety:
+        async def gate_request(self, text, **_kwargs):
+            return SimpleNamespace(safe_text=text, metadata=None)
+
     monkeypatch.setattr(orchestrator, "resource_bundle_service", FakeService())
+    monkeypatch.setattr(chat, "content_safety_service", AllowSafety())
     response = client.post("/api/chat", json={
         "session_id": session_id,
         "message": "生成资源包",

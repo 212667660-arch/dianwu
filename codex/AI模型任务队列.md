@@ -2,7 +2,7 @@
 
 > 项目：基于大模型的个性化资源生成与学习多智能体系统开发
 > 队列位置：E:\软件杯\codex\AI模型任务队列.md
-> 当前模型批次：Sol（S-022 已完成；S-026 分层内容安全过滤实施中）
+> 当前模型批次：Sol（S-022 已完成；S-026 已实现并完成打包验收，最终代码审查中）
 > 最后审视日期：2026-07-17
 
 ## 一、使用规则
@@ -78,7 +78,7 @@
 | S-021 | P0 | 完成 | 对照软件杯官网文件审计当前项目是否具备参赛提交条件 | S-020、比赛官网最新通知 | 官网资格与赛题要求、提交物清单、当前产物逐项对照、阻塞项与提交前行动清单 |
 | S-023 | P1 | 完成 | Code Quality Review: v2 Protocol Models (models.py, __init__.py, tests) | 无 | 审查报告 → 本轮对话 |
 | S-022 | P0 | 完成 | 实现至少五类个性化学习资源生成与桌面端展示 | S-021、现有 learning-resource/v1 | 已完成严格 v2 协议、五类质量门、会话归属持久化、真实进度与取消、统一服务、HTTP/SSE/历史/独立重试、桌面端类型契约、安全渲染和 SmartTutor 闭环；完整验收见 S-022-REMEDIATION-COMPLETE |
-| S-026 | P0 | 进行中 | 实现系统级分层内容安全过滤 | S-022 端到端修复与安全渲染基线；用户已批准完成 S-022 后自动继续 | `content-safety/v1`、输入/上下文/输出安全门、Reviewer Agent、可信引用、SafeMarkdown/SafeMermaid、安全审计与完整回归 |
+| S-026 | P0 | 待验证 | 实现系统级分层内容安全过滤 | S-022 端到端修复与安全渲染基线；用户已批准完成 S-022 后自动继续 | 已完成 `content-safety/v1`、输入/上下文/输出安全门、Reviewer Agent、可信引用、安全审计、SafeMarkdown/SafeMermaid/CSP 与完整打包验收；等待最终代码审查结论 |
 | S-027 | P0 | 完成 | 对照 `2026-07-16-deepseek-write.md` 核对五类资源架构、代码与可优化项 | S-022 当前实现；S-026 保持暂停 | 已确认独立管线、五类 specialist、v2 协议和组件骨架存在，但桌面端未接入、会话状态不恢复、取消/进度/重试未闭环、知识与来源未传入、bundle/artifact 持久化断层、类型门槛和渲染安全不足；证据与优化顺序见本轮对话 |
 | T-033 | P0 | 完成 | 实现多 API 配置、高可用切换、模型选择与推理强度控制 | S-017 | 版本 2 加密多配置、原子热应用与回滚、3 次/2 配置预算、Retry-After/熔断、普通与流式故障边界、全局/学习空间模型和思考强度选择、兼容迁移、真实桌面 5/5 连接及完整打包回归 |
 | T-035 | P0 | 完成 | 实现本地知识库与安全文件导入 | S-018 | 已完成文件选择/拖放、七格式与限额校验、隔离解析 worker、SQLite 元数据/FTS/可选语义索引、可追溯引用、学习助手绑定与隐私模式、删除/重建、恶意文件/性能/打包测试及 Windows 桌面安装包验收 |
@@ -305,6 +305,7 @@ S-016 已完成：本仓库提交身份已设置为 `Wei kb <212667660@qq.com>`�
 | 2026-07-17 | S-026-TASK6 | Sol | backend/services/content_safety/service.py、backend/services/resource_bundle/pipeline.py、service.py、specialists/*.py、backend/tests/test_content_safety_bundle_integration.py、test_resource_bundle_service.py、test_resource_bundle_specialists.py、test_streaming.py、codex/AI模型任务队列.md | 五类资源请求在 Planner 前执行确定性+Reviewer 安全门；Planner 输出可审核；每个结构化 artifact 在事件和持久化前执行结构、引用及语义审核。`REGENERATE` 只携带原 Brief 和受控原因码且最多一次，仍失败转 `FAILED + CONTENT_ARTIFACT_BLOCKED` 空正文；单产物阻断保留安全兄弟并形成 PARTIAL，Reviewer 不可用使用稳定可重试错误。资源/编排/流式回归 135 passed。 |
 | 2026-07-17 | S-026-TASK7 | Sol | backend/services/content_safety/service.py、backend/services/orchestrator.py、backend/routers/chat.py、profile.py、resource.py、backend/services/db.py、backend/tests/test_content_safety_entrypoints.py、test_orchestrator.py、test_streaming.py、test_resource_bundle_api.py、test_web_resource_integration.py、codex/AI模型任务队列.md | 聊天、SSE、独立画像和旧资源端点均在首次模型调用/消息落库前执行请求门；PII 只以脱敏值进入历史、检索、模型与缓存键。诊断、画像和旧资源输出审核通过后才保存和发布，SSE 不再发送 provisional 原文，流中断也不泄露 partial；未知引用不再静默清除。定向入口/协议/API 回归 43 passed。 |
 | 2026-07-17 | S-026-TASK8 | Sol | a3-front/a3-front/src/api/types.ts、src/components/learning/SafeMermaid.vue、ResourceCard.vue、src/tests/components/SafeMermaid.test.ts、ResourceBundle.test.ts、index.html、electron/runtime.test.mjs、codex/AI模型任务队列.md | 前端补齐 `content-safety/v1` 类型；安全阻断只显示稳定中文文案，不暴露内部 reason codes。SafeMermaid 增加 200 节点/300 边预算，并用 SVG 标签/属性/URL 白名单清洗 Mermaid 结果后才写入 DOM；主 renderer 增加 `script-src 'self'`、`object-src 'none'`、`base-uri 'none'`、`frame-src 'none'` CSP。组件 16 passed，Electron runtime 18 passed。 |
+| 2026-07-17 | S-026-TASK9-ACCEPTANCE | Sol | backend、a3-front/a3-front、codex/AI模型任务队列.md | 完整隔离验收：后端 457 passed、7 skipped；Electron/Node 141 passed；Vitest 112 passed；`vue-tsc -b` 与 `npm run build:desktop` 通过。PyInstaller 包验证 7 passed、3 deselected；打包 `api.exe` 实测凭据请求返回 422 `CONTENT_SECRET_DETECTED`，响应和会话历史均无密钥且消息为空。`npm run desktop:pack` 成功；unpacked 桌面测试模式退出码 0，backend ready/stop 日志完整、零残留；包内后端 SHA-256 与最新构建一致，当前 SmartTutor 资源包含安全阻断文案、bundle/artifact/retry。仅真实语义 Reviewer 效果仍需用户配置加密模型 profile 后进行人工样例复核。 |
 | 2026-07-17 | S-022-TASK4 | Sol | backend/services/resource_bundle/pipeline.py、backend/tests/test_resource_bundle_pipeline.py、codex/AI模型任务队列.md | 完成资源计划、进度、单产物和最终 bundle 事件；取消会中断正在运行的模型调用，失败只暴露稳定错误码并在 finally 清理取消注册。定向验证 11 passed；五类资源回归 110 passed。 |
 | 2026-07-17 | S-022-TASK5 | Sol | backend/services/resource_bundle/service.py、backend/services/resource_bundle/pipeline.py、backend/services/orchestrator.py、backend/routers/resource.py、backend/services/db.py、backend/tests/test_resource_bundle_service.py、backend/tests/test_resource_bundle_pipeline.py、backend/tests/test_orchestrator.py、backend/tests/test_resource_bundle_api.py、codex/AI模型任务队列.md | 新增统一 ResourceBundleService，接入画像、学习状态、知识库和公开来源，隔离 v1 缓存，成功/失败均恢复 PROFILED；HTTP 与 SSE 共用服务，SSE 转发真实 Pipeline 事件，取消按 generation_id 联动 bundle。定向 16 passed；资源、编排与流式回归 126 passed；compileall 通过。 |
 | 2026-07-17 | S-022-TASK6 | Sol | backend/models/schemas.py、backend/routers/chat.py、backend/routers/resource.py、backend/routers/sessions.py、backend/services/orchestrator.py、backend/services/resource_bundle/service.py、backend/tests/test_resource_bundle_service.py、backend/tests/test_resource_bundle_orchestrator_integration.py、codex/AI模型任务队列.md | 完成严格 ChatRequest/BundleResponse/RetryArtifactRequest；普通 chat 返回 typed bundle，SSE 逐产物并恢复 PROFILED，会话历史返回 owned resource_bundles，失败产物可在原 bundle 内独立重试且不留下临时 bundle。定向 27 passed；完整后端 403 passed、7 skipped；compileall 通过。 |

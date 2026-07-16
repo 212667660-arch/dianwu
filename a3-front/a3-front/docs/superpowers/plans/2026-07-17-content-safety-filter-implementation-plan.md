@@ -1,5 +1,7 @@
 # Content Safety Filter Implementation Plan
 
+> 状态：9 个任务均已实施并通过完整回归与打包验收，等待最终代码审查。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 为诊断、画像、普通资源和五类资源建立统一的 `content-safety/v1` 输入、上下文、输出、持久化与渲染安全闭环，并保持 v1/v2 历史数据兼容。
