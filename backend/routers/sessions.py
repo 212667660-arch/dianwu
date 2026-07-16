@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.errors import ResourceNotFoundError
 from backend.services import db as repo
+from backend.services.resource_db import list_bundles
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 SessionPath = Annotated[str, Path(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")]
@@ -71,6 +72,7 @@ async def get_session_history(session_id: SessionPath, db: Session = Depends(get
             }
             for item in session.resources
         ],
+        "resource_bundles": list_bundles(db, session_id),
     }
 
 

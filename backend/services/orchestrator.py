@@ -16,7 +16,7 @@ from backend.knowledge.context import (
     sanitize_citations,
 )
 from backend.protocols import parse_profile, parse_resource, serialize_profile, serialize_resource
-from backend.protocols.v2.models import ArtifactType
+from backend.protocols.v2.models import ArtifactType, ResourceBundle
 from backend.services import db as repo
 from backend.services import learning
 from backend.services.model_runtime import RoutedStreamEvent, RuntimeSelection, model_runtime_router
@@ -140,6 +140,7 @@ class ChatResult:
         cached: bool = False,
         sources: list[dict[str, str]] | None = None,
         knowledge_sources: list[dict[str, object]] | None = None,
+        bundle: ResourceBundle | None = None,
     ) -> None:
         self.reply = reply
         self.phase = phase
@@ -148,6 +149,7 @@ class ChatResult:
         self.cached = cached
         self.sources = sources or []
         self.knowledge_sources = knowledge_sources or []
+        self.bundle = bundle
 
 
 def _is_rediagnose(message: str) -> bool:
@@ -231,12 +233,30 @@ async def _diagnosis_reply(db: Session, session, session_id: str, complete):
     return True, ""
 
 
-async def handle_message(db: Session, session_id: str, message: str) -> ChatResult:
+async def handle_message(
+    db: Session,
+    session_id: str,
+    message: str,
+    resource_mode: str | None = None,
+    resource_type: str | None = None,
+) -> ChatResult:
     async with _workflow_lock(session_id):
-        return await _handle_message(db, session_id, message)
+        return await _handle_message(
+            db,
+            session_id,
+            message,
+            resource_mode=resource_mode,
+            resource_type=resource_type,
+        )
 
 
-async def _handle_message(db: Session, session_id: str, message: str) -> ChatResult:
+async def _handle_message(
+    db: Session,
+    session_id: str,
+    message: str,
+    resource_mode: str | None = None,
+    resource_type: str | None = None,
+) -> ChatResult:
     repo.append_message(db, session_id, "user", message)
     session = repo.get_or_create_session(db, session_id)
     complete = _selected_complete(_runtime_selection(db, session_id))
@@ -260,6 +280,29 @@ async def _handle_message(db: Session, session_id: str, message: str) -> ChatRes
         if session.state == repo.SessionState.PROFILED.value:
             if not session.profile_text:
                 raise DomainStateError("会话画像缺失，请重新诊断。", "PROFILE_MISSING")
+            if resource_mode:
+                selection = (
+                    ResourceSelection.single(ArtifactType(resource_type))
+                    if resource_mode == "single" and resource_type is not None
+                    else ResourceSelection.bundle()
+                )
+                bundle = await resource_bundle_service.generate(
+                    db,
+                    session_id,
+                    message,
+                    selection,
+                    generation_id=uuid.uuid4().hex,
+                )
+                bundle_text = json.dumps(bundle.model_dump(mode="json"), ensure_ascii=False)
+                repo.append_message(db, session_id, "assistant", bundle_text)
+                stable_session = repo.get_session(db, session_id)
+                return ChatResult(
+                    "",
+                    "resource",
+                    stable_session.state if stable_session is not None else repo.SessionState.PROFILED.value,
+                    session.profile_version,
+                    bundle=bundle,
+                )
             knowledge_context = retrieve_knowledge_context(
                 db,
                 session_id,

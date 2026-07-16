@@ -12,11 +12,19 @@ SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 class ChatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     message: str = Field(min_length=1, max_length=8000)
     session_id: str = Field(default="default", min_length=1, max_length=64)
     request_id: Optional[str] = Field(default=None, max_length=64)
     resource_mode: Optional[Literal["bundle", "single"]] = Field(default=None)
-    resource_type: Optional[str] = Field(default=None, max_length=32)
+    resource_type: Optional[Literal[
+        "course_explanation",
+        "mind_map",
+        "question_bank",
+        "extended_reading",
+        "adaptive_practice",
+    ]] = Field(default=None)
 
     @field_validator("message")
     @classmethod
@@ -47,6 +55,8 @@ class ChatRequest(BaseModel):
     def validate_resource_mode_requires_type(self):
         if self.resource_mode == "single" and not self.resource_type:
             raise ValueError("resource_type is required when resource_mode is single")
+        if self.resource_mode != "single" and self.resource_type is not None:
+            raise ValueError("resource_type is only accepted when resource_mode is single")
         return self
 
 
@@ -117,7 +127,73 @@ class KnowledgeSourceResult(BaseModel):
     retrieval_mode: Literal["keyword", "hybrid"]
 
 
+class ResourceArtifactResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    artifact_id: str
+    type: Literal[
+        "course_explanation",
+        "mind_map",
+        "question_bank",
+        "extended_reading",
+        "adaptive_practice",
+    ]
+    title: str
+    status: Literal["SUCCEEDED", "FAILED", "CANCELLED"]
+    body: str = ""
+    type_specific_data: dict[str, Any] = Field(default_factory=dict)
+    quality_score: float = 0.0
+    quality_issues: list[str] = Field(default_factory=list)
+    error_code: Optional[str] = None
+    retryable: bool = False
+
+
+class BundleResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    bundle_id: str
+    protocol_version: Literal["learning-resource-bundle/v2"]
+    topic: str
+    profile_version: int
+    learning_state_version: str
+    mode: Literal["bundle", "single"]
+    status: Literal["COMPLETED", "PARTIAL", "FAILED", "CANCELLED"]
+    requested_types: list[Literal[
+        "course_explanation",
+        "mind_map",
+        "question_bank",
+        "extended_reading",
+        "adaptive_practice",
+    ]]
+    artifacts: list[ResourceArtifactResponse] = Field(default_factory=list)
+    aggregate_quality: float = 0.0
+    created_at: str
+    knowledge_sources: list[dict[str, Any]] = Field(default_factory=list)
+    public_sources: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class RetryArtifactRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: str = Field(min_length=1, max_length=64)
+
+    @field_validator("session_id")
+    @classmethod
+    def validate_retry_session_id(cls, value: str) -> str:
+        if not SESSION_ID_PATTERN.fullmatch(value):
+            raise ValueError("invalid session_id")
+        return value
+
+
+class RetryArtifactResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    bundle: BundleResponse
+
+
 class ChatResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     reply: str
     phase: Literal["diagnosis", "profile", "resource"]
     state: str
@@ -125,6 +201,7 @@ class ChatResponse(BaseModel):
     cached: bool = False
     sources: list[WebSearchResult] = Field(default_factory=list)
     knowledge_sources: list[KnowledgeSourceResult] = Field(default_factory=list)
+    bundle: Optional[BundleResponse] = None
 
 
 class WebSearchResponse(BaseModel):
@@ -414,14 +491,3 @@ class SessionModelPreferenceResponse(SessionModelPreferenceUpdate):
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 
     session_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
-from typing import Any
-
-
-class BundleResponse(BaseModel):
-    bundle_id: str
-    protocol_version: str
-    topic: str
-    status: str
-    artifacts: list[dict[str, Any]] = Field(default_factory=list)
-    aggregate_quality: float = 0.0
-

@@ -10,14 +10,25 @@ from typing import Any, Awaitable, Callable
 
 from sqlalchemy.orm import Session
 
-from backend.errors import AppError, DomainStateError, UnexpectedBackendError
+from backend.errors import (
+    AppError,
+    DomainStateError,
+    ResourceNotFoundError,
+    UnexpectedBackendError,
+)
 from backend.knowledge.context import (
     KnowledgeContext,
     citation_payload,
     retrieve_knowledge_context,
 )
 from backend.protocols import parse_profile
-from backend.protocols.v2.models import ArtifactType, ResourceBundle, ResourceMode
+from backend.protocols.v2.models import (
+    ArtifactStatus,
+    ArtifactType,
+    ResourceArtifact,
+    ResourceBundle,
+    ResourceMode,
+)
 from backend.services import db as repo
 from backend.services import learning
 from backend.services.model_runtime import RuntimeSelection, model_runtime_router
@@ -26,8 +37,13 @@ from backend.services.resource_bundle.cancel import (
     cleanup_cancellation,
     get_or_create_cancellation,
 )
+from backend.services.resource_bundle.aggregator import aggregate_bundle
 from backend.services.resource_bundle.pipeline import BundlePipeline
-from backend.services.resource_db import save_bundle
+from backend.services.resource_db import (
+    delete_bundle,
+    get_bundle_for_session,
+    save_bundle,
+)
 from backend.services.web_search import search_web_optional
 
 
@@ -125,6 +141,39 @@ def _runtime_selection(db: Session, session_id: str) -> RuntimeSelection:
         model_id=preference.model_id,
         reasoning_effort=preference.reasoning_effort or "auto",
         failover_enabled=failover,
+    )
+
+
+def _bundle_from_record(record: dict[str, Any]) -> ResourceBundle:
+    artifacts = [
+        ResourceArtifact(
+            artifact_id=str(item["artifact_id"]),
+            type=ArtifactType(str(item["type"])),
+            title=str(item["title"]),
+            status=ArtifactStatus(str(item["status"])),
+            body=str(item.get("body") or ""),
+            type_specific_data=dict(item.get("type_specific_data") or {}),
+            quality_score=float(item.get("quality_score") or 0),
+            quality_issues=list(item.get("quality_issues") or []),
+            error_code=item.get("error_code"),
+            retryable=bool(item.get("retryable")),
+        )
+        for item in record.get("artifacts", [])
+    ]
+    return ResourceBundle(
+        bundle_id=str(record["bundle_id"]),
+        protocol_version=str(record["protocol_version"]),
+        topic=str(record["topic"]),
+        profile_version=int(record["profile_version"]),
+        learning_state_version=str(record["learning_state_version"]),
+        mode=str(record["mode"]),
+        status=str(record["status"]),
+        requested_types=[ArtifactType(item) for item in record.get("requested_types", [])],
+        artifacts=artifacts,
+        aggregate_quality=float(record.get("aggregate_quality") or 0),
+        created_at=str(record["created_at"]),
+        knowledge_sources=list(record.get("knowledge_sources") or []),
+        public_sources=list(record.get("public_sources") or []),
     )
 
 
@@ -251,6 +300,67 @@ class ResourceBundleService:
             db.rollback()
             repo.fail_to_stable_state(db, session, "BUNDLE_FAILED")
             raise UnexpectedBackendError() from exc
+
+    async def retry_artifact(
+        self,
+        db: Session,
+        session_id: str,
+        bundle_id: str,
+        artifact_type: ArtifactType,
+        *,
+        generation_id: str,
+    ) -> ResourceBundle:
+        record = get_bundle_for_session(db, session_id, bundle_id)
+        if record is None:
+            raise ResourceNotFoundError(
+                "RESOURCE_BUNDLE_NOT_FOUND",
+                "资源包不存在或不属于当前会话。",
+            )
+        original = _bundle_from_record(record)
+        target = next(
+            (artifact for artifact in original.artifacts if artifact.type == artifact_type),
+            None,
+        )
+        if target is None:
+            raise ResourceNotFoundError(
+                "RESOURCE_ARTIFACT_NOT_FOUND",
+                "资源产物不存在。",
+            )
+        if target.status == ArtifactStatus.SUCCEEDED or not target.retryable:
+            raise DomainStateError(
+                "当前资源产物不可重试。",
+                "RESOURCE_ARTIFACT_NOT_RETRYABLE",
+            )
+
+        temporary = await self.generate(
+            db,
+            session_id,
+            f"重新生成{original.topic}的{artifact_type.value}",
+            ResourceSelection.single(artifact_type),
+            generation_id=generation_id,
+        )
+        generated = temporary.artifacts[0]
+        replacement = generated.model_copy(update={"artifact_id": target.artifact_id})
+        artifacts = [
+            replacement if artifact.type == artifact_type else artifact
+            for artifact in original.artifacts
+        ]
+        updated = aggregate_bundle(
+            original.bundle_id,
+            original.topic,
+            original.profile_version,
+            original.learning_state_version,
+            original.mode.value,
+            original.requested_types,
+            artifacts,
+            False,
+            original.knowledge_sources,
+            original.public_sources,
+        ).model_copy(update={"created_at": original.created_at})
+        delete_bundle(db, temporary.bundle_id)
+        save_bundle(db, session_id, updated)
+        repo.commit(db)
+        return updated
 
 
 resource_bundle_service = ResourceBundleService()

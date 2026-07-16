@@ -19,6 +19,7 @@ from backend.services import db as repo
 from backend.services.resource_bundle.pipeline import PipelineResult
 from backend.services.resource_bundle.service import ResourceBundleService, ResourceSelection
 from backend.services.resource_db import get_bundle_for_session
+from backend.services.resource_db import list_bundles, save_bundle
 
 
 def _session_id(prefix: str) -> str:
@@ -187,6 +188,97 @@ async def test_v2_request_never_reads_v1_resource_cache(monkeypatch) -> None:
 
     assert result.protocol_version == "learning-resource-bundle/v2"
     assert len(pipeline.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_retry_replaces_only_failed_artifact_in_original_bundle() -> None:
+    session_id = _session_id("bundle-service-retry")
+    _seed_profiled_session(session_id)
+    bundle_id = f"bundle-original-{uuid.uuid4().hex[:8]}"
+    course = ResourceArtifact(
+        artifact_id=f"{bundle_id}-course",
+        type=ArtifactType.COURSE_EXPLANATION,
+        title="原课程讲解",
+        status=ArtifactStatus.SUCCEEDED,
+        body="原讲解内容",
+        quality_score=88,
+    )
+    mind_map = ResourceArtifact(
+        artifact_id=f"{bundle_id}-mind",
+        type=ArtifactType.MIND_MAP,
+        title="导图",
+        status=ArtifactStatus.FAILED,
+        body="",
+        quality_score=0,
+        quality_issues=["MERMAID_PARSE_ERROR"],
+        error_code="MERMAID_PARSE_ERROR",
+        retryable=True,
+    )
+    original = ResourceBundle(
+        bundle_id=bundle_id,
+        topic="一次函数",
+        profile_version=3,
+        learning_state_version="7",
+        mode="bundle",
+        status=BundleStatus.PARTIAL,
+        requested_types=[ArtifactType.COURSE_EXPLANATION, ArtifactType.MIND_MAP],
+        artifacts=[course, mind_map],
+        aggregate_quality=44,
+        created_at="2026-07-17T00:00:00Z",
+    )
+    retry_artifact = ResourceArtifact(
+        artifact_id="temporary-mind",
+        type=ArtifactType.MIND_MAP,
+        title="新导图",
+        status=ArtifactStatus.SUCCEEDED,
+        body="flowchart TD\nA-->B",
+        quality_score=92,
+    )
+
+    class RetryPipeline(CapturingPipeline):
+        async def run(self, **kwargs):
+            self.calls.append(kwargs)
+            temporary = ResourceBundle(
+                bundle_id=str(kwargs["bundle_id"]),
+                topic="一次函数",
+                profile_version=3,
+                learning_state_version="7",
+                mode="single",
+                status=BundleStatus.COMPLETED,
+                requested_types=[ArtifactType.MIND_MAP],
+                artifacts=[retry_artifact],
+                aggregate_quality=92,
+                created_at="2026-07-17T01:00:00Z",
+            )
+            return PipelineResult(bundle=temporary)
+
+    service = ResourceBundleService(
+        pipeline=RetryPipeline(),
+        learning_context_provider=lambda _db, _sid: "",
+        knowledge_retriever=lambda _db, _sid, _query: KnowledgeContext.empty(),
+        web_search=lambda _message: _async_value([]),
+    )
+    with SessionLocal() as db:
+        save_bundle(db, session_id, original)
+        repo.commit(db)
+        updated = await service.retry_artifact(
+            db,
+            session_id,
+            bundle_id,
+            ArtifactType.MIND_MAP,
+            generation_id="retry-generation",
+        )
+        stored = get_bundle_for_session(db, session_id, bundle_id)
+        history = list_bundles(db, session_id)
+
+    artifacts = {artifact.type: artifact for artifact in updated.artifacts}
+    assert artifacts[ArtifactType.COURSE_EXPLANATION].body == "原讲解内容"
+    assert artifacts[ArtifactType.COURSE_EXPLANATION].artifact_id == course.artifact_id
+    assert artifacts[ArtifactType.MIND_MAP].body == "flowchart TD\nA-->B"
+    assert artifacts[ArtifactType.MIND_MAP].artifact_id == mind_map.artifact_id
+    assert updated.status == BundleStatus.COMPLETED
+    assert stored is not None and stored["status"] == "COMPLETED"
+    assert [item["bundle_id"] for item in history] == [bundle_id]
 
 
 async def _async_value(value):

@@ -1,10 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Path
 import uuid
 
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models.schemas import BundleResponse, ChatRequest, ResourceRequest, ResourceResponse
+from backend.models.schemas import (
+    BundleResponse,
+    ChatRequest,
+    ResourceRequest,
+    ResourceResponse,
+    RetryArtifactRequest,
+    RetryArtifactResponse,
+)
 from backend.protocols.v2.models import ArtifactType
 from backend.services.model_runtime import RuntimeSelection, model_runtime_router
 from backend.services.resource_agent import generate_resources
@@ -15,6 +24,10 @@ from backend.services.resource_bundle.service import (
 from backend.services.web_search import search_web_optional
 
 router = APIRouter(prefix="/api", tags=["resource"])
+BundleIdPath = Annotated[
+    str,
+    Path(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"),
+]
 
 
 @router.post("/resource", response_model=ResourceResponse)
@@ -58,11 +71,26 @@ async def resource_bundle_endpoint(req: ChatRequest, db: Session = Depends(get_d
         generation_id=uuid.uuid4().hex,
     )
 
-    return BundleResponse(
-        bundle_id=bundle.bundle_id,
-        protocol_version=bundle.protocol_version,
-        topic=bundle.topic,
-        status=bundle.status.value,
-        artifacts=[a.model_dump() for a in bundle.artifacts],
-        aggregate_quality=bundle.aggregate_quality,
+    return BundleResponse.model_validate(bundle.model_dump(mode="json"))
+
+
+@router.post(
+    "/resource-bundles/{bundle_id}/artifacts/{artifact_type}/retry",
+    response_model=RetryArtifactResponse,
+)
+async def retry_resource_artifact(
+    bundle_id: BundleIdPath,
+    artifact_type: ArtifactType,
+    req: RetryArtifactRequest,
+    db: Session = Depends(get_db),
+) -> RetryArtifactResponse:
+    bundle = await resource_bundle_service.retry_artifact(
+        db,
+        req.session_id,
+        bundle_id,
+        artifact_type,
+        generation_id=uuid.uuid4().hex,
+    )
+    return RetryArtifactResponse(
+        bundle=BundleResponse.model_validate(bundle.model_dump(mode="json"))
     )

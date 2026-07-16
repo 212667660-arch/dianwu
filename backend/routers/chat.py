@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.errors import ResourceNotFoundError
-from backend.models.schemas import ChatRequest, ChatResponse
+from backend.models.schemas import BundleResponse, ChatRequest, ChatResponse
 from backend.services.orchestrator import cancel_generation, handle_message, stream_message
 
 router = APIRouter(prefix="/api", tags=["chat"])
@@ -17,7 +17,16 @@ router = APIRouter(prefix="/api", tags=["chat"])
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)) -> ChatResponse:
-    result = await handle_message(db, req.session_id, req.message)
+    if req.resource_mode:
+        result = await handle_message(
+            db,
+            req.session_id,
+            req.message,
+            resource_mode=req.resource_mode,
+            resource_type=req.resource_type,
+        )
+    else:
+        result = await handle_message(db, req.session_id, req.message)
     return ChatResponse(
         reply=result.reply,
         phase=result.phase,
@@ -26,6 +35,11 @@ async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)) -> Chat
         cached=result.cached,
         sources=result.sources,
         knowledge_sources=result.knowledge_sources,
+        bundle=(
+            BundleResponse.model_validate(result.bundle.model_dump(mode="json"))
+            if result.bundle is not None
+            else None
+        ),
     )
 
 
