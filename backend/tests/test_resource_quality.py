@@ -50,10 +50,16 @@ def test_resource_agent_repairs_output_below_quality_gate(monkeypatch) -> None:
     class Gateway:
         def __init__(self) -> None:
             self.calls = 0
+            self.messages = []
 
         async def complete(self, messages, temperature=0.4):
             self.calls += 1
-            return LOW_QUALITY_RESOURCE if self.calls == 1 else GOOD_RESOURCE
+            self.messages.append(messages)
+            return (
+                LOW_QUALITY_RESOURCE + "\nREJECTED-RAW-MARKER"
+                if self.calls == 1
+                else GOOD_RESOURCE
+            )
 
     gateway = Gateway()
     output = asyncio.run(resource_agent.generate_resources(
@@ -63,6 +69,8 @@ def test_resource_agent_repairs_output_below_quality_gate(monkeypatch) -> None:
     ))
     assert gateway.calls == 2
     assert parse_resource(output).topic == "一次函数"
+    assert "REJECTED-RAW-MARKER" not in str(gateway.messages[1])
+    assert "PROTOCOL_END_MISSING" in str(gateway.messages[1])
 
 
 def test_resource_prompt_marks_local_knowledge_as_untrusted_data() -> None:

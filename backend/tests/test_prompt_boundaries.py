@@ -1,4 +1,7 @@
+import pytest
+
 from backend.protocols.v2.models import ArtifactType, ResourceBrief, SubjectCategory
+from backend.services import profile_agent
 from backend.services.profile_agent import build_diagnosis_messages, build_profile_messages
 from backend.services.resource_agent import build_resource_messages
 from backend.services.resource_bundle.planner import build_planner_messages
@@ -6,6 +9,7 @@ from backend.services.resource_bundle.specialists.base import (
     build_specialist_messages,
     specialist_for_type,
 )
+from backend.tests.test_web_resource_integration import PROFILE
 
 
 MARKER = "DYN-UNTRUSTED"
@@ -111,3 +115,18 @@ def test_planner_user_payload_has_a_bounded_total_size():
     )
 
     assert len(_user_text(messages)) <= 31000
+
+
+@pytest.mark.asyncio
+async def test_profile_repair_does_not_reinject_rejected_model_output():
+    calls = []
+
+    async def complete(messages, temperature=0.2):
+        calls.append(messages)
+        return "REJECTED-PROFILE-RAW" if len(calls) == 1 else PROFILE
+
+    await profile_agent.generate_profile(["学习数学"], complete=complete)
+
+    assert len(calls) == 2
+    assert "REJECTED-PROFILE-RAW" not in str(calls[1])
+    assert "PROTOCOL_HEADER_MISSING" in str(calls[1])

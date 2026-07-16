@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from backend.errors import (
     AppError,
+    ContentSafetyInputBlockedError,
     DomainStateError,
     ResourceNotFoundError,
     UnexpectedBackendError,
@@ -32,7 +33,7 @@ from backend.protocols.v2.models import (
 from backend.services import db as repo
 from backend.services import learning
 from backend.services.model_runtime import RuntimeSelection, model_runtime_router
-from backend.services.content_safety.models import SafetyMetadata
+from backend.services.content_safety.models import SafetyAction, SafetyMetadata
 from backend.services.content_safety.service import content_safety_service
 from backend.services.resource_bundle.cancel import (
     cancel_bundle,
@@ -99,25 +100,73 @@ def build_knowledge_retrieval_query(db: Session, session_id: str, message: str) 
     return " ".join(dict.fromkeys(part.strip() for part in parts if part.strip()))
 
 
-def knowledge_source_payload(context: KnowledgeContext) -> list[dict[str, object]]:
-    return [citation_payload(citation) for citation in context.citations]
+def _filter_context(safety_service: Any, text: str):
+    filter_context = getattr(
+        safety_service,
+        "filter_context",
+        content_safety_service.filter_context,
+    )
+    return filter_context(text)
+
+
+def knowledge_source_payload(
+    context: KnowledgeContext,
+    safety_service: Any = content_safety_service,
+) -> list[dict[str, object]]:
+    payloads: list[dict[str, object]] = []
+    for citation in context.citations:
+        payload = citation_payload(citation)
+        payload["document_name"] = _filter_context(
+            safety_service,
+            str(payload["document_name"]),
+        ).safe_text
+        payload["locator_label"] = _filter_context(
+            safety_service,
+            str(payload["locator_label"]),
+        ).safe_text
+        locator = dict(payload.get("locator") or {})
+        if "sheet_name" in locator:
+            locator["sheet_name"] = _filter_context(
+                safety_service,
+                str(locator["sheet_name"]),
+            ).safe_text
+        payload["locator"] = locator
+        payloads.append(payload)
+    return payloads
 
 
 def _public_source_context(
     sources: list[Any],
     *,
     first_reference: int,
+    safety_service: Any = content_safety_service,
 ) -> tuple[str, list[dict[str, object]]]:
     if not sources:
         return "", []
     sections = ['<public_sources untrusted="true">']
     snapshots: list[dict[str, object]] = []
-    for offset, source in enumerate(sources[:8]):
-        reference_id = f"资料{first_reference + offset}"
+    for source in sources[:8]:
         source_data = source.model_dump() if hasattr(source, "model_dump") else dict(source)
-        title = str(source_data.get("title") or "公开资料")[:300]
-        snippet = str(source_data.get("snippet") or "")[:1000]
+        title_result = _filter_context(
+            safety_service,
+            str(source_data.get("title") or "公开资料")[:300],
+        )
+        snippet_result = _filter_context(
+            safety_service,
+            str(source_data.get("snippet") or "")[:1000],
+        )
         url = str(source_data.get("url") or "")[:2048]
+        url_result = _filter_context(safety_service, url)
+        if (
+            not title_result.safe_text
+            or (source_data.get("snippet") and not snippet_result.safe_text)
+            or url_result.metadata.decision != SafetyAction.ALLOW
+            or url_result.safe_text != url
+        ):
+            continue
+        reference_id = f"资料{first_reference + len(snapshots)}"
+        title = title_result.safe_text
+        snippet = snippet_result.safe_text
         sections.append(
             f"[{reference_id}] {html.escape(title, quote=False)}\n"
             f"{html.escape(snippet, quote=False)}"
@@ -232,9 +281,16 @@ class ResourceBundleService:
             raise DomainStateError("会话画像缺失，请重新诊断。", "PROFILE_MISSING")
 
         try:
+            runtime_selection = _runtime_selection(db, session_id)
+            safe_profile_text = _filter_context(
+                self._safety_service,
+                session.profile_text,
+            ).safe_text
+            if not safe_profile_text:
+                raise ContentSafetyInputBlockedError()
             subject_category = "other"
             try:
-                subject_category = parse_profile(session.profile_text).subject or "other"
+                subject_category = parse_profile(safe_profile_text).subject or "other"
             except Exception:
                 logger.info("Profile subject unavailable for bundle generation")
             if request_safety is None:
@@ -242,17 +298,41 @@ class ResourceBundleService:
                     message,
                     intent=message,
                     subject_category=subject_category,
+                    generation_profile_id=(
+                        model_runtime_router.generation_candidate_id(runtime_selection)
+                    ),
+                    request_id=generation_id,
+                    session_tag=session_id,
                 )
             safe_message = request_safety.safe_text
             repo.begin_generation(db, session)
-            learning_context = self._learning_context_provider(db, session_id)
+            learning_context = _filter_context(
+                self._safety_service,
+                self._learning_context_provider(db, session_id),
+            ).safe_text
             query = build_knowledge_retrieval_query(db, session_id, safe_message)
             knowledge_context = self._knowledge_retriever(db, session_id, query)
-            knowledge_sources = knowledge_source_payload(knowledge_context)
+            safe_knowledge = _filter_context(
+                self._safety_service,
+                knowledge_context.prompt,
+            )
+            if safe_knowledge.safe_text:
+                knowledge_context = KnowledgeContext(
+                    prompt=safe_knowledge.safe_text,
+                    citations=knowledge_context.citations,
+                    retrieval_mode=knowledge_context.retrieval_mode,
+                )
+            else:
+                knowledge_context = KnowledgeContext.empty()
+            knowledge_sources = knowledge_source_payload(
+                knowledge_context,
+                self._safety_service,
+            )
             public_results = await self._web_search(safe_message)
             public_context, public_sources = _public_source_context(
                 public_results,
                 first_reference=len(knowledge_sources) + 1,
+                safety_service=self._safety_service,
             )
             prompt_context = "\n\n".join(
                 item for item in (knowledge_context.prompt, public_context) if item
@@ -282,7 +362,7 @@ class ResourceBundleService:
                     bundle_id=bundle_id,
                     mode=selection.mode.value,
                     single_type=selection.resource_type,
-                    profile_text=session.profile_text,
+                    profile_text=safe_profile_text,
                     learning_context=learning_context,
                     knowledge_context=prompt_context,
                     user_request=safe_message,
@@ -292,6 +372,7 @@ class ResourceBundleService:
                     learning_state_version=str(session.learning_state_version),
                     knowledge_sources=knowledge_sources,
                     public_sources=public_sources,
+                    audit_session_tag=session_id,
                     on_event=on_event,
                 )
             finally:

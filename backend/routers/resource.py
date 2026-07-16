@@ -6,6 +6,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
+from backend.errors import ContentCitationNotAllowedError
 from backend.models.schemas import (
     BundleResponse,
     ChatRequest,
@@ -16,7 +17,8 @@ from backend.models.schemas import (
 )
 from backend.protocols.v2.models import ArtifactType
 from backend.services.model_runtime import RuntimeSelection, model_runtime_router
-from backend.services.content_safety.models import SafetyStage
+from backend.services.content_safety.citations import validate_citations
+from backend.services.content_safety.models import SafetyAction, SafetyStage
 from backend.services.content_safety.service import content_safety_service
 from backend.services.resource_agent import generate_resources
 from backend.services.resource_bundle.service import (
@@ -32,33 +34,80 @@ BundleIdPath = Annotated[
 ]
 
 
+def _safe_web_sources(sources):
+    safe_sources = []
+    for source in sources:
+        title = content_safety_service.filter_context(source.title)
+        snippet = content_safety_service.filter_context(source.snippet)
+        url = content_safety_service.filter_context(source.url)
+        if (
+            not title.safe_text
+            or (source.snippet and not snippet.safe_text)
+            or url.metadata.decision != SafetyAction.ALLOW
+            or url.safe_text != source.url
+        ):
+            continue
+        safe_sources.append(source.model_copy(update={
+            "title": title.safe_text,
+            "snippet": snippet.safe_text,
+            "url": url.safe_text,
+        }))
+    return safe_sources
+
+
 @router.post("/resource", response_model=ResourceResponse)
 async def resource_endpoint(req: ResourceRequest) -> ResourceResponse:
+    request_id = uuid.uuid4().hex
+    selection = RuntimeSelection()
+    expected_generation_profile_id = model_runtime_router.generation_candidate_id(selection)
     safe_profile = await content_safety_service.gate_request(
         req.profile_text,
         intent="读取学习者画像",
         subject_category="other",
+        generation_profile_id=expected_generation_profile_id,
+        request_id=request_id,
+        session_tag="standalone-resource",
     )
     safe_request = await content_safety_service.gate_request(
         req.message,
         intent=req.message,
         subject_category="other",
+        generation_profile_id=expected_generation_profile_id,
+        request_id=request_id,
+        session_tag="standalone-resource",
     )
-    sources = await search_web_optional(safe_request.safe_text) if req.use_web_search else []
+    sources = (
+        _safe_web_sources(await search_web_optional(safe_request.safe_text))
+        if req.use_web_search
+        else []
+    )
+    source_payload = [
+        {
+            **source.model_dump(),
+            "reference_id": f"资料{index}",
+        }
+        for index, source in enumerate(sources, 1)
+    ]
     generation_profile_id = None
 
     async def complete(messages, temperature=0.2):
         nonlocal generation_profile_id
-        completion = await model_runtime_router.complete(RuntimeSelection(), messages, temperature)
+        completion = await model_runtime_router.complete(selection, messages, temperature)
         generation_profile_id = completion.profile_id
         return completion.text
 
     resource_text = await generate_resources(
         safe_profile.safe_text,
         safe_request.safe_text,
-        [item.model_dump() for item in sources],
+        source_payload,
         complete=complete,
     )
+    citation_decision = validate_citations(
+        resource_text,
+        allowed={str(item["reference_id"]) for item in source_payload},
+    )
+    if not citation_decision.allowed:
+        raise ContentCitationNotAllowedError()
     reviewed = await content_safety_service.review_text(
         resource_text,
         stage=SafetyStage.ARTIFACT,
@@ -66,6 +115,8 @@ async def resource_endpoint(req: ResourceRequest) -> ResourceResponse:
         subject_category="other",
         artifact_type="learning-resource/v1",
         generation_profile_id=generation_profile_id,
+        request_id=request_id,
+        session_tag="standalone-resource",
     )
     return ResourceResponse(
         resource_text=reviewed.safe_text,

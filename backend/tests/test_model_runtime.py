@@ -85,6 +85,90 @@ def test_reviewer_candidates_prefer_a_different_enabled_profile() -> None:
     asyncio.run(exercise())
 
 
+def test_complete_calls_share_global_two_request_limit() -> None:
+    async def exercise() -> None:
+        entered_two = asyncio.Event()
+        release = asyncio.Event()
+
+        class ConcurrentGateway(ScriptedGateway):
+            def __init__(self) -> None:
+                super().__init__()
+                self.active = 0
+                self.max_active = 0
+
+            async def complete(self, *args, **kwargs) -> str:
+                self.active += 1
+                self.max_active = max(self.max_active, self.active)
+                if self.active >= 2:
+                    entered_two.set()
+                try:
+                    await release.wait()
+                    return "OK"
+                finally:
+                    self.active -= 1
+
+        gateway = ConcurrentGateway()
+        router = ModelRuntimeRouter(gateway_factory=lambda _value: gateway)
+        await router.apply_snapshot(snapshot(profile("primary")))
+        tasks = [
+            asyncio.create_task(router.complete(
+                selection(),
+                [{"role": "user", "content": str(index)}],
+            ))
+            for index in range(3)
+        ]
+
+        await entered_two.wait()
+        await asyncio.sleep(0)
+        assert gateway.max_active == 2
+        release.set()
+        await asyncio.gather(*tasks)
+
+    asyncio.run(exercise())
+
+
+def test_stream_calls_hold_global_slot_for_stream_lifetime() -> None:
+    async def exercise() -> None:
+        entered_two = asyncio.Event()
+        release = asyncio.Event()
+
+        class ConcurrentStreamGateway(ScriptedGateway):
+            def __init__(self) -> None:
+                super().__init__()
+                self.active = 0
+                self.max_active = 0
+
+            async def stream(self, *args, **kwargs):
+                self.active += 1
+                self.max_active = max(self.max_active, self.active)
+                if self.active >= 2:
+                    entered_two.set()
+                try:
+                    await release.wait()
+                    yield "OK"
+                finally:
+                    self.active -= 1
+
+        gateway = ConcurrentStreamGateway()
+        router = ModelRuntimeRouter(gateway_factory=lambda _value: gateway)
+        await router.apply_snapshot(snapshot(profile("primary")))
+
+        async def consume(index: int):
+            return [event async for event in router.stream(
+                selection(),
+                [{"role": "user", "content": str(index)}],
+            )]
+
+        tasks = [asyncio.create_task(consume(index)) for index in range(3)]
+        await entered_two.wait()
+        await asyncio.sleep(0)
+        assert gateway.max_active == 2
+        release.set()
+        await asyncio.gather(*tasks)
+
+    asyncio.run(exercise())
+
+
 def test_retryable_primary_failure_uses_backup_once() -> None:
     async def exercise() -> None:
         gateways = {

@@ -31,7 +31,10 @@ class PolicyDecision(BaseModel):
 _PROMPT_INJECTION_PATTERNS = (
     re.compile(r"(?:忽略|无视|覆盖|绕过).{0,20}(?:系统|提示|规则|指令)"),
     re.compile(r"(?:你现在是|现在扮演).{0,20}(?:系统|开发者|无限制|不受限)"),
-    re.compile(r"ignore\s+(?:all\s+|the\s+)?(?:previous|above|system)\s+instructions?", re.IGNORECASE),
+    re.compile(
+        r"ignore\s+(?:all\s+|the\s+)?(?:(?:previous|above)(?:\s+system)?|system)\s+instructions?",
+        re.IGNORECASE,
+    ),
     re.compile(r"(?:reveal|print|output).{0,20}(?:system prompt|secret|api key)", re.IGNORECASE),
 )
 

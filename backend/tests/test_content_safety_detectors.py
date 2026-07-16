@@ -1,3 +1,5 @@
+import pytest
+
 from backend.services.content_safety.detectors import (
     detect_structures,
     redact_personal_data,
@@ -21,6 +23,25 @@ def test_common_api_key_shape_is_detected_without_echoing_secret():
 
     assert result.has(RiskCategory.SECRET_OR_CREDENTIAL)
     assert secret not in result.model_dump_json()
+
+
+@pytest.mark.parametrize(
+    "secret",
+    [
+        "ghp_abcdefghijklmnopqrstuvwxyz0123456789",
+        "github_pat_11AA0abcdefghijklmnopqrstuvwxyz_0123456789ABCDEFGH",
+        "xoxb-123456789012-123456789012-abcdefghijklmnopqrstuvwx",
+        "AIzaSyA1234567890abcdefghijklmnopqrstuv",
+        "sk_live_abcdefghijklmnopqrstuvwxyz123456",
+        "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature123456",
+        'api_key="abcdefghijklmnopqrstuvwxyz123456"',
+    ],
+)
+def test_known_high_confidence_credentials_are_detected(secret):
+    result = detect_structures(secret)
+
+    assert result.has(RiskCategory.SECRET_OR_CREDENTIAL)
+    assert result.blocking is True
 
 
 def test_phone_email_and_identity_number_are_redacted():

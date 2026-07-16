@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
 
@@ -6,6 +7,12 @@ from backend.database import SessionLocal, init_db
 from backend.main import app
 from backend.services import db as repo
 from backend.services import learning
+from backend.services.content_safety.models import (
+    RiskLevel,
+    SafetyAction,
+    SafetyMetadata,
+    SafetyStage,
+)
 from backend.tests.error_assertions import assert_error
 
 PROFILE = """【协议:learner-profile/v1】
@@ -47,7 +54,20 @@ def _seed_learning_session() -> tuple[str, int, int]:
         repo.set_state(db, session, repo.SessionState.PROFILE_READY)
         repo.save_profile(db, session, PROFILE)
         repo.begin_generation(db, session)
-        resource = repo.complete_generation(db, session, "一次函数", "生成练习", RESOURCE, session.profile_version)
+        resource = repo.complete_generation(
+            db,
+            session,
+            "一次函数",
+            "生成练习",
+            RESOURCE,
+            session.profile_version,
+            safety_metadata=SafetyMetadata(
+                stage=SafetyStage.ARTIFACT,
+                decision=SafetyAction.ALLOW,
+                risk_level=RiskLevel.LOW,
+                checked_at=datetime.now(timezone.utc).isoformat(),
+            ),
+        )
         return session_id, resource.id, resource.questions[0].id
     finally:
         db.close()

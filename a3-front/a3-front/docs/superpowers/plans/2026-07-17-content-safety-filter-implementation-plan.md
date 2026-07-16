@@ -1,6 +1,6 @@
 # Content Safety Filter Implementation Plan
 
-> 状态：9 个任务均已实施并通过完整回归与打包验收，等待最终代码审查。
+> 状态：9 个任务、审查修复与最终代码审查均已完成；完整回归、独立后端包和 unpacked 桌面验收通过。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

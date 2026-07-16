@@ -47,9 +47,8 @@ def build_profile_messages(history: Sequence[str], profile_version: int) -> list
     ]
 
 
-async def _repair(messages: list[dict[str, str]], invalid: str, error: ProtocolValidationError, complete: CompleteCallable) -> str:
+async def _repair(messages: list[dict[str, str]], _invalid: str, error: ProtocolValidationError, complete: CompleteCallable) -> str:
     return await complete(messages + [
-        {"role": "assistant", "content": invalid},
         {"role": "user", "content": f"上一次输出不符合协议，错误代码为 {error.code}。请仅修复格式后重新输出完整协议，不要解释。"},
     ])
 

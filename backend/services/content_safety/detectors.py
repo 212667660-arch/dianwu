@@ -46,9 +46,35 @@ _SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         re.compile(r"\b(?:akia|asia)[a-z0-9]{16}\b", re.IGNORECASE),
     ),
     (
+        "SECRET_GITHUB_TOKEN",
+        re.compile(
+            r"\b(?:gh[pousr]_[a-z0-9]{36}|github_pat_[a-z0-9_]{20,})\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "SECRET_SLACK_TOKEN",
+        re.compile(r"\bxox[baprs]-[a-z0-9-]{20,}\b", re.IGNORECASE),
+    ),
+    (
+        "SECRET_GOOGLE_API_KEY",
+        re.compile(r"\baiza[a-z0-9_-]{30,}\b", re.IGNORECASE),
+    ),
+    (
+        "SECRET_STRIPE_LIVE_KEY",
+        re.compile(r"\b(?:sk|rk)_live_[a-z0-9]{20,}\b", re.IGNORECASE),
+    ),
+    (
+        "SECRET_JSON_WEB_TOKEN",
+        re.compile(
+            r"\beyj[a-z0-9_-]{8,}\.[a-z0-9_-]{8,}\.[a-z0-9_-]{8,}\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
         "SECRET_ASSIGNMENT",
         re.compile(
-            r"\b(?:api[_ -]?key|access[_ -]?token|client[_ -]?secret|password)\s*[:=]\s*[a-z0-9._~+/=-]{12,}",
+            r"\b(?:api[_ -]?key|access[_ -]?token|client[_ -]?secret|password)\s*[:=]\s*[\"']?[a-z0-9._~+/=-]{12,}[\"']?",
             re.IGNORECASE,
         ),
     ),

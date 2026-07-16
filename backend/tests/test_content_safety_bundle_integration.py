@@ -19,6 +19,7 @@ from backend.services.content_safety.models import (
     SafetyMetadata,
     SafetyStage,
 )
+from backend.services.content_safety.service import ContentSafetyService
 from backend.services.resource_bundle.pipeline import BundlePipeline
 from backend.services.resource_bundle.service import ResourceBundleService, ResourceSelection
 from backend.services.resource_db import get_bundle_for_session
@@ -63,6 +64,13 @@ flowchart TD
 ## 大纲
 - 测试
   - 结果"""
+
+PII_MERMAID_OUT = """## Mermaid
+flowchart TD
+  A[联系 13800138000] --> B[学习]
+## 大纲
+- 联系 13800138000
+  - 学习"""
 
 QB_OUT = """## 基础
 题目1：测试
@@ -122,6 +130,33 @@ class AllowSafety:
             artifact=safe,
             metadata=safe.safety,
             reason_codes=[],
+        )
+
+
+class AuditCapturingSafety(AllowSafety):
+    def __init__(self) -> None:
+        self.plan_kwargs: list[dict[str, object]] = []
+        self.artifact_kwargs: list[dict[str, object]] = []
+
+    async def review_plan(self, _plan_text, **kwargs):
+        self.plan_kwargs.append(kwargs)
+        return await super().review_plan(_plan_text, **kwargs)
+
+    async def review_artifact(self, artifact, **kwargs):
+        self.artifact_kwargs.append(kwargs)
+        return await super().review_artifact(artifact, **kwargs)
+
+
+class AllowReviewer:
+    async def review(self, *, candidate, generation_profile_id=None, context):
+        return SimpleNamespace(
+            metadata=SafetyMetadata(
+                stage=context.stage,
+                decision=SafetyAction.ALLOW,
+                risk_level=RiskLevel.LOW,
+                reviewer_profile_id="reviewer",
+                checked_at=datetime.now(timezone.utc).isoformat(),
+            )
         )
 
 
@@ -235,6 +270,37 @@ async def test_regenerate_happens_once_without_reinjecting_rejected_output():
 
 
 @pytest.mark.asyncio
+async def test_bundle_reviews_use_bundle_and_session_audit_identifiers():
+    session_id = f"safety-audit-{uuid.uuid4().hex[:8]}"
+    seed_profiled_session(session_id)
+    safety = AuditCapturingSafety()
+    service = ResourceBundleService(
+        pipeline=BundlePipeline(
+            gateway=ScriptedGateway(completions=[PLAN_OUT, SAFE_COURSE]),
+            safety_service=safety,
+        ),
+        safety_service=safety,
+        learning_context_provider=lambda _db, _sid: "",
+        knowledge_retriever=lambda _db, _sid, _query: KnowledgeContext.empty(),
+        web_search=lambda _message: async_value([]),
+    )
+
+    with SessionLocal() as db:
+        bundle = await service.generate(
+            db,
+            session_id,
+            "生成课程讲解",
+            ResourceSelection.single(ArtifactType.COURSE_EXPLANATION),
+            generation_id="audit-generation",
+        )
+
+    assert safety.plan_kwargs[0]["request_id"] == bundle.bundle_id
+    assert safety.plan_kwargs[0]["session_tag"] == session_id
+    assert safety.artifact_kwargs[0]["request_id"] == bundle.bundle_id
+    assert safety.artifact_kwargs[0]["session_tag"] == session_id
+
+
+@pytest.mark.asyncio
 async def test_blocked_artifact_is_not_emitted_and_safe_siblings_form_partial_bundle():
     gateway = ScriptedGateway(completions=[
         PLAN_OUT,
@@ -273,6 +339,44 @@ async def test_blocked_artifact_is_not_emitted_and_safe_siblings_form_partial_bu
     assert blocked.retryable is True
     assert any(artifact.status == ArtifactStatus.SUCCEEDED for artifact in result.bundle.artifacts)
     assert all("UNSAFE-ORIGINAL" not in json.dumps(event, ensure_ascii=False) for event in events)
+
+
+@pytest.mark.asyncio
+async def test_mind_map_type_data_is_redacted_before_sse_and_persistence():
+    session_id = f"safety-mind-map-{uuid.uuid4().hex[:8]}"
+    seed_profiled_session(session_id)
+    safety = ContentSafetyService(reviewer=AllowReviewer())
+    pipeline = BundlePipeline(
+        gateway=ScriptedGateway(completions=[PLAN_OUT, PII_MERMAID_OUT]),
+        safety_service=safety,
+    )
+    events: list[dict[str, object]] = []
+    service = ResourceBundleService(
+        pipeline=pipeline,
+        safety_service=safety,
+        learning_context_provider=lambda _db, _sid: "",
+        knowledge_retriever=lambda _db, _sid, _query: KnowledgeContext.empty(),
+        web_search=lambda _message: async_value([]),
+    )
+
+    with SessionLocal() as db:
+        bundle = await service.generate(
+            db,
+            session_id,
+            "生成思维导图",
+            ResourceSelection.single(ArtifactType.MIND_MAP),
+            generation_id="mind-map-redaction",
+            on_event=events.append,
+        )
+        stored = get_bundle_for_session(db, session_id, bundle.bundle_id)
+
+    artifact = bundle.artifacts[0]
+    assert "13800138000" not in artifact.body
+    assert "13800138000" not in str(artifact.type_specific_data)
+    assert "13800138000" not in json.dumps(events, ensure_ascii=False)
+    assert stored is not None
+    assert "13800138000" not in json.dumps(stored, ensure_ascii=False)
+    assert "[手机号已隐藏]" in artifact.type_specific_data["outline"]
 
 
 async def async_value(value):

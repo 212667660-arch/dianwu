@@ -12,7 +12,6 @@ from backend.errors import AppError, SafetyReviewUnavailableError
 from backend.protocols.v2.models import (
     ArtifactStatus, ArtifactType, BundleStatus, ResourceArtifact, ResourceBundle,
 )
-from backend.services.content_safety.concurrency import model_call_slot
 from backend.services.content_safety.models import (
     RiskLevel,
     SafetyAction,
@@ -145,8 +144,7 @@ async def _complete_or_cancel(gateway, messages, temperature, cancellation) -> C
         raise BundleCancelled()
 
     async def _complete():
-        async with model_call_slot():
-            return await gateway.complete(messages, temperature=temperature)
+        return await gateway.complete(messages, temperature=temperature)
 
     model_task = asyncio.create_task(_complete())
     cancel_task = asyncio.create_task(cancellation.event.wait())
@@ -188,6 +186,7 @@ class BundlePipeline:
         profile_version: int, learning_state_version: str,
         knowledge_sources: list[dict[str, object]] | None = None,
         public_sources: list[dict[str, object]] | None = None,
+        audit_session_tag: str = "",
         on_event=None,
     ) -> PipelineResult:
         cancellation = get_or_create_cancellation(bundle_id)
@@ -209,6 +208,8 @@ class BundlePipeline:
                         intent=user_request,
                         subject_category=brief.subject_category.value,
                         generation_profile_id=plan_completion.profile_id,
+                        request_id=bundle_id,
+                        session_tag=audit_session_tag or bundle_id,
                     )
             except BundleCancelled:
                 artifacts = [_cancelled_artifact(bundle_id, item) for item in requested_types]
@@ -290,6 +291,8 @@ class BundlePipeline:
                                     intent=user_request,
                                     subject_category=brief.subject_category.value,
                                     generation_profile_id=completion.profile_id,
+                                    request_id=bundle_id,
+                                    session_tag=audit_session_tag or bundle_id,
                                 )
                                 if review.action in {SafetyAction.ALLOW, SafetyAction.REDACT}:
                                     result = SpecialistResult(
@@ -332,6 +335,8 @@ class BundlePipeline:
                                             intent=user_request,
                                             subject_category=brief.subject_category.value,
                                             generation_profile_id=repaired_completion.profile_id,
+                                            request_id=bundle_id,
+                                            session_tag=audit_session_tag or bundle_id,
                                         )
                                     else:
                                         second_review = None

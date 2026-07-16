@@ -19,6 +19,7 @@ from backend.errors import (
     ModelRuntimeApplyFailedError,
 )
 from backend.models.schemas import ModelConnectionTestResponse, ModelDefinition, ModelProfileSecret, ModelRuntimeSnapshotInput, ModelSettingsResponse
+from backend.services.content_safety.concurrency import model_call_slot
 from backend.services.llm_service import ModelGateway
 from backend.services.model_capabilities import ReasoningEffort, effective_effort, reasoning_payload
 from backend.services.model_resilience import AttemptBudget, CircuitBreaker, RetryClass, classify_error
@@ -223,6 +224,19 @@ class ModelRuntimeRouter:
             ] + [generation_profile_id]
         return tuple(enabled)
 
+    def generation_candidate_id(
+        self,
+        selection: RuntimeSelection,
+    ) -> str | None:
+        snapshot = self._snapshot
+        if not snapshot.profiles:
+            return None
+        try:
+            candidates = self._candidate_ids(snapshot, selection)
+        except Exception:
+            return None
+        return candidates[0] if candidates else None
+
     def legacy_model_settings(self) -> ModelSettingsResponse | None:
         snapshot = self._snapshot
         profile_id = snapshot.value.default_profile_id
@@ -329,6 +343,19 @@ class ModelRuntimeRouter:
         messages: list[dict[str, str]],
         temperature: float = 0.2,
     ) -> RoutedCompletion:
+        async with model_call_slot():
+            return await self._complete_within_slot(
+                selection,
+                messages,
+                temperature,
+            )
+
+    async def _complete_within_slot(
+        self,
+        selection: RuntimeSelection,
+        messages: list[dict[str, str]],
+        temperature: float = 0.2,
+    ) -> RoutedCompletion:
         async with self._lease() as snapshot:
             candidates = self._candidate_ids(snapshot, selection)
             first_profile_id = candidates[0]
@@ -395,6 +422,20 @@ class ModelRuntimeRouter:
         raise ModelFailoverExhaustedError()
 
     async def stream(
+        self,
+        selection: RuntimeSelection,
+        messages: list[dict[str, str]],
+        temperature: float = 0.2,
+    ):
+        async with model_call_slot():
+            async for event in self._stream_within_slot(
+                selection,
+                messages,
+                temperature,
+            ):
+                yield event
+
+    async def _stream_within_slot(
         self,
         selection: RuntimeSelection,
         messages: list[dict[str, str]],

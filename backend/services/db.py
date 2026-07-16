@@ -547,7 +547,7 @@ def find_cached_resource(db: Session, session: ChatSession, request_message: str
     if ttl_seconds <= 0:
         return None
     cutoff = datetime.utcnow() - timedelta(seconds=ttl_seconds)
-    return (
+    candidates = (
         db.query(Resource)
         .filter(
             Resource.session_id == session.session_id,
@@ -557,10 +557,22 @@ def find_cached_resource(db: Session, session: ChatSession, request_message: str
             Resource.knowledge_sources_json == "[]",
             Resource.status == "COMPLETED",
             Resource.created_at >= cutoff,
+            Resource.safety_json.is_not(None),
         )
         .order_by(Resource.created_at.desc())
-        .first()
+        .limit(20)
+        .all()
     )
+    from backend.services.content_safety.models import SafetyAction, SafetyMetadata
+
+    for candidate in candidates:
+        try:
+            metadata = SafetyMetadata.model_validate_json(candidate.safety_json)
+        except (TypeError, ValueError):
+            continue
+        if metadata.decision in {SafetyAction.ALLOW, SafetyAction.REDACT}:
+            return candidate
+    return None
 
 
 def complete_generation(

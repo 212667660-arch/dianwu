@@ -19,7 +19,13 @@ def build_resource_messages(
 ) -> list[dict[str, str]]:
     reference_block = ""
     if web_sources:
-        reference_lines = [f"- {item['title']} | {item['url']} | {item.get('snippet', '')}" for item in web_sources]
+        reference_lines = [
+            (
+                f"- [{item.get('reference_id') or f'资料{index}'}] "
+                f"{item['title']} | {item.get('snippet', '')}"
+            )
+            for index, item in enumerate(web_sources, 1)
+        ]
         reference_block = "【外部参考资料开始】\n" + "\n".join(reference_lines) + "\n【外部参考资料结束】"
     progress_block = ""
     if learning_context:
@@ -50,9 +56,8 @@ def build_resource_messages(
     ]
 
 
-async def _repair(messages: list[dict[str, str]], invalid: str, error: ProtocolValidationError, complete: CompleteCallable) -> str:
+async def _repair(messages: list[dict[str, str]], _invalid: str, error: ProtocolValidationError, complete: CompleteCallable) -> str:
     return await complete(messages + [
-        {"role": "assistant", "content": invalid},
         {"role": "user", "content": f"上一次输出未通过协议或质量校验，错误代码为 {error.code}。请修复后重新输出完整协议，不要解释。"},
     ])
 

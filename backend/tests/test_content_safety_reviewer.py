@@ -138,6 +138,28 @@ async def test_candidate_content_is_untrusted_and_absent_from_system():
     assert 'trust="untrusted"' in user
 
 
+def test_reviewer_messages_fail_closed_instead_of_truncating_candidate_tail():
+    from backend.services.content_safety.reviewer import build_reviewer_messages
+
+    candidate = ("\\" * 70_000) + "DANGEROUS-TAIL"
+
+    with pytest.raises(ValueError):
+        build_reviewer_messages(candidate, context())
+
+
+@pytest.mark.asyncio
+async def test_oversized_reviewer_candidate_uses_stable_fail_closed_error():
+    router = FakeRouter(("reviewer",), {"reviewer": ALLOW})
+
+    with pytest.raises(SafetyReviewUnavailableError):
+        await SafetyReviewer(router=router).review(
+            candidate=("\\" * 70_000) + "DANGEROUS-TAIL",
+            context=context(),
+        )
+
+    assert router.calls == []
+
+
 @pytest.mark.asyncio
 async def test_invalid_or_unavailable_reviewer_candidates_fail_closed():
     router = FakeRouter(

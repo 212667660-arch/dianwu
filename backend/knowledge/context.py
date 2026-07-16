@@ -158,8 +158,12 @@ def validate_citations(
 def sanitize_citations(
     text: str,
     citations: Sequence[KnowledgeCitation],
+    *,
+    additional_allowed: set[str] | None = None,
 ) -> tuple[str, list[str], list[str]]:
-    allowed = {citation.reference_id for citation in citations}
+    allowed = {
+        citation.reference_id for citation in citations
+    } | set(additional_allowed or set())
     used: list[str] = []
     issues: list[str] = []
 

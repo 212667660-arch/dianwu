@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.errors import SafetyReviewUnavailableError
-from backend.services.content_safety.concurrency import model_call_slot
 from backend.services.content_safety.models import (
     RiskCategory,
     RiskLevel,
@@ -82,6 +81,7 @@ def build_reviewer_messages(candidate: str, context: ReviewContext) -> list[dict
         },
         field_limit=100_000,
         total_limit=120_000,
+        truncate=False,
     )
     protocol = "\n".join([
         "请严格输出：",
@@ -110,21 +110,23 @@ class SafetyReviewer:
         context: ReviewContext,
         generation_profile_id: str | None = None,
     ) -> ReviewResult:
-        messages = build_reviewer_messages(candidate, context)
+        try:
+            messages = build_reviewer_messages(candidate, context)
+        except ValueError as exc:
+            raise SafetyReviewUnavailableError() from exc
         candidates = self._router.reviewer_candidate_ids(generation_profile_id)
         for profile_id in candidates:
             try:
-                async with model_call_slot():
-                    completion = await self._router.complete(
-                        RuntimeSelection(
-                            profile_mode="manual",
-                            preferred_profile_id=profile_id,
-                            reasoning_effort="off",
-                            failover_enabled=False,
-                        ),
-                        messages,
-                        0.0,
-                    )
+                completion = await self._router.complete(
+                    RuntimeSelection(
+                        profile_mode="manual",
+                        preferred_profile_id=profile_id,
+                        reasoning_effort="off",
+                        failover_enabled=False,
+                    ),
+                    messages,
+                    0.0,
+                )
                 metadata = parse_reviewer_output(
                     completion.text,
                     reviewer_profile_id=completion.profile_id,

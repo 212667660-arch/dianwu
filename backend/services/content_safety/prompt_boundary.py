@@ -58,13 +58,18 @@ def bounded_untrusted_payload(
     *,
     field_limit: int = 8_000,
     total_limit: int = 30_000,
+    truncate: bool = True,
 ) -> str:
     if field_limit < 1 or total_limit < 2:
         raise ValueError("invalid payload limits")
     bounded = _truncate(value, field_limit)
+    if not truncate and bounded != value:
+        raise ValueError("untrusted payload field exceeds limit")
     payload = _serialized(bounded)
     if len(payload) <= total_limit:
         return payload
+    if not truncate:
+        raise ValueError("untrusted payload exceeds total limit")
     for path in reversed(_string_paths(bounded)):
         current = _get(bounded, path)
         excess = len(payload) - total_limit
@@ -88,6 +93,7 @@ def untrusted_json_block(
     *,
     field_limit: int = 8_000,
     total_limit: int = 30_000,
+    truncate: bool = True,
 ) -> str:
     if not _BLOCK_NAME.fullmatch(name):
         raise ValueError("invalid untrusted block name")
@@ -95,6 +101,7 @@ def untrusted_json_block(
         {"value": value},
         field_limit=field_limit,
         total_limit=total_limit,
+        truncate=truncate,
     )
     return (
         f'<{name} trust="untrusted">'
