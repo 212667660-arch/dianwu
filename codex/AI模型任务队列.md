@@ -2,8 +2,8 @@
 
 > 项目：基于大模型的个性化资源生成与学习多智能体系统开发
 > 队列位置：E:\软件杯\codex\AI模型任务队列.md
-> 当前模型批次：Sol（S-022 五类个性化资源生成设计进行中）
-> 最后审视日期：2026-07-16
+> 当前模型批次：Sol（S-022 五类资源现有实现复核中；S-026 内容安全实施按用户要求暂停）
+> 最后审视日期：2026-07-17
 
 ## 一、使用规则
 
@@ -78,6 +78,7 @@
 | S-021 | P0 | 完成 | 对照软件杯官网文件审计当前项目是否具备参赛提交条件 | S-020、比赛官网最新通知 | 官网资格与赛题要求、提交物清单、当前产物逐项对照、阻塞项与提交前行动清单 |
 | S-023 | P1 | 完成 | Code Quality Review: v2 Protocol Models (models.py, __init__.py, tests) | 无 | 审查报告 → 本轮对话 |
 | S-022 | P0 | 进行中 | 实现至少五类个性化学习资源生成与桌面端展示 | S-021、现有 learning-resource/v1 | 五类资源协议、按画像生成、结构化展示、质量门槛、兼容迁移与完整回归；本任务不导入课程数据集 |
+| S-026 | P0 | 保留 | 实现系统级分层内容安全过滤 | 现有诊断、辅导、知识库与五类资源模型链路；用户已批准设计并要求暂不实施 | `content-safety/v1`、输入/上下文/输出安全门、Reviewer Agent、可信引用、SafeMarkdown/SafeMermaid、安全审计与完整回归 |
 | T-033 | P0 | 完成 | 实现多 API 配置、高可用切换、模型选择与推理强度控制 | S-017 | 版本 2 加密多配置、原子热应用与回滚、3 次/2 配置预算、Retry-After/熔断、普通与流式故障边界、全局/学习空间模型和思考强度选择、兼容迁移、真实桌面 5/5 连接及完整打包回归 |
 | T-035 | P0 | 完成 | 实现本地知识库与安全文件导入 | S-018 | 已完成文件选择/拖放、七格式与限额校验、隔离解析 worker、SQLite 元数据/FTS/可选语义索引、可追溯引用、学习助手绑定与隐私模式、删除/重建、恶意文件/性能/打包测试及 Windows 桌面安装包验收 |
 | T-036 | P1 | 完成 | 实现桌宠形象包、用户上传、进度事件与语音鼓励 | S-019 | 已完成角色包目录选择、固定文件/atlas 校验、原子替换、失败保留旧角色、恢复墨团、热重载、动作音效和本地语音鼓励；全面素材/许可证、逐帧视觉与主观音色 QA 保留后续 |
@@ -290,3 +291,4 @@ S-016 已完成：本仓库提交身份已设置为 `Wei kb <212667660@qq.com>`�
 
 
 | 2026-07-16 | S-025-SAFEMERMAID | Sol | a3-front/a3-front/src/components/learning/SafeMermaid.vue、a3-front/a3-front/src/tests/components/SafeMermaid.test.ts、a3-front/a3-front/package.json、codex/AI模型任务队列.md | 创建 SafeMermaid Vue 3 组件：仅渲染 flowchart/graph 前缀安全代码、禁止 script/click/iframe 等注入模式、解析失败或非安全格式降级为文本大纲、动态 import mermaid 并设置 securityLevel:strict。vitest 4/4 通过，全量 12/12 通过。 |
+| 2026-07-17 | S-026-DESIGN | Sol | a3-front/a3-front/docs/superpowers/specs/2026-07-17-content-safety-filter-design.md、codex/AI模型任务队列.md | 用户批准分层内容安全设计：统一输入、上下文、生成后与渲染安全门，采用确定性检查、Safety Reviewer Agent、可信引用和安全 Markdown/Mermaid；按用户要求只保存设计，实施状态为保留。 |
