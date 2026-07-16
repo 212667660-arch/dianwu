@@ -223,6 +223,7 @@ class ResourceBundleService:
         generation_id: str,
         is_disconnected: DisconnectCheck | None = None,
         on_event: EventSink | None = None,
+        request_safety: Any | None = None,
     ) -> ResourceBundle:
         session = repo.get_session(db, session_id)
         if session is None or session.state != repo.SessionState.PROFILED.value:
@@ -236,11 +237,12 @@ class ResourceBundleService:
                 subject_category = parse_profile(session.profile_text).subject or "other"
             except Exception:
                 logger.info("Profile subject unavailable for bundle generation")
-            request_safety = await self._safety_service.gate_request(
-                message,
-                intent=message,
-                subject_category=subject_category,
-            )
+            if request_safety is None:
+                request_safety = await self._safety_service.gate_request(
+                    message,
+                    intent=message,
+                    subject_category=subject_category,
+                )
             safe_message = request_safety.safe_text
             repo.begin_generation(db, session)
             learning_context = self._learning_context_provider(db, session_id)

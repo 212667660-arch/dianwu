@@ -1,9 +1,18 @@
 import asyncio
 
 from fastapi.testclient import TestClient
+from types import SimpleNamespace
 
 from backend.main import app
 from backend.routers import resource as resource_router
+
+
+class AllowSafety:
+    async def gate_request(self, text, **_kwargs):
+        return SimpleNamespace(safe_text=text, metadata=None)
+
+    async def review_text(self, text, **_kwargs):
+        return SimpleNamespace(safe_text=text, metadata=None)
 
 from backend.models.schemas import WebSearchResult
 from backend.services import resource_agent
@@ -79,6 +88,7 @@ def test_resource_endpoint_returns_web_sources(monkeypatch) -> None:
 
     monkeypatch.setattr(resource_router, "search_web_optional", search)
     monkeypatch.setattr(resource_router, "generate_resources", generate)
+    monkeypatch.setattr(resource_router, "content_safety_service", AllowSafety())
     with TestClient(app) as client:
         response = client.post("/api/resource", json={"profile_text": PROFILE, "message": "生成一次函数资料"})
     assert response.status_code == 200
@@ -95,6 +105,7 @@ def test_resource_endpoint_degrades_when_search_returns_empty(monkeypatch) -> No
 
     monkeypatch.setattr(resource_router, "search_web_optional", no_search)
     monkeypatch.setattr(resource_router, "generate_resources", generate)
+    monkeypatch.setattr(resource_router, "content_safety_service", AllowSafety())
     with TestClient(app) as client:
         response = client.post("/api/resource", json={"profile_text": PROFILE, "message": "生成一次函数资料"})
     assert response.status_code == 200

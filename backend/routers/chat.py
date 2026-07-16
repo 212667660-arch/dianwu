@@ -11,6 +11,7 @@ from backend.database import get_db
 from backend.errors import ResourceNotFoundError
 from backend.models.schemas import BundleResponse, ChatRequest, ChatResponse
 from backend.services.orchestrator import cancel_generation, handle_message, stream_message
+from backend.services.content_safety.service import content_safety_service
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -24,9 +25,15 @@ async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)) -> Chat
             req.message,
             resource_mode=req.resource_mode,
             resource_type=req.resource_type,
+            safety_service=content_safety_service,
         )
     else:
-        result = await handle_message(db, req.session_id, req.message)
+        result = await handle_message(
+            db,
+            req.session_id,
+            req.message,
+            safety_service=content_safety_service,
+        )
     return ChatResponse(
         reply=result.reply,
         phase=result.phase,
@@ -48,7 +55,8 @@ async def chat_stream_endpoint(req: ChatRequest, request: Request, db: Session =
     async def events():
         async for event in stream_message(db, req.session_id, req.message, request.is_disconnected,
                                   resource_mode=req.resource_mode,
-                                  resource_type=req.resource_type):
+                                  resource_type=req.resource_type,
+                                  safety_service=content_safety_service):
             name = str(event.pop("event"))
             payload = json.dumps(event, ensure_ascii=False)
             yield f"event: {name}\ndata: {payload}\n\n"

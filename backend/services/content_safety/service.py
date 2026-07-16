@@ -30,6 +30,13 @@ class SafeRequestResult(BaseModel):
     metadata: SafetyMetadata
 
 
+class SafeTextResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    safe_text: str
+    metadata: SafetyMetadata
+
+
 class ArtifactSafetyResult(BaseModel):
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
@@ -137,6 +144,51 @@ class ContentSafetyService:
         if reviewed.metadata.decision != SafetyAction.ALLOW:
             raise ContentArtifactBlockedError()
         return reviewed.metadata
+
+    async def review_text(
+        self,
+        text: str,
+        *,
+        stage: SafetyStage = SafetyStage.ARTIFACT,
+        intent: str,
+        subject_category: str = "other",
+        artifact_type: str | None = None,
+        generation_profile_id: str | None = None,
+    ) -> SafeTextResult:
+        structural = detect_structures(text)
+        if structural.blocking:
+            raise ContentArtifactBlockedError()
+        redaction = redact_personal_data(text)
+        reviewed = await self._reviewer.review(
+            candidate=redaction.text,
+            generation_profile_id=generation_profile_id,
+            context=ReviewContext(
+                stage=stage,
+                intent=intent[:500] or "学习内容",
+                subject_category=subject_category or "other",
+                artifact_type=artifact_type,
+                audience="student",
+            ),
+        )
+        metadata = reviewed.metadata
+        if metadata.decision == SafetyAction.ALLOW:
+            if redaction.changed:
+                metadata = metadata.model_copy(update={
+                    "decision": SafetyAction.REDACT,
+                    "risk_level": RiskLevel.MEDIUM,
+                    "categories": list(dict.fromkeys([
+                        *metadata.categories,
+                        RiskCategory.PERSONAL_DATA,
+                    ])),
+                    "reason_codes": list(dict.fromkeys([
+                        *metadata.reason_codes,
+                        *redaction.reason_codes,
+                    ])),
+                })
+            return SafeTextResult(safe_text=redaction.text, metadata=metadata)
+        if metadata.decision == SafetyAction.REDACT and redaction.changed:
+            return SafeTextResult(safe_text=redaction.text, metadata=metadata)
+        raise ContentArtifactBlockedError()
 
     async def review_artifact(
         self,

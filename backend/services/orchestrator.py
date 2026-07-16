@@ -5,11 +5,12 @@ import logging
 import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy.orm import Session
 
 from backend.config import get_settings
-from backend.errors import AppError, ClientCancelledError, DomainStateError, ProtocolValidationError, UnexpectedBackendError
+from backend.errors import AppError, ClientCancelledError, ContentCitationNotAllowedError, DomainStateError, ProtocolValidationError, UnexpectedBackendError
 from backend.knowledge.context import (
     citation_payload,
     retrieve_knowledge_context,
@@ -20,6 +21,8 @@ from backend.protocols.v2.models import ArtifactType, ResourceBundle
 from backend.services import db as repo
 from backend.services import learning
 from backend.services.model_runtime import RoutedStreamEvent, RuntimeSelection, model_runtime_router
+from backend.services.content_safety.models import SafetyStage
+from backend.services.content_safety.citations import validate_citations
 from backend.services.profile_agent import build_profile_messages, generate_diagnosis_decision, generate_profile
 from backend.services.resource_agent import build_resource_messages, generate_resources
 from backend.services.resource_quality import validate_resource_quality
@@ -74,8 +77,52 @@ def _runtime_selection(db: Session, session_id: str) -> RuntimeSelection:
 def _selected_complete(selection: RuntimeSelection):
     async def complete(messages: list[dict[str, str]], temperature: float = 0.2) -> str:
         result = await model_runtime_router.complete(selection, messages, temperature)
+        complete.last_profile_id = result.profile_id
         return result.text
+    complete.last_profile_id = None
     return complete
+
+
+def _session_subject(session) -> str:
+    if session is None or not session.profile_text:
+        return "other"
+    try:
+        return parse_profile(session.profile_text).subject or "other"
+    except Exception:
+        return "other"
+
+
+async def _gate_message(safety_service: Any | None, message: str, session):
+    if safety_service is None:
+        return message, None
+    result = await safety_service.gate_request(
+        message,
+        intent=message,
+        subject_category=_session_subject(session),
+    )
+    return result.safe_text, result
+
+
+async def _review_output(
+    safety_service: Any | None,
+    text: str,
+    *,
+    intent: str,
+    session,
+    generation_profile_id: str | None = None,
+    artifact_type: str | None = None,
+):
+    if safety_service is None:
+        return text, None
+    result = await safety_service.review_text(
+        text,
+        stage=SafetyStage.ARTIFACT,
+        intent=intent,
+        subject_category=_session_subject(session),
+        artifact_type=artifact_type,
+        generation_profile_id=generation_profile_id,
+    )
+    return result.safe_text, result.metadata
 
 
 class _RuntimeStreamAdapter:
@@ -239,6 +286,7 @@ async def handle_message(
     message: str,
     resource_mode: str | None = None,
     resource_type: str | None = None,
+    safety_service: Any | None = None,
 ) -> ChatResult:
     async with _workflow_lock(session_id):
         return await _handle_message(
@@ -247,6 +295,7 @@ async def handle_message(
             message,
             resource_mode=resource_mode,
             resource_type=resource_type,
+            safety_service=safety_service,
         )
 
 
@@ -256,9 +305,11 @@ async def _handle_message(
     message: str,
     resource_mode: str | None = None,
     resource_type: str | None = None,
+    safety_service: Any | None = None,
 ) -> ChatResult:
-    repo.append_message(db, session_id, "user", message)
     session = repo.get_or_create_session(db, session_id)
+    message, request_safety = await _gate_message(safety_service, message, session)
+    repo.append_message(db, session_id, "user", message)
     complete = _selected_complete(_runtime_selection(db, session_id))
     if _is_rediagnose(message):
         repo.restart_diagnosis(db, session)
@@ -269,10 +320,24 @@ async def _handle_message(
                 repo.set_state(db, session, repo.SessionState.DIAGNOSING)
             diagnosis_complete, reply = await _diagnosis_reply(db, session, session_id, complete)
             if not diagnosis_complete:
+                reply, _ = await _review_output(
+                    safety_service,
+                    reply,
+                    intent=message,
+                    session=session,
+                    generation_profile_id=getattr(complete, "last_profile_id", None),
+                )
                 repo.append_message(db, session_id, "assistant", reply)
                 return ChatResult(reply, "diagnosis", session.state, session.profile_version)
             repo.set_state(db, session, repo.SessionState.PROFILE_READY)
             profile_text = await generate_profile(_history_texts(db, session_id), session.profile_version + 1, complete=complete)
+            profile_text, _ = await _review_output(
+                safety_service,
+                profile_text,
+                intent=message,
+                session=session,
+                generation_profile_id=getattr(complete, "last_profile_id", None),
+            )
             version = repo.save_profile(db, session, profile_text)
             repo.append_message(db, session_id, "assistant", profile_text)
             return ChatResult(profile_text, "profile", session.state, version)
@@ -292,6 +357,7 @@ async def _handle_message(
                     message,
                     selection,
                     generation_id=uuid.uuid4().hex,
+                    request_safety=request_safety,
                 )
                 bundle_text = json.dumps(bundle.model_dump(mode="json"), ensure_ascii=False)
                 repo.append_message(db, session_id, "assistant", bundle_text)
@@ -340,9 +406,25 @@ async def _handle_message(
                 knowledge_context.prompt,
                 complete,
             )
+            citation_decision = validate_citations(
+                resource_text,
+                allowed={item.reference_id for item in knowledge_context.citations},
+            )
+            if not citation_decision.allowed:
+                raise ContentCitationNotAllowedError()
             resource_text, _used, citation_issues = sanitize_citations(
                 resource_text,
                 knowledge_context.citations,
+            )
+            resource = parse_resource(resource_text)
+            validate_resource_quality(resource)
+            resource_text, safety_metadata = await _review_output(
+                safety_service,
+                resource_text,
+                intent=message,
+                session=session,
+                generation_profile_id=getattr(complete, "last_profile_id", None),
+                artifact_type="learning-resource/v1",
             )
             resource = parse_resource(resource_text)
             validate_resource_quality(resource)
@@ -356,6 +438,7 @@ async def _handle_message(
                 source_payload,
                 knowledge_sources=knowledge_sources,
                 extra_quality_issues=citation_issues,
+                safety_metadata=safety_metadata,
             )
             repo.append_message(db, session_id, "assistant", resource_text)
             return ChatResult(
@@ -377,27 +460,32 @@ async def _handle_message(
 
 async def stream_message(db: Session, session_id: str, message: str, is_disconnected,
                          resource_mode: str | None = None,
-                         resource_type: str | None = None) -> AsyncIterator[dict[str, object]]:
+                         resource_type: str | None = None,
+                         safety_service: Any | None = None) -> AsyncIterator[dict[str, object]]:
     async with _workflow_lock(session_id):
         async for event in _stream_message(db, session_id, message, is_disconnected,
                                         resource_mode=resource_mode,
-                                        resource_type=resource_type):
+                                        resource_type=resource_type,
+                                        safety_service=safety_service):
             yield event
 
 
 async def _stream_message(db: Session, session_id: str, message: str, is_disconnected,
                           resource_mode: str | None = None,
-                          resource_type: str | None = None) -> AsyncIterator[dict[str, object]]:
+                          resource_type: str | None = None,
+                          safety_service: Any | None = None) -> AsyncIterator[dict[str, object]]:
     request_id = uuid.uuid4().hex
     generation_id = uuid.uuid4().hex
     cancel_event = asyncio.Event()
     _generation_cancel_events[generation_id] = cancel_event
     _generation_sessions[generation_id] = session_id
     session = None
+    request_safety = None
 
     try:
-        repo.append_message(db, session_id, "user", message)
         session = repo.get_or_create_session(db, session_id)
+        message, request_safety = await _gate_message(safety_service, message, session)
+        repo.append_message(db, session_id, "user", message)
         complete = _selected_complete(_runtime_selection(db, session_id))
         if _is_rediagnose(message):
             repo.restart_diagnosis(db, session)
@@ -407,6 +495,13 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
             yield {"event": "phase", "request_id": request_id, "generation_id": generation_id, "phase": "diagnosis"}
             diagnosis_complete, reply = await _diagnosis_reply(db, session, session_id, complete)
             if not diagnosis_complete:
+                reply, _ = await _review_output(
+                    safety_service,
+                    reply,
+                    intent=message,
+                    session=session,
+                    generation_profile_id=getattr(complete, "last_profile_id", None),
+                )
                 repo.append_message(db, session_id, "assistant", reply)
                 yield {"event": "delta", "request_id": request_id, "content": reply, "provisional": False}
                 yield {"event": "done", "request_id": request_id, "status": "completed", "state": session.state}
@@ -414,12 +509,14 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
             repo.set_state(db, session, repo.SessionState.PROFILE_READY)
             yield {"event": "phase", "request_id": request_id, "generation_id": generation_id, "phase": "profile"}
             raw = ""
+            last_profile_id = None
             selection = _runtime_selection(db, session_id)
             async for item in _stream_items(_gateway, selection, build_profile_messages(_history_texts(db, session_id), session.profile_version + 1), 0.2):
                 if cancel_event.is_set() or await is_disconnected():
                     raise ClientCancelledError()
                 if isinstance(item, RoutedStreamEvent):
                     if item.event == "meta":
+                        last_profile_id = item.profile_id
                         yield _stream_meta_payload(item, request_id)
                         continue
                     if item.event == "interrupted":
@@ -431,7 +528,6 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
                 else:
                     delta = item
                 raw += delta
-                yield {"event": "delta", "request_id": request_id, "content": delta, "provisional": True}
             try:
                 canonical = serialize_profile(parse_profile(raw))
                 repaired = False
@@ -440,9 +536,18 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
                 canonical = await generate_profile(_history_texts(db, session_id), session.profile_version + 1, complete=complete)
                 repaired = True
                 error_code = exc.code
+                last_profile_id = getattr(complete, "last_profile_id", last_profile_id)
+            canonical, _ = await _review_output(
+                safety_service,
+                canonical,
+                intent=message,
+                session=session,
+                generation_profile_id=last_profile_id,
+            )
             yield {"event": "validation", "request_id": request_id, "valid": True, "repair_attempted": repaired, "error_code": error_code}
             if canonical.strip() != raw.strip():
                 yield {"event": "replace", "request_id": request_id, "content": canonical}
+            yield {"event": "delta", "request_id": request_id, "content": canonical, "provisional": False}
             version = repo.save_profile(db, session, canonical)
             repo.append_message(db, session_id, "assistant", canonical)
             yield {"event": "persisted", "request_id": request_id, "profile_version": version}
@@ -477,6 +582,7 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
                 generation_id=generation_id,
                 is_disconnected=is_disconnected,
                 on_event=on_bundle_event,
+                request_safety=request_safety,
             ))
             while True:
                 queue_task = asyncio.create_task(event_queue.get())
@@ -549,6 +655,7 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
         yield {"event": "knowledge_sources", "request_id": request_id, "sources": knowledge_sources, "cached": False}
         learning_context = learning.learning_context(db, session_id)
         selection = _runtime_selection(db, session_id)
+        last_profile_id = None
         async for item in _stream_items(
             _gateway,
             selection,
@@ -565,6 +672,7 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
                 raise ClientCancelledError()
             if isinstance(item, RoutedStreamEvent):
                 if item.event == "meta":
+                    last_profile_id = item.profile_id
                     yield _stream_meta_payload(item, request_id)
                     continue
                 if item.event == "interrupted":
@@ -576,7 +684,6 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
             else:
                 delta = item
             raw += delta
-            yield {"event": "delta", "request_id": request_id, "content": delta, "provisional": True}
         try:
             resource = parse_resource(raw)
             validate_resource_quality(resource)
@@ -596,15 +703,33 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
             resource = parse_resource(canonical)
             repaired = True
             error_code = exc.code
+            last_profile_id = getattr(complete, "last_profile_id", last_profile_id)
+        citation_decision = validate_citations(
+            canonical,
+            allowed={item.reference_id for item in knowledge_context.citations},
+        )
+        if not citation_decision.allowed:
+            raise ContentCitationNotAllowedError()
         canonical, _used, citation_issues = sanitize_citations(
             canonical,
             knowledge_context.citations,
         )
         resource = parse_resource(canonical)
         validate_resource_quality(resource)
+        canonical, safety_metadata = await _review_output(
+            safety_service,
+            canonical,
+            intent=message,
+            session=session,
+            generation_profile_id=last_profile_id,
+            artifact_type="learning-resource/v1",
+        )
+        resource = parse_resource(canonical)
+        validate_resource_quality(resource)
         yield {"event": "validation", "request_id": request_id, "valid": True, "repair_attempted": repaired, "error_code": error_code}
         if canonical.strip() != raw.strip():
             yield {"event": "replace", "request_id": request_id, "content": canonical}
+        yield {"event": "delta", "request_id": request_id, "content": canonical, "provisional": False}
         stored = repo.complete_generation(
             db,
             session,
@@ -615,6 +740,7 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
             source_payload,
             knowledge_sources=knowledge_sources,
             extra_quality_issues=citation_issues,
+            safety_metadata=safety_metadata,
         )
         repo.append_message(db, session_id, "assistant", canonical)
         yield {"event": "persisted", "request_id": request_id, "resource_id": stored.id}

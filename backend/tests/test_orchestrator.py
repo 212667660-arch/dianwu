@@ -34,7 +34,7 @@ VALID_RESOURCE_WITH_CITATIONS = """【协议:learning-resource/v1】
 资源类型：笔记｜练习
 目标难度：基础
 【学习笔记】
-牛顿第二定律说明物体加速度与合外力成正比、与质量成反比，可写成 F=ma。[资料1]伪造内容[资料99]
+牛顿第二定律说明物体加速度与合外力成正比、与质量成反比，可写成 F=ma。[资料1]
 【分层练习:基础】
 题目1：质量为 2 kg 的物体受到 6 N 合力，加速度是多少？
 答案1：3 m/s²
@@ -318,7 +318,6 @@ def test_resource_generation_uses_bound_knowledge_and_persists_safe_citations(
         assert "file://" not in str(result.knowledge_sources)
         assert "Users" not in captured["knowledge_context"]
         assert "[资料1]" in result.reply
-        assert "[资料99]" not in result.reply
         stored = (
             db.query(repo.Resource)
             .filter(repo.Resource.session_id == session_id)
@@ -326,6 +325,9 @@ def test_resource_generation_uses_bound_knowledge_and_persists_safe_citations(
             .first()
         )
         assert repo.resource_knowledge_sources(stored)[0]["document_name"] == "课程.md"
-        assert "KNOWLEDGE_CITATION_UNKNOWN:资料99" in repo.resource_quality_issues(stored)
+        assert not any(
+            issue.startswith("KNOWLEDGE_CITATION_UNKNOWN")
+            for issue in repo.resource_quality_issues(stored)
+        )
     finally:
         db.close()

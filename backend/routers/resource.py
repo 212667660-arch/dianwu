@@ -16,6 +16,8 @@ from backend.models.schemas import (
 )
 from backend.protocols.v2.models import ArtifactType
 from backend.services.model_runtime import RuntimeSelection, model_runtime_router
+from backend.services.content_safety.models import SafetyStage
+from backend.services.content_safety.service import content_safety_service
 from backend.services.resource_agent import generate_resources
 from backend.services.resource_bundle.service import (
     ResourceSelection,
@@ -32,16 +34,41 @@ BundleIdPath = Annotated[
 
 @router.post("/resource", response_model=ResourceResponse)
 async def resource_endpoint(req: ResourceRequest) -> ResourceResponse:
-    sources = await search_web_optional(req.message) if req.use_web_search else []
+    safe_profile = await content_safety_service.gate_request(
+        req.profile_text,
+        intent="读取学习者画像",
+        subject_category="other",
+    )
+    safe_request = await content_safety_service.gate_request(
+        req.message,
+        intent=req.message,
+        subject_category="other",
+    )
+    sources = await search_web_optional(safe_request.safe_text) if req.use_web_search else []
+    generation_profile_id = None
+
     async def complete(messages, temperature=0.2):
-        return (await model_runtime_router.complete(RuntimeSelection(), messages, temperature)).text
+        nonlocal generation_profile_id
+        completion = await model_runtime_router.complete(RuntimeSelection(), messages, temperature)
+        generation_profile_id = completion.profile_id
+        return completion.text
+
+    resource_text = await generate_resources(
+        safe_profile.safe_text,
+        safe_request.safe_text,
+        [item.model_dump() for item in sources],
+        complete=complete,
+    )
+    reviewed = await content_safety_service.review_text(
+        resource_text,
+        stage=SafetyStage.ARTIFACT,
+        intent=safe_request.safe_text,
+        subject_category="other",
+        artifact_type="learning-resource/v1",
+        generation_profile_id=generation_profile_id,
+    )
     return ResourceResponse(
-        resource_text=await generate_resources(
-            req.profile_text,
-            req.message,
-            [item.model_dump() for item in sources],
-            complete=complete,
-        ),
+        resource_text=reviewed.safe_text,
         sources=sources,
         knowledge_sources=[],
     )

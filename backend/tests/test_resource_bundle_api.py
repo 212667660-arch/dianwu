@@ -106,7 +106,7 @@ class TestResourceBundleEndpoint:
         assert response.status_code == 422
 
     def test_v1_chat_still_returns_text_without_bundle(self, monkeypatch):
-        async def handle_message(_db, _session_id, _message):
+        async def handle_message(_db, _session_id, _message, **_kwargs):
             return ChatResult("诊断问题", "diagnosis", "DIAGNOSING")
 
         monkeypatch.setattr(chat, "handle_message", handle_message)

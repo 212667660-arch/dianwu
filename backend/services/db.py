@@ -573,6 +573,7 @@ def complete_generation(
     sources: list[dict[str, object]] | None = None,
     knowledge_sources: list[dict[str, object]] | None = None,
     extra_quality_issues: list[str] | None = None,
+    safety_metadata: object | None = None,
 ) -> Resource:
     if session.state != SessionState.GENERATING.value:
         raise DomainStateError("当前状态不能完成资源生成。", "GENERATION_STATE_INVALID")
@@ -597,6 +598,11 @@ def complete_generation(
         learning_state_version=session.learning_state_version,
         quality_score=max(0, quality.score - 10 * len(additional_issues)),
         quality_issues_json=json.dumps(combined_issues, ensure_ascii=False),
+        safety_json=(
+            json.dumps(safety_metadata.model_dump(mode="json"), ensure_ascii=False)
+            if hasattr(safety_metadata, "model_dump")
+            else None
+        ),
     )
     db.add(resource)
     _index_resource_questions(db, resource)

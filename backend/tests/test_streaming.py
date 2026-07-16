@@ -77,7 +77,9 @@ def test_stream_emits_real_deltas_then_persists(monkeypatch) -> None:
 
         second_events = asyncio.run(_collect(orchestrator.stream_message(db, session_id, "我最怕画图", connected)))
         assert any(event["event"] == "phase" and event["phase"] == "profile" for event in second_events)
-        assert sum(1 for event in second_events if event["event"] == "delta") == 2
+        profile_deltas = [event for event in second_events if event["event"] == "delta"]
+        assert len(profile_deltas) == 1
+        assert profile_deltas[0]["provisional"] is False
         assert any(event["event"] == "persisted" for event in second_events)
         assert second_events[-1]["status"] == "completed"
     finally:
@@ -279,7 +281,7 @@ def test_runtime_stream_interruption_preserves_delta_and_emits_metadata(monkeypa
         meta = next(event for event in events if event["event"] == "meta")
         assert meta["profile_id"] == "backup"
         assert meta["failover_used"] is True
-        assert any(event["event"] == "delta" and event["content"] == "partial" for event in events)
+        assert not any(event["event"] == "delta" for event in events)
         interrupted = next(event for event in events if event["event"] == "interrupted")
         assert interrupted["can_continue_with_backup"] is True
         assert not any(event["event"] == "replace" for event in events)
