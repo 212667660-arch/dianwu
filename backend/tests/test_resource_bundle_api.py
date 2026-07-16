@@ -12,7 +12,8 @@ from backend.protocols.v2.models import (
     ResourceArtifact,
     ResourceBundle,
 )
-from backend.routers import resource
+from backend.routers import chat, resource
+from backend.services.orchestrator import ChatResult
 
 client = TestClient(app)
 
@@ -104,8 +105,15 @@ class TestResourceBundleEndpoint:
         })
         assert response.status_code == 422
 
-    def test_v1_chat_still_works(self):
+    def test_v1_chat_still_returns_text_without_bundle(self, monkeypatch):
+        async def handle_message(_db, _session_id, _message):
+            return ChatResult("诊断问题", "diagnosis", "DIAGNOSING")
+
+        monkeypatch.setattr(chat, "handle_message", handle_message)
         response = client.post("/api/chat", json={
             "session_id": "test-v1", "message": "你好",
         })
-        assert response.status_code in (200, 404, 422)
+        assert response.status_code == 200
+        assert response.json()["reply"] == "诊断问题"
+        assert response.json()["phase"] == "diagnosis"
+        assert response.json()["bundle"] is None
