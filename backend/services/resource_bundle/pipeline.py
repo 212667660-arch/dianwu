@@ -38,6 +38,8 @@ class PipelineResult:
 def _make_failed_bundle(
     bundle_id: str, profile_version: int, learning_state_version: str,
     mode: str, requested_types: list[ArtifactType], topic: str = "规划失败",
+    knowledge_sources: list[dict[str, object]] | None = None,
+    public_sources: list[dict[str, object]] | None = None,
 ) -> ResourceBundle:
     return ResourceBundle(
         bundle_id=bundle_id,
@@ -61,6 +63,8 @@ def _make_failed_bundle(
         ],
         aggregate_quality=0.0,
         created_at=datetime.now(timezone.utc).isoformat(),
+        knowledge_sources=knowledge_sources or [],
+        public_sources=public_sources or [],
     )
 
 
@@ -117,6 +121,8 @@ class BundlePipeline:
         profile_text: str, learning_context: str, knowledge_context: str,
         user_request: str, source_allowlist: list[str], subject_category_hint: str,
         profile_version: int, learning_state_version: str,
+        knowledge_sources: list[dict[str, object]] | None = None,
+        public_sources: list[dict[str, object]] | None = None,
         on_event=None,
     ) -> PipelineResult:
         cancellation = get_or_create_cancellation(bundle_id)
@@ -136,6 +142,7 @@ class BundlePipeline:
                 bundle = aggregate_bundle(
                     bundle_id, "已取消", profile_version, learning_state_version,
                     mode, requested_types, artifacts, True,
+                    knowledge_sources, public_sources,
                 )
                 await _emit(on_event, {"event": "resource_bundle", **bundle.model_dump(mode="json")})
                 return PipelineResult(bundle=bundle)
@@ -143,6 +150,8 @@ class BundlePipeline:
                 logger.warning("Resource plan failed: %s", type(exc).__name__)
                 bundle = _make_failed_bundle(
                     bundle_id, profile_version, learning_state_version, mode, requested_types,
+                    knowledge_sources=knowledge_sources,
+                    public_sources=public_sources,
                 )
                 await _emit(on_event, {"event": "resource_bundle", **bundle.model_dump(mode="json")})
                 return PipelineResult(bundle=bundle, error="PLAN_FAILED")
@@ -234,6 +243,7 @@ class BundlePipeline:
             bundle = aggregate_bundle(
                 bundle_id, brief.topic, profile_version, learning_state_version,
                 mode, requested_types, artifacts, cancellation.is_cancelled(),
+                knowledge_sources, public_sources,
             )
             await _emit(on_event, {"event": "resource_bundle", **bundle.model_dump(mode="json")})
             return PipelineResult(bundle=bundle, plan_raw=plan_raw)

@@ -607,6 +607,15 @@ def complete_generation(
     return resource
 
 
+def finish_bundle_generation(db: Session, session: ChatSession) -> None:
+    if session.state != SessionState.GENERATING.value:
+        raise DomainStateError("当前状态不能完成资源包生成。", "GENERATION_STATE_INVALID")
+    session.state = SessionState.PROFILED.value
+    session.last_stable_state = SessionState.PROFILED.value
+    session.last_error_code = None
+    _commit(db)
+
+
 def fail_to_stable_state(db: Session, session: ChatSession, error_code: str) -> None:
     session.state = session.last_stable_state or SessionState.NEW.value
     session.last_error_code = error_code

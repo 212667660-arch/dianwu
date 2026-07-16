@@ -84,6 +84,92 @@ def test_diagnosis_requires_follow_up_then_generates_profile(monkeypatch) -> Non
         db.close()
 
 
+def test_bundle_stream_delegates_to_shared_service(monkeypatch) -> None:
+    from backend.protocols.v2.models import (
+        ArtifactStatus,
+        ArtifactType,
+        BundleStatus,
+        ResourceArtifact,
+        ResourceBundle,
+    )
+
+    init_db()
+    session_id = f"bundle-shared-{uuid.uuid4().hex[:10]}"
+    calls = []
+    artifact = ResourceArtifact(
+        artifact_id="bundle-stream-course",
+        type=ArtifactType.COURSE_EXPLANATION,
+        title="课程讲解",
+        status=ArtifactStatus.SUCCEEDED,
+        body="内容",
+        quality_score=88,
+    )
+    bundle = ResourceBundle(
+        bundle_id="bundle-stream-shared",
+        topic="一次函数",
+        profile_version=1,
+        learning_state_version="1",
+        mode="bundle",
+        status=BundleStatus.COMPLETED,
+        requested_types=[ArtifactType.COURSE_EXPLANATION],
+        artifacts=[artifact],
+        aggregate_quality=88,
+        created_at="2026-07-17T00:00:00Z",
+    )
+
+    class FakeService:
+        async def generate(
+            self, db, requested_session_id, message, selection, *, on_event, **kwargs
+        ):
+            session = repo.get_session(db, requested_session_id)
+            calls.append((requested_session_id, message, selection, session.state))
+            await on_event({
+                "event": "resource_plan",
+                "bundle_id": bundle.bundle_id,
+                "topic": bundle.topic,
+                "requested_types": ["course_explanation"],
+            })
+            await on_event({"event": "resource_bundle", **bundle.model_dump(mode="json")})
+            return bundle
+
+    async def connected() -> bool:
+        return False
+
+    monkeypatch.setattr(orchestrator, "resource_bundle_service", FakeService(), raising=False)
+    db = SessionLocal()
+    try:
+        session = repo.get_or_create_session(db, session_id)
+        session.state = repo.SessionState.PROFILED.value
+        session.last_stable_state = repo.SessionState.PROFILED.value
+        session.profile_text = VALID_PROFILE
+        session.profile_version = 1
+        repo.commit(db)
+
+        async def collect():
+            return [event async for event in orchestrator.stream_message(
+                db,
+                session_id,
+                "生成资源包",
+                connected,
+                resource_mode="bundle",
+            )]
+
+        events = asyncio.run(collect())
+    finally:
+        db.close()
+
+    assert len(calls) == 1
+    assert calls[0][0:2] == (session_id, "生成资源包")
+    assert calls[0][2].mode.value == "bundle"
+    assert calls[0][3] == repo.SessionState.PROFILED.value
+    assert [event["event"] for event in events if event["event"].startswith("resource_")] == [
+        "resource_plan",
+        "resource_bundle",
+    ]
+    assert events[-1]["event"] == "done"
+    assert events[-1]["state"] == repo.SessionState.PROFILED.value
+
+
 def test_repository_rejects_illegal_state_transition() -> None:
     init_db()
     session_id = f"state-{uuid.uuid4().hex}"

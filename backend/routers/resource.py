@@ -8,8 +8,10 @@ from backend.models.schemas import BundleResponse, ChatRequest, ResourceRequest,
 from backend.protocols.v2.models import ArtifactType
 from backend.services.model_runtime import RuntimeSelection, model_runtime_router
 from backend.services.resource_agent import generate_resources
-from backend.services.resource_bundle.pipeline import BundlePipeline
-from backend.services.resource_db import save_bundle
+from backend.services.resource_bundle.service import (
+    ResourceSelection,
+    resource_bundle_service,
+)
 from backend.services.web_search import search_web_optional
 
 router = APIRouter(prefix="/api", tags=["resource"])
@@ -43,32 +45,24 @@ async def resource_bundle_endpoint(req: ChatRequest, db: Session = Depends(get_d
             raise HTTPException(status_code=400, detail="resource_type required for single mode")
         single_type = ArtifactType(req.resource_type)
 
-    bundle_id = f"bundle-{uuid.uuid4().hex[:12]}"
-
-    async def _gateway_complete(messages, temperature=0.3):
-        result = await model_runtime_router.complete(RuntimeSelection(), messages, temperature)
-        return result.text
-
-    class Gateway:
-        async def complete(self, messages, temperature=0.3):
-            return await _gateway_complete(messages, temperature)
-
-    pipeline = BundlePipeline(Gateway())
-    result = await pipeline.run(
-        bundle_id=bundle_id, mode=req.resource_mode, single_type=single_type,
-        profile_text="", learning_context="", knowledge_context="",
-        user_request=req.message, source_allowlist=[],
-        subject_category_hint="other", profile_version=1, learning_state_version="v1",
+    selection = (
+        ResourceSelection.single(single_type)
+        if single_type is not None
+        else ResourceSelection.bundle()
+    )
+    bundle = await resource_bundle_service.generate(
+        db,
+        req.session_id,
+        req.message,
+        selection,
+        generation_id=uuid.uuid4().hex,
     )
 
-    save_bundle(db, req.session_id, result.bundle)
-    db.commit()
-
     return BundleResponse(
-        bundle_id=result.bundle.bundle_id,
-        protocol_version=result.bundle.protocol_version,
-        topic=result.bundle.topic,
-        status=result.bundle.status.value,
-        artifacts=[a.model_dump() for a in result.bundle.artifacts],
-        aggregate_quality=result.bundle.aggregate_quality,
+        bundle_id=bundle.bundle_id,
+        protocol_version=bundle.protocol_version,
+        topic=bundle.topic,
+        status=bundle.status.value,
+        artifacts=[a.model_dump() for a in bundle.artifacts],
+        aggregate_quality=bundle.aggregate_quality,
     )

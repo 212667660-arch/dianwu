@@ -16,19 +16,19 @@ from backend.knowledge.context import (
     sanitize_citations,
 )
 from backend.protocols import parse_profile, parse_resource, serialize_profile, serialize_resource
+from backend.protocols.v2.models import ArtifactType
 from backend.services import db as repo
 from backend.services import learning
 from backend.services.model_runtime import RoutedStreamEvent, RuntimeSelection, model_runtime_router
 from backend.services.profile_agent import build_profile_messages, generate_diagnosis_decision, generate_profile
 from backend.services.resource_agent import build_resource_messages, generate_resources
 from backend.services.resource_quality import validate_resource_quality
-from backend.protocols.v2.sse_events import artifact_event, bundle_event, plan_event, progress_event
-from backend.services.resource_bundle.pipeline import BundlePipeline
-from backend.services.resource_bundle.cancel import get_or_create_cancellation as _bundle_get_cancel, cleanup_cancellation as _bundle_cleanup, cancel_bundle as _bundle_cancel
-from backend.protocols.v2.models import ArtifactType
-from backend.services.resource_bundle.planner import derive_requested_types
-from backend.services.resource_db import save_bundle
 import json
+from backend.services.resource_bundle.cancel import cancel_bundle as _bundle_cancel
+from backend.services.resource_bundle.service import (
+    ResourceSelection,
+    resource_bundle_service,
+)
 from backend.services.web_search import search_web_optional
 
 _REDIAGNOSE_HINTS = ("重新诊断", "重新生成画像", "换画像", "重新分析我")
@@ -126,6 +126,7 @@ def cancel_generation(generation_id: str, session_id: str) -> bool:
     if event is None:
         return False
     event.set()
+    _bundle_cancel(f"bundle-{generation_id}")
     return True
 
 
@@ -407,6 +408,70 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
 
         if session.state != repo.SessionState.PROFILED.value or not session.profile_text:
             raise DomainStateError("会话尚未完成诊断，请先继续诊断。", "RESOURCE_NOT_READY")
+
+        if resource_mode:
+            selection = (
+                ResourceSelection.single(ArtifactType(resource_type))
+                if resource_mode == "single" and resource_type is not None
+                else ResourceSelection.bundle()
+            )
+            yield {
+                "event": "phase",
+                "request_id": request_id,
+                "generation_id": generation_id,
+                "phase": "resource",
+            }
+            event_queue: asyncio.Queue[dict[str, object]] = asyncio.Queue()
+
+            async def on_bundle_event(event: dict[str, object]) -> None:
+                await event_queue.put({"request_id": request_id, **event})
+
+            service_task = asyncio.create_task(resource_bundle_service.generate(
+                db,
+                session_id,
+                message,
+                selection,
+                generation_id=generation_id,
+                is_disconnected=is_disconnected,
+                on_event=on_bundle_event,
+            ))
+            while True:
+                queue_task = asyncio.create_task(event_queue.get())
+                done, _ = await asyncio.wait(
+                    {service_task, queue_task},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if queue_task in done:
+                    yield queue_task.result()
+                else:
+                    queue_task.cancel()
+                    try:
+                        await queue_task
+                    except asyncio.CancelledError:
+                        pass
+                if service_task in done:
+                    while not event_queue.empty():
+                        yield event_queue.get_nowait()
+                    break
+
+            bundle = await service_task
+            bundle_dict = bundle.model_dump(mode="json")
+            repo.append_message(
+                db,
+                session_id,
+                "assistant",
+                json.dumps(bundle_dict, ensure_ascii=False),
+            )
+            yield {"event": "persisted", "request_id": request_id, "bundle_id": bundle.bundle_id}
+            stable_session = repo.get_session(db, session_id)
+            yield {
+                "event": "done",
+                "request_id": request_id,
+                "status": "completed",
+                "state": stable_session.state if stable_session is not None else repo.SessionState.PROFILED.value,
+            }
+            return
+
         knowledge_context = retrieve_knowledge_context(
             db,
             session_id,
@@ -433,67 +498,6 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
             return
         repo.begin_generation(db, session)
         yield {"event": "phase", "request_id": request_id, "generation_id": generation_id, "phase": "resource"}
-
-        if resource_mode:
-            bundle_id = f"bundle-{uuid.uuid4().hex[:12]}"
-            profile_text = session.profile_text or ""
-            profile_subject = "other"
-            try:
-                parsed_profile = parse_profile(profile_text)
-                profile_subject = parsed_profile.subject or "other"
-            except Exception:
-                pass
-
-            class _BundleGateway:
-                async def complete(self, messages, temperature=0.3):
-                    result = await model_runtime_router.complete(
-                        _runtime_selection(db, session_id), messages, temperature,
-                    )
-                    return result.text
-
-            pipeline = BundlePipeline(_BundleGateway())
-
-            try:
-                single_type: ArtifactType | None = None
-                if resource_mode == "single" and resource_type:
-                    try:
-                        single_type = ArtifactType(resource_type)
-                    except ValueError:
-                        pass
-
-                requested_types = derive_requested_types(resource_mode, single_type)
-
-                yield {"event": "resource_plan", "bundle_id": bundle_id,
-                       "topic": "generating...",
-                       "requested_types": [t.value for t in requested_types]}
-
-                result = await pipeline.run(
-                    bundle_id=bundle_id, mode=resource_mode, single_type=single_type,
-                    profile_text=profile_text, learning_context="", knowledge_context="",
-                    user_request=message, source_allowlist=[],
-                    subject_category_hint=profile_subject,
-                    profile_version=session.profile_version,
-                    learning_state_version=str(session.learning_state_version),
-                )
-
-                bundle_dict = result.bundle.model_dump()
-                yield {"event": "resource_bundle", **bundle_dict}
-
-                save_bundle(db, session_id, result.bundle)
-
-                yield {"event": "persisted", "bundle_id": bundle_id}
-
-                repo.append_message(db, session_id, "assistant", json.dumps(bundle_dict, ensure_ascii=False))
-                yield {"event": "done", "request_id": request_id, "status": "completed",
-                       "state": session.state}
-
-            except Exception as exc:
-                yield {"event": "error", "request_id": request_id,
-                       "code": "BUNDLE_FAILED", "message": str(exc)}
-            finally:
-                _bundle_cleanup(bundle_id)
-
-            return
 
         raw = ""
         sources = await search_web_optional(message)

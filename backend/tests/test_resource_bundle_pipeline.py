@@ -138,6 +138,35 @@ class TestPipelineSingleMode:
         assert events[0]["topic"] == "测试主题"
         assert events[-1]["status"] == "COMPLETED"
 
+    @pytest.mark.asyncio
+    async def test_failed_plan_event_keeps_trusted_source_snapshots(self):
+        gateway = ScriptedGateway(completions=[])
+        pipeline = BundlePipeline(gateway=gateway)
+        events: list[dict[str, object]] = []
+
+        result = await pipeline.run(
+            bundle_id="test-plan-source-snapshots",
+            mode="single",
+            single_type=ArtifactType.COURSE_EXPLANATION,
+            profile_text="画像",
+            learning_context="",
+            knowledge_context="",
+            user_request="生成",
+            source_allowlist=["资料1", "资料2"],
+            subject_category_hint="math",
+            profile_version=1,
+            learning_state_version="v1",
+            knowledge_sources=[{"reference_id": "资料1"}],
+            public_sources=[{"reference_id": "资料2"}],
+            on_event=events.append,
+        )
+
+        assert result.bundle.status == BundleStatus.FAILED
+        assert result.bundle.knowledge_sources == [{"reference_id": "资料1"}]
+        assert result.bundle.public_sources == [{"reference_id": "资料2"}]
+        assert events[-1]["knowledge_sources"] == [{"reference_id": "资料1"}]
+        assert events[-1]["public_sources"] == [{"reference_id": "资料2"}]
+
 
 class TestPipelineBundleMode:
     @pytest.mark.asyncio
