@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, screen, shell } from 'electron'
 import { spawn } from 'node:child_process'
 import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
@@ -17,12 +17,15 @@ import {
   validateModelProfileId,
   validateModelProfileInput,
   validateModelProfilePolicyInput,
+  validatePetSettingsInput,
+  validatePetTaskStateInput,
 } from './ipc-contract.mjs'
 import { createKnowledgeImporter } from './knowledge-import.mjs'
 import { createKnowledgeController } from './knowledge-controller.mjs'
 import { createModelConfigStore, sanitizeModelEnvironment } from './model-config.mjs'
 import { createModelProfileVault } from './model-profile-vault.mjs'
 import { createModelProfileController } from './model-profile-controller.mjs'
+import { createPetController } from './pet-controller.mjs'
 import { backendCommand, electronUserDataPath, navigationAction } from './runtime.mjs'
 
 const mainDir = path.dirname(fileURLToPath(import.meta.url))
@@ -40,6 +43,17 @@ let backendProcess = null
 let backendRuntime = null
 let backendProxy = null
 let isQuitting = false
+
+const petController = createPetController({
+  BrowserWindow,
+  screen,
+  fs,
+  userDataDir: app.getPath('userData'),
+  packagedPetDir: path.join(mainDir, 'pets', 'motuan'),
+  petIndex: path.join(mainDir, 'pet', 'index.html'),
+  petPreload: path.join(mainDir, 'pet-preload.cjs'),
+  pathToFileURL,
+})
 
 const modelConfigStore = createModelConfigStore({
   safeStorage,
@@ -244,6 +258,7 @@ function createWindow() {
     },
   })
   const mainWebContents = mainWindow.webContents
+  petController.setMainWebContents(mainWebContents)
   mainWindow.setMenuBarVisibility(false)
   mainWindow.once('ready-to-show', () => {
     if (process.env.A3_ELECTRON_TEST_MODE !== '1') mainWindow?.show()
@@ -312,6 +327,37 @@ ipcMain.handle('a3:knowledge-open-source', (event, input) => {
   if (!locator.ok) return locator
   return knowledgeController.openSource(event, input.documentId, locator.value)
 })
+ipcMain.handle('a3:pet-get', event => {
+  if (!trustedPetMainSender(event)) return deniedPetRequest()
+  return { ok: true, status: 200, data: publicPetSnapshot() }
+})
+ipcMain.handle('a3:pet-update-settings', (event, input) => {
+  if (!trustedPetMainSender(event)) return deniedPetRequest()
+  return withValidatedInput(validatePetSettingsInput(input), async value => {
+    await petController.updateSettings(value)
+    return { ok: true, status: 200, data: publicPetSnapshot() }
+  })
+})
+ipcMain.handle('a3:pet-set-task-state', (event, input) => {
+  if (!trustedPetMainSender(event)) return deniedPetRequest()
+  return withValidatedInput(validatePetTaskStateInput(input), value => ({
+    ok: true,
+    status: 200,
+    data: petController.setTaskState(value),
+  }))
+})
+ipcMain.handle('a3:pet-ready', event => petController.isPetSender(event)
+  ? petController.readyPayload()
+  : deniedPetRequest())
+ipcMain.on('a3:pet-drag-begin', (event, point) => {
+  if (petController.isPetSender(event)) safelyMovePet(() => petController.beginDrag(point))
+})
+ipcMain.on('a3:pet-drag-move', (event, point) => {
+  if (petController.isPetSender(event)) safelyMovePet(() => petController.moveDrag(point))
+})
+ipcMain.on('a3:pet-drag-end', event => {
+  if (petController.isPetSender(event)) safelyMovePet(() => petController.endDrag())
+})
 ipcMain.on('a3:stream-start', (event, streamId, input) => { void backendProxy?.startStream(event, streamId, input) })
 ipcMain.on('a3:stream-cancel', (event, streamId) => { backendProxy?.cancelStream(event, streamId) })
 
@@ -325,15 +371,20 @@ app.on('second-instance', () => {
 app.whenReady().then(async () => {
   try {
     await knowledgeImporter.prepare()
+    await petController.prepare()
     await startBackend()
     await modelProfileController.bootstrap()
     createWindow()
+    petController.createWindow({ forceHidden: process.env.A3_ELECTRON_TEST_MODE === '1' })
+    screen.on('display-added', reclampPetWindow)
+    screen.on('display-removed', reclampPetWindow)
+    screen.on('display-metrics-changed', reclampPetWindow)
   } catch (error) {
     await log(`startup failed: ${error instanceof Error ? error.message : String(error)}`)
     showStartupError(error)
   }
 })
-app.on('before-quit', () => { isQuitting = true; void knowledgeController.shutdown(); stopBackend() })
+app.on('before-quit', () => { isQuitting = true; petController.destroy(); void knowledgeController.shutdown(); stopBackend() })
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
 
 function withValidatedInput(validation, invoke) {
@@ -342,5 +393,39 @@ function withValidatedInput(validation, invoke) {
     ok: false,
     status: validation.error.code === 'DESKTOP_REQUEST_DENIED' ? 403 : 400,
     error: validation.error,
+  }
+}
+
+function trustedPetMainSender(event) {
+  return petController.isMainSender(event) && trustedKnowledgeSender(event)
+}
+
+function deniedPetRequest() {
+  return {
+    ok: false,
+    status: 403,
+    error: desktopError('DESKTOP_REQUEST_DENIED', '桌宠请求来源不受信任。'),
+  }
+}
+
+function safelyMovePet(action) {
+  try {
+    void Promise.resolve(action()).catch(error => log(`pet movement failed: ${error instanceof Error ? error.message : String(error)}`))
+  } catch (error) {
+    void log(`pet movement denied: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+function reclampPetWindow() {
+  void petController.reclamp().catch(error => log(`pet display clamp failed: ${error instanceof Error ? error.message : String(error)}`))
+}
+
+function publicPetSnapshot() {
+  const value = petController.snapshot()
+  return {
+    available: true,
+    pet: value.pet ? { id: value.pet.id, displayName: value.pet.displayName, description: value.pet.description } : null,
+    settings: value.settings,
+    state: value.state,
   }
 }

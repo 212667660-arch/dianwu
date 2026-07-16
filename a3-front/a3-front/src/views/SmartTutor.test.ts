@@ -24,6 +24,9 @@ const storeMock = vi.hoisted(() => ({
   refreshKnowledge: vi.fn(), saveSessionKnowledgeCollections: vi.fn(),
 }))
 const storeHarness = vi.hoisted(() => ({ current: null as null | typeof storeMock }))
+const petMock = vi.hoisted(() => ({
+  begin: vi.fn(), update: vi.fn(), complete: vi.fn(), fail: vi.fn(),
+}))
 
 vi.mock('@/api', () => ({
   backendApi: apiMock,
@@ -37,6 +40,11 @@ vi.mock('@/stores/backend', async () => {
   return { useBackendStore: () => store }
 })
 vi.mock('element-plus', () => ({ ElMessage: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }))
+vi.mock('@/pet/task-state', () => ({
+  petTaskState: {
+    begin: petMock.begin,
+  },
+}))
 
 import SmartTutor from './SmartTutor.vue'
 
@@ -59,9 +67,38 @@ describe('SmartTutor failure recovery', () => {
     backendStore.refreshModelProfiles.mockResolvedValue(undefined)
     backendStore.loadSessionModelPreference.mockResolvedValue(undefined)
     backendStore.saveSessionModelPreference.mockResolvedValue(undefined)
+    petMock.begin.mockReset().mockReturnValue({ update: petMock.update, complete: petMock.complete, fail: petMock.fail })
+    petMock.update.mockReset()
+    petMock.complete.mockReset()
+    petMock.fail.mockReset()
     apiMock.streamChat.mockImplementation(async (_sessionId, _message, onEvent) => {
       onEvent({ event: 'error', code: 'FIELD_REQUIRED', message: '模型输出缺少必填字段，请重试。' })
     })
+  })
+
+  it('maps generation, validation, completion and failure to pet task states', async () => {
+    apiMock.streamChat.mockImplementationOnce(async (_sessionId, _message, onEvent) => {
+      onEvent({ event: 'phase', phase: 'diagnosis' })
+      onEvent({ event: 'validation', valid: true })
+      onEvent({ event: 'delta', content: '完成。' })
+    })
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/tutor', component: SmartTutor }] })
+    await router.push('/tutor'); await router.isReady()
+    const wrapper = mount(SmartTutor, { global: { plugins: [router], stubs } })
+    await wrapper.get('textarea').setValue('测试桌宠状态')
+    await wrapper.findAll('button').find(button => button.text() === '发送')!.trigger('click')
+    await flushPromises()
+
+    expect(petMock.begin).toHaveBeenCalledWith('running')
+    expect(petMock.update).toHaveBeenCalledWith('running')
+    expect(petMock.update).toHaveBeenCalledWith('review')
+    expect(petMock.complete).toHaveBeenCalledWith('waiting')
+
+    apiMock.streamChat.mockRejectedValueOnce(new Error('连接失败'))
+    await wrapper.get('textarea').setValue('再次测试')
+    await wrapper.findAll('button').find(button => button.text() === '发送')!.trigger('click')
+    await flushPromises()
+    expect(petMock.fail).toHaveBeenCalled()
   })
 
   it('keeps a streaming failure visible and restores the draft for retry', async () => {

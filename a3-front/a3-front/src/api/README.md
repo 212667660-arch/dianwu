@@ -13,6 +13,7 @@
 - 知识库集合、文档状态、搜索和学习空间绑定可经普通 API 管理；Web 模式不上传文件或文件路径，只能管理已经由桌面端导入的资料。
 - 文件选择与拖放导入只能调用固定的 `knowledgeChooseFiles` / `knowledgeImportDroppedFiles` bridge。Electron 主进程复制并哈希文件后只向后端提交 manifest，renderer 不接触原路径、对象路径或桌面令牌。
 - 本地引用只包含受控文档 ID、显示名和 page/slide/sheet_rows/paragraph locator。点击引用先进入知识库详情；桌面端可再请求主进程打开临时只读副本。
+- 桌宠设置与任务状态只通过 `petGet`、`petUpdateSettings`、`petSetTaskState` 三个固定 bridge；Web 模式返回不可用快照并安全忽略状态上报，不经通用 HTTP transport。桌宠自身使用独立 `a3Pet` preload，仅暴露 ready、拖动和状态/设置订阅，不获得主应用 API、模型配置或文件能力。
 - API 错误会显示给用户，不会静默替换为假数据。
 
 ## 统一错误对象

@@ -2,8 +2,8 @@
 
 > 项目：基于大模型的个性化资源生成与学习多智能体系统开发
 > 队列位置：E:\软件杯\codex\AI模型任务队列.md
-> 当前模型批次：Sol（T-033 多 API 高可用实现进行中；T-035 已完成；S-019/T-036 保持原状态）
-> 最后审视日期：2026-07-15
+> 当前模型批次：Sol（S-019/T-036 第一阶段桌宠 MVP 已完成；下一项为角色导入 UI、语音鼓励及完整 QA）
+> 最后审视日期：2026-07-16
 
 ## 一、使用规则
 
@@ -73,10 +73,10 @@
 | S-016 | P1 | 完成 | 连接 GitHub 私有远程仓库 | S-015 | 本地提交身份、`origin`、`main` 上游分支、远程提交一致性和推送验收 |
 | S-017 | P0 | 完成 | 设计稳定优先的多 API 配置、故障转移、模型切换与推理强度架构 | S-014、T-032、用户已确认“手动主配置 + 自动备用切换 + 可关闭自动切换” | Electron 版本 2 加密保险库、后端内存路由器、原子热应用、主备与熔断、普通/流式边界、全局与学习空间覆盖、模型能力和推理强度适配、13 项 TDD 实施计划 |
 | S-018 | P0 | 完成 | 设计本地知识库、文件导入、解析、索引与学习流程接入 | 现有 FastAPI/SQLite/Electron、安全边界、用户新增需求 | 支持格式与限额、文件存储和解析隔离、文本切片/检索、引用溯源、会话/资源接入、删除与重建、接口/UI、测试和打包方案 |
-| S-019 | P1 | 进行中 | 设计可扩展桌宠、用户形象导入、学习进度感知与语音鼓励 | S-009、S-010、T-030、用户新增需求 | 当前先交付透明窗口、pet.json/spritesheet.webp、拖动/位置、九状态、任务联动、显示/缩放/速度与资源节流 MVP；用户上传形象、语音与全面视觉/许可证 QA 后续分批完成 |
+| S-019 | P1 | 进行中 | 设计可扩展桌宠、用户形象导入、学习进度感知与语音鼓励 | S-009、S-010、T-030、用户新增需求 | 第一阶段 MVP 已完成：独立透明置顶窗口、严格角色清单、九状态、拖动/位置、多屏/DPI、任务联动、显示/缩放/速度和资源节流；下一阶段为导入 UI、语音和完整 QA |
 | T-033 | P0 | 完成 | 实现多 API 配置、高可用切换、模型选择与推理强度控制 | S-017 | 版本 2 加密多配置、原子热应用与回滚、3 次/2 配置预算、Retry-After/熔断、普通与流式故障边界、全局/学习空间模型和思考强度选择、兼容迁移、真实桌面 5/5 连接及完整打包回归 |
 | T-035 | P0 | 完成 | 实现本地知识库与安全文件导入 | S-018 | 已完成文件选择/拖放、七格式与限额校验、隔离解析 worker、SQLite 元数据/FTS/可选语义索引、可追溯引用、学习助手绑定与隐私模式、删除/重建、恶意文件/性能/打包测试及 Windows 桌面安装包验收 |
-| T-036 | P1 | 进行中 | 实现桌宠形象包、用户上传、进度事件与语音鼓励 | S-019 | 用户已解除桌宠暂停；当前优先实现可启动、显示、拖动、交互、九状态、任务状态联动、显示/隐藏/缩放/速度、多屏/DPI 和节流的可用桌面 MVP，上传形象与语音保留扩展接口 |
+| T-036 | P1 | 进行中 | 实现桌宠形象包、用户上传、进度事件与语音鼓励 | S-019 | 第一阶段可用 MVP 已完成并打包验收；自定义 `userData/pets/current` 角色目录与安全回退已具备，用户上传管理 UI、语音鼓励和全面素材审计保留后续 |
 
 ## 五、Terra 队列
 
@@ -182,6 +182,8 @@ T-033 Task 13 与整项任务已完成：旧 `GET /api/settings/model` 返回运
 
 用户已于 2026-07-16 恢复桌宠任务并明确授权按建议直接设计。Sol 当前在 `codex/desktop-pet-mvp` 分支执行 S-019/T-036 第一阶段：参考 Apache-2.0 的 openai/skills `hatch-pet` 固定 8×9、192×208 精灵图契约和校验思路，创建本项目原创角色；优先交付独立透明置顶窗口、拖动位置、多屏/DPI、九动画状态、任务联动、点击/双击、显示/隐藏/缩放/速度及空闲节流。全面许可证审计、完整视觉 QA、全部状态人工核对、用户形象导入和语音鼓励按用户要求保留后续。
 
+S-019/T-036 第一阶段桌宠 MVP 已完成：Electron 独立 sandbox 窗口与 preload、pet.json/spritesheet.webp 严格读取和非法自定义回退、原创“墨团”九行动画、拖动与位置持久化、多显示器/DPI 约束、点击挥手/双击跳跃、显示/隐藏/缩放/速度、隐藏暂停与长空闲降频均已落地。主应用书桌卡可控制设置，SmartTutor 的生成/校验/完成/失败及全局加载可自动驱动 running/review/waiting/failed/idle。真实 Windows unpacked 验收发现并修复缩放后立即拖动可能读取原生瞬态 bounds 的问题；最终显示隐藏、缩放恢复、立即拖动、双击和五任务状态均通过。后续保留角色导入 UI、语音鼓励、全面许可证审计、完整视觉 QA 和九状态逐帧人工核对。
+
 Luna 批次已完成并通过复审。README、API 示例、协议说明、评测样例和开发总结已同步当前代码。L-007、L-008、L-009 已完成：快捷测试入口和浏览器测试台均已通过自动化测试、浏览器检查及打包启动自检；竞品对照和后端优化方案已形成。S-009 已就绪，等待切换 Sol 后实施跨模块学习闭环代码。
 
 INBOX-002 已联调：后端已支持用户自定义 OpenAI 兼容或 Anthropic 网关。DeepSeek OpenAI 兼容路径已完成真实普通调用、SSE 分片与协议联调；后续可转入前端或 Electron 集成阶段。
@@ -208,6 +210,7 @@ S-016 已完成：本仓库提交身份已设置为 `Wei kb <212667660@qq.com>`�
 
 | 日期 | 任务 ID | 模型 | 修改文件 | 验证结果 |
 | --- | --- | --- | --- | --- |
+| 2026-07-16 | S-019 / T-036 第一阶段 | Sol | a3-front/a3-front/electron/pet-*、electron/pet/、electron/pets/motuan/、tools/pet/、src/components/pet/、src/pet/、electron/main.mjs、preload.cjs、ipc-contract.mjs、src/api/、DeskPanel.vue、AppLayout.vue、SmartTutor.vue 及测试；README.md、src/api/README.md、codex/AI模型任务队列.md | 交付原创“墨团”透明置顶桌宠 MVP：严格 8×9 atlas 清单、非法自定义回退、拖动/位置、多屏/DPI、九状态、任务联动、点击/双击、显示/隐藏/缩放/速度及资源节流。上游 Apache-2.0 validator 验证 1536×1872 RGBA WebP、透明残留 0、错误 0；完整 `npm test` 为 Electron 121 passed、Vitest 84 passed，修复真实 Windows 缩放后立即拖动的瞬态 bounds 回归并新增控制器测试；`build:desktop`、`desktop:pack` 通过。unpacked 同时加载主界面/学习伙伴，canvas 非透明像素 25,043，DPI 1.5 backing 288×312；显示隐藏、1.25×/1.5×设置、恢复后立即拖动、双击事件和 running/review/waiting/failed/idle 固定 IPC 均通过，测试进程和临时设置已清理。完整视觉/许可证 QA、逐帧状态核对、导入 UI 与语音留后续。 |
 | 2026-07-16 | T-033 Task 13 / T-033 完成 | Sol | backend/errors.py、services/llm_service.py、model_resilience.py、model_runtime.py、model_settings.py 及测试；README.md、backend/API示例.md、a3-front/a3-front/src/api/README.md、codex/AI模型任务队列.md | 旧接口兼容测试转接统一运行时；新增有界 Retry-After、同配置一次等待重试、截止时间切备用和熔断冷却；认证/权限失败后主配置进入 needs_attention，避免重复无效调用。故障矩阵覆盖连接/超时、408/429/502/503/504、401/403/404、流边界、half-open、取消与尝试预算。隔离后端 281 passed/7 skipped，Electron 104 passed、Vitest 75 passed，桌面构建、后端七格式打包和启动检查通过；unpacked 测试启动无残留，最终真实加密配置 5/5 成功，P50 1519 ms、P95 2105 ms；密钥与回复正文未输出。 |
 | 2026-07-16 | T-033 Task 12 | Sol | a3-front/a3-front/src/components/model/ModelSelectionPopover.vue 及测试、src/views/SmartTutor.vue 及测试、src/api/types.ts、codex/AI模型任务队列.md | 输入区新增学习空间配置/模型/思考强度/自动备用偏好；模型能力过滤与 `xhigh→high` 实际显示有回归。SSE 自动切换显示非阻断提示，输出后中断保留文字并通过新请求续写，会话切换清除旧空间实际模型。浏览器 1440px/375px 无横向溢出、控制台无错误；完整 `npm test` 为 Electron Node 104 passed、Vitest 75 passed；`build:desktop` 和 `git diff --check` 通过。 |
 | 2026-07-16 | T-033 Task 11 | Sol | a3-front/a3-front/src/components/model/ModelProfileList.vue 及测试、ModelProfileEditor.vue 及测试、src/views/ModelSettings.vue 及测试；electron/model-profile-controller.mjs 及测试；codex/AI模型任务队列.md | 以暖色连接工作台替换单配置页面，支持配置选择、新建、复制、默认、启停、测试、删除、备用排序、多模型与推理能力白名单；Key 不回填，未测试草稿不能保存，失败/保存后清空。故障中的非默认配置可离线停用，重新启用仍需测试。浏览器 1440px 与 375px 无横向溢出且控制台无错误；完整 `npm test` 为 Electron Node 104 passed、Vitest 71 passed；`build:desktop` 和 `git diff --check` 通过。 |

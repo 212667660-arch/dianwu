@@ -99,6 +99,22 @@ MODEL_NAME=deepseek-v4-pro
 - Swagger：`http://127.0.0.1:8000/docs`
 - 功能测试台：`http://127.0.0.1:8000/test`
 
+### 3.1 启动 Electron 桌面端
+
+桌面端会自行启动打包后的本地后端；开发与解压运行命令如下：
+
+```powershell
+cd E:\软件杯\a3-front\a3-front
+npm install
+npm run desktop:dev
+
+# 生成解压版后直接运行
+npm run desktop:pack
+.\release\win-unpacked\智学协作台.exe
+```
+
+`desktop:dev` 和 `desktop:pack` 需要 `a3-front/a3-front/desktop-backend/api.exe` 已存在。模型配置、知识库、桌宠设置与学习数据均写入 Electron userData，不写入安装目录。
+
 ### 4. 运行测试
 
 ```powershell
@@ -137,6 +153,21 @@ MODEL_NAME=deepseek-v4-pro
 - 图片型 PDF 在没有本地 OCR 包时进入 `OCR_REQUIRED`，不影响其他文档和主学习服务。语义包缺失或损坏时自动退回关键词检索。
 - A3 不会自动下载或随安装包分发 OCR/语义模型权重。首次启动会创建 `userData/knowledge/packs/README.txt`；只应安装具有明确许可、兼容范围和 SHA-256 的本地包。
 - 删除文档会清理数据库、FTS/语义索引和无引用对象；应用异常退出时进行中的任务标记为 `INTERRUPTED`，可由用户重试。
+
+## 桌面学习伙伴
+
+Electron 启动时会同时创建独立的透明、无边框、置顶桌宠窗口。默认原创角色“墨团”支持空闲、左右移动、挥手、跳跃、失败、等待、执行和检查动画；学习生成、协议校验、完成与失败会自动切换任务状态。单击挥手、双击跳跃，按住拖动可移动到其他显示器；位置、显示开关、缩放和速度会保存在 `userData/pet-settings.json`。隐藏时暂停动画，空闲 60 秒后降低刷新频率。
+
+书桌右栏的“桌面学习伙伴”卡片可显示/隐藏桌宠，并选择 50%–150% 缩放和 0.5×–2× 动画速度。Web 浏览器模式只显示说明，不尝试调用桌面能力。
+
+替换角色素材时，在 `%APPDATA%\A3LearningAgent\pets\current\` 放置：
+
+- `pet.json`
+- `spritesheet.webp`
+
+重启应用后会优先读取该目录；清单、精灵图缺失或规格非法时自动回退内置“墨团”。兼容规格固定为单格 192×208、8 列×9 行、总尺寸 1536×1872，未使用格必须完全透明。动画行依次为 `idle`、`running-right`、`running-left`、`waving`、`jumping`、`failed`、`waiting`、`running`、`review`。内置范例位于 `a3-front/a3-front/electron/pets/motuan/`，可用 `tools/pet/generate_motuan.py` 重新生成。
+
+atlas 校验工具来自 Apache-2.0 的 `openai/skills` hatch-pet，原 LICENSE 与来源说明保存在 `tools/pet/third_party/hatch-pet/`。项目没有复用 OpenAI/Codex 名称、Logo 或角色素材。
 
 ## 资源缓存
 
@@ -206,6 +237,6 @@ MODEL_NAME=deepseek-v4-pro
 ## 后续工作
 
 - 按新增供应商和模型的官方能力继续扩充推理参数适配器与真实流式回归。
-- 在知识库稳定交付后，再按独立设计实施可扩展桌宠；账号体系继续只保留扩展边界。
+- 继续完善桌宠角色导入 UI、素材安全检查、语音鼓励、完整视觉 QA 与全面许可证审计；账号体系继续只保留扩展边界。
 - 根据真实模型输出扩充评测集和评分基线。
 - 按 `codex/AI模型任务队列.md` 管理后续模型任务。

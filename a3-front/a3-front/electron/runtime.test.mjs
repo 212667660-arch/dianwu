@@ -136,7 +136,7 @@ test('preload and renderer client do not contain runtime token or backend addres
   assert.doesNotMatch(client, /desktopToken|window\.a3Desktop\?\.apiBaseUrl/)
 })
 
-test('preload exposes fixed request, stream, model profile, and knowledge bridge methods only', () => {
+test('preload exposes fixed request, stream, model profile, knowledge, and pet bridge methods only', () => {
   const preload = fs.readFileSync(path.join(projectDir, 'electron', 'preload.cjs'), 'utf8')
 
   for (const name of [
@@ -158,11 +158,35 @@ test('preload exposes fixed request, stream, model profile, and knowledge bridge
     'knowledgeRevealSource:',
     'knowledgeOpenSource:',
     'knowledgeOnImportProgress:',
+    'petGet:',
+    'petUpdateSettings:',
+    'petSetTaskState:',
   ]) {
     assert.match(preload, new RegExp(name))
   }
   assert.doesNotMatch(preload, /(?:^|[,{]\s*)ipcRenderer\s*:/m)
   assert.doesNotMatch(preload, /openExternal/)
+})
+
+test('desktop pet uses a separate sandbox preload and main-process controller', () => {
+  const main = fs.readFileSync(path.join(projectDir, 'electron', 'main.mjs'), 'utf8')
+  const petPreload = fs.readFileSync(path.join(projectDir, 'electron', 'pet-preload.cjs'), 'utf8')
+
+  assert.match(main, /createPetController/)
+  assert.match(main, /await petController\.prepare\(\)/)
+  assert.match(main, /petController\.createWindow/)
+  assert.match(main, /display-(?:added|removed)|display-metrics-changed/)
+  assert.match(main, /petController\.destroy\(\)/)
+  for (const channel of [
+    'a3:pet-get', 'a3:pet-update-settings', 'a3:pet-set-task-state',
+    'a3:pet-ready', 'a3:pet-drag-begin', 'a3:pet-drag-move', 'a3:pet-drag-end',
+  ]) assert.match(main, new RegExp(channel))
+
+  for (const name of ['ready:', 'beginDrag:', 'moveDrag:', 'endDrag:', 'onState:', 'onSettings:']) {
+    assert.match(petPreload, new RegExp(name))
+  }
+  assert.doesNotMatch(petPreload, /(?:^|[,{]\s*)ipcRenderer\s*:/m)
+  assert.doesNotMatch(petPreload, /request:|modelConfig|knowledge/)
 })
 
 test('sandboxed renderer uses a CommonJS preload bridge', () => {

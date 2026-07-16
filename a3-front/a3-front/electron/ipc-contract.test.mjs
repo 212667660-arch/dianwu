@@ -12,6 +12,8 @@ import {
   validateModelProfileId,
   validateModelProfileInput,
   validateModelProfilePolicyInput,
+  validatePetSettingsInput,
+  validatePetTaskStateInput,
   validateDesktopRequest,
 } from './ipc-contract.mjs'
 
@@ -201,6 +203,24 @@ test('知识库定位只允许固定类型和正向范围', () => {
     { type: 'page', start: 1, end: 1, path: 'C:\\secret' },
   ]) {
     assert.equal(validateKnowledgeLocator(input).ok, false)
+  }
+})
+
+test('桌宠 IPC 只接受固定设置值和任务状态', () => {
+  assert.deepEqual(validatePetSettingsInput({ visible: false, scale: 1.25, speed: 1.5 }), {
+    ok: true,
+    value: { visible: false, scale: 1.25, speed: 1.5 },
+  })
+  assert.deepEqual(validatePetTaskStateInput('review'), { ok: true, value: 'review' })
+
+  for (const input of [
+    { visible: true, assetPath: 'C:\\secret' },
+    { scale: 1.1 },
+    { speed: Number.NaN },
+    {},
+  ]) assert.equal(validatePetSettingsInput(input).ok, false)
+  for (const input of ['waving', 'running-left', '../failed', { state: 'idle' }]) {
+    assert.equal(validatePetTaskStateInput(input).ok, false)
   }
 })
 

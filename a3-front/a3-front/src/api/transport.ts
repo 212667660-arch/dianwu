@@ -1,4 +1,4 @@
-import type { KnowledgeImportBatch, KnowledgeLocator, ModelConfigInput, ModelProfileInput, ModelProfilePolicy, StreamEvent } from './types'
+import type { KnowledgeImportBatch, KnowledgeLocator, ModelConfigInput, ModelProfileInput, ModelProfilePolicy, PetSettings, PetTaskState, StreamEvent } from './types'
 
 export interface TransportRequest {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE'
@@ -45,6 +45,9 @@ export interface DesktopBridge {
   knowledgeRevealSource?(documentId: number): Promise<DesktopResponse>
   knowledgeOpenSource?(documentId: number, locator: KnowledgeLocator): Promise<DesktopResponse>
   knowledgeOnImportProgress?(listener: (jobs: KnowledgeImportBatch['jobs']) => void): () => void
+  petGet?(): Promise<DesktopResponse>
+  petUpdateSettings?(input: Partial<PetSettings>): Promise<DesktopResponse>
+  petSetTaskState?(state: PetTaskState): Promise<DesktopResponse>
   startStream(streamId: string, input: TransportRequest): void
   cancelStream(streamId: string): void
   onStreamEvent(listener: (message: DesktopStreamMessage) => void): () => void

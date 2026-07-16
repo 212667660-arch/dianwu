@@ -6,6 +6,8 @@ const backendMock = vi.hoisted(() => ({
   live: true,
   ready: true,
   loading: false,
+  modelConfigBusy: false,
+  modelProfileBusy: false,
   sessionId: 'test-session',
   session: null,
   model: { api_key_configured: true },
@@ -17,11 +19,20 @@ const backendMock = vi.hoisted(() => ({
   refreshAll: vi.fn(),
   lastError: '',
 }))
+const petMock = vi.hoisted(() => ({ begin: vi.fn(), complete: vi.fn() }))
+const storeHarness = vi.hoisted(() => ({ current: null as null | typeof backendMock }))
 
-vi.mock('@/stores/backend', () => ({ useBackendStore: () => backendMock }))
+vi.mock('@/stores/backend', async () => {
+  const { reactive } = await import('vue')
+  storeHarness.current = reactive(backendMock) as typeof backendMock
+  return { useBackendStore: () => storeHarness.current }
+})
 vi.mock('@/router', () => ({ routes: [{ path: '/', children: [] }] }))
+vi.mock('@/pet/task-state', () => ({ petTaskState: { begin: petMock.begin } }))
 
 import AppLayout from './AppLayout.vue'
+
+const backendStore = storeHarness.current!
 
 function bridgeWithExit() {
   let listener: ((payload: { code: number | null }) => void) | undefined
@@ -55,6 +66,11 @@ beforeEach(() => {
   backendMock.model = { api_key_configured: true }
   backendMock.modelConfigured = true
   backendMock.lastError = ''
+  backendMock.loading = false
+  backendMock.modelConfigBusy = false
+  backendMock.modelProfileBusy = false
+  petMock.begin.mockReset().mockReturnValue({ complete: petMock.complete, update: vi.fn(), fail: vi.fn() })
+  petMock.complete.mockReset()
   backendMock.refreshAll.mockReset().mockResolvedValue(undefined)
   delete window.a3Desktop
 })
@@ -107,5 +123,19 @@ describe('AppLayout backend lifecycle', () => {
     expect(wrapper.find('[data-test="conversation-rail"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="desk-panel"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="desk-toggle"]').exists()).toBe(true)
+  })
+
+  it('maps global loading transactions to a nested pet running task', async () => {
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: AppLayout }] })
+    await router.push('/'); await router.isReady()
+    mount(AppLayout, { global: { plugins: [router], stubs } })
+
+    backendStore.modelProfileBusy = true
+    await flushPromises()
+    expect(petMock.begin).toHaveBeenCalledWith('running')
+
+    backendStore.modelProfileBusy = false
+    await flushPromises()
+    expect(petMock.complete).toHaveBeenCalledWith('idle')
   })
 })

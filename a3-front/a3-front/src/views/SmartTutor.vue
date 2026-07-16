@@ -95,6 +95,7 @@ import { backendApi, DesktopApiError, errorMessage, type KnowledgeSource, type R
 import { useBackendStore } from '@/stores/backend'
 import KnowledgeSourceList from '@/components/knowledge/KnowledgeSourceList.vue'
 import ModelSelectionPopover from '@/components/model/ModelSelectionPopover.vue'
+import { petTaskState, type PetTaskTicket } from '@/pet/task-state'
 
 const backend = useBackendStore()
 const route = useRoute()
@@ -125,6 +126,7 @@ const bindingPrivacy = ref<'allow_model_context' | 'local_search_only'>('allow_m
 const messageList = ref<HTMLElement>()
 let controller: AbortController | null = null
 let interruptionId = 0
+let activePetTask: PetTaskTicket | null = null
 
 const messages = computed(() => backend.session?.messages || [])
 const phaseLabel = computed(() => generating.value ? `${activePhase.value}中` : backend.session?.state || '等待开始')
@@ -137,7 +139,11 @@ async function scrollBottom() {
 
 function handleEvent(event: StreamEvent) {
   if (event.generation_id) generationId.value = event.generation_id
-  if (event.phase) activePhase.value = event.phase === 'profile' ? '画像' : event.phase === 'resource' ? '资源' : '诊断'
+  if (event.phase) {
+    activePhase.value = event.phase === 'profile' ? '画像' : event.phase === 'resource' ? '资源' : '诊断'
+    activePetTask?.update('running')
+  }
+  if (event.event === 'validation') activePetTask?.update('review')
   if (event.event === 'delta' && event.content) streamText.value += event.content
   if (event.event === 'replace' && event.content) streamText.value = event.content
   if (event.event === 'meta') {
@@ -181,6 +187,8 @@ async function send() {
   sources.value = []
   knowledgeSources.value = []
   controller = new AbortController()
+  const petTask = petTaskState.begin('running')
+  activePetTask = petTask
   await scrollBottom()
   try {
     if (useStream.value) {
@@ -193,21 +201,24 @@ async function send() {
       activePhase.value = response.phase === 'profile' ? '画像' : response.phase === 'resource' ? '资源' : '诊断'
     }
     if (backend.sessionId === requestSessionId) await backend.refreshSession()
-    if (streamInterrupted.value) { failedMessage.value = message; pendingUser.value = '' }
-    else if (streamError.value) { failedMessage.value = message; pendingUser.value = '' }
-    else { pendingUser.value = ''; streamText.value = '' }
+    if (streamInterrupted.value) { failedMessage.value = message; pendingUser.value = ''; petTask.complete('waiting') }
+    else if (streamError.value) { failedMessage.value = message; pendingUser.value = ''; petTask.fail() }
+    else { pendingUser.value = ''; streamText.value = ''; petTask.complete('waiting') }
   } catch (error) {
-    if (!isCancellationError(error)) {
+    if (isCancellationError(error)) petTask.complete('waiting')
+    else {
       streamError.value = errorMessage(error)
       failedMessage.value = message
       pendingUser.value = ''
       ElMessage.error(streamError.value)
+      petTask.fail()
     }
   } finally {
     generating.value = false
     controller = null
     generationId.value = ''
     activeSessionId.value = ''
+    if (activePetTask === petTask) activePetTask = null
     await scrollBottom()
   }
 }
@@ -277,7 +288,7 @@ watch(() => backend.sessionId, currentSessionId => {
 onMounted(async () => {
   await Promise.allSettled([backend.refreshModelProfiles(), backend.loadSessionModelPreference()])
 })
-onBeforeUnmount(() => controller?.abort())
+onBeforeUnmount(() => { controller?.abort(); activePetTask?.complete('idle'); activePetTask = null })
 </script>
 
 <style scoped lang="scss">

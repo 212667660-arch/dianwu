@@ -31,6 +31,7 @@ import { useRoute, useRouter } from 'vue-router'
 import ConversationRail from '@/components/workspace/ConversationRail.vue'
 import DeskPanel from '@/components/workspace/DeskPanel.vue'
 import { useBackendStore } from '@/stores/backend'
+import { petTaskState, type PetTaskTicket } from '@/pet/task-state'
 const backend = useBackendStore()
 const router = useRouter()
 const route = useRoute()
@@ -52,6 +53,14 @@ const mastery = computed(() => {
 const deskSources = computed(() => backend.resources.at(-1)?.sources || [])
 watch(deskNote, value => localStorage.setItem('a3-companion-note', value.slice(0, 120)))
 let disposeBackendExit: (() => void) | undefined
+let globalPetTask: PetTaskTicket | null = null
+watch(
+  () => backend.loading || backend.modelConfigBusy || backend.modelProfileBusy,
+  busy => {
+    if (busy && !globalPetTask) globalPetTask = petTaskState.begin('running')
+    else if (!busy && globalPetTask) { globalPetTask.complete('idle'); globalPetTask = null }
+  },
+)
 async function applySession() { backend.setSessionId(sessionDraft.value); sessionDraft.value = backend.sessionId; await backend.refreshAll() }
 async function switchSession(value: string) { backend.setSessionId(value); sessionDraft.value = backend.sessionId; drawerOpen.value = false; await backend.refreshAll() }
 async function startNewSession() { backend.setSessionId(`student_${Date.now().toString(36)}`); sessionDraft.value = backend.sessionId; drawerOpen.value = false; await backend.refreshAll(); await router.push('/tutor') }
@@ -61,5 +70,5 @@ onMounted(async () => {
   await backend.refreshAll()
   if (backend.live && !backend.modelConfigured && route.path !== '/model-settings') await router.replace('/model-settings')
 })
-onBeforeUnmount(() => disposeBackendExit?.())
+onBeforeUnmount(() => { disposeBackendExit?.(); globalPetTask?.complete('idle'); globalPetTask = null })
 </script>

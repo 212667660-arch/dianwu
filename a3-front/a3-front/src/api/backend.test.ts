@@ -241,3 +241,37 @@ describe('knowledge API', () => {
     })
   })
 })
+
+describe('desktop pet API', () => {
+  it('uses fixed desktop pet methods without generic transport requests', async () => {
+    const request = vi.fn()
+    const snapshot = {
+      available: true, pet: { id: 'motuan', displayName: '墨团', description: '学习伙伴' },
+      settings: { visible: true, scale: 1, speed: 1 }, state: 'idle',
+    }
+    const petGet = vi.fn().mockResolvedValue({ ok: true, status: 200, data: snapshot })
+    const petUpdateSettings = vi.fn().mockResolvedValue({ ok: true, status: 200, data: snapshot })
+    const petSetTaskState = vi.fn().mockResolvedValue({ ok: true, status: 200, data: 'review' })
+    window.a3Desktop = {
+      request, modelConfigTest: vi.fn(), modelConfigSave: vi.fn(),
+      petGet, petUpdateSettings, petSetTaskState,
+      startStream: vi.fn(), cancelStream: vi.fn(),
+      onStreamEvent: vi.fn(() => () => {}), onBackendExit: vi.fn(() => () => {}),
+    }
+
+    await expect(backendApi.pet()).resolves.toEqual(snapshot)
+    await backendApi.updatePetSettings({ scale: 1.25 })
+    await backendApi.setPetTaskState('review')
+
+    expect(petUpdateSettings).toHaveBeenCalledWith({ scale: 1.25 })
+    expect(petSetTaskState).toHaveBeenCalledWith('review')
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it('returns an unavailable snapshot and no-ops task state in web mode', async () => {
+    await expect(backendApi.pet()).resolves.toMatchObject({ available: false, pet: null })
+    await expect(backendApi.setPetTaskState('running')).resolves.toBe('running')
+    await expect(backendApi.updatePetSettings({ visible: false })).rejects.toMatchObject({ code: 'DESKTOP_ONLY' })
+    expect(webRequest).not.toHaveBeenCalled()
+  })
+})

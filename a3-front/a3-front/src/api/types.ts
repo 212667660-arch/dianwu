@@ -263,3 +263,26 @@ export interface SessionModelPreferenceInput {
 export interface SessionModelPreference extends SessionModelPreferenceInput {
   session_id: string
 }
+
+export type PetTaskState = 'idle' | 'running' | 'waiting' | 'review' | 'failed'
+export type PetScale = 0.5 | 0.75 | 1 | 1.25 | 1.5
+export type PetSpeed = 0.5 | 0.75 | 1 | 1.25 | 1.5 | 2
+
+export interface PetSettings {
+  visible: boolean
+  scale: PetScale
+  speed: PetSpeed
+}
+
+export interface PetSummary {
+  id: string
+  displayName: string
+  description: string
+}
+
+export interface PetSnapshot {
+  available: boolean
+  pet: PetSummary | null
+  settings: PetSettings
+  state: PetTaskState
+}

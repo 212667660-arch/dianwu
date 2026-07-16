@@ -33,5 +33,7 @@ describe('DeskPanel', () => {
     expect(wrapper.emitted('update:note')?.at(-1)).toEqual(['今晚复习斜率'])
     await wrapper.get('[data-test="suggested-action"]').trigger('click')
     expect(wrapper.emitted('use-suggestion')?.[0]).toEqual(['给我一道一次函数热身题'])
+    expect(wrapper.find('[data-test="pet-settings-card"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('桌宠功能预留')
   })
 })

@@ -24,6 +24,9 @@ import type {
   ModelRuntimeStatus,
   ModelSettings,
   NextAction,
+  PetSettings,
+  PetSnapshot,
+  PetTaskState,
   ProgressSnapshot,
   ReviewTask,
   SessionHistory,
@@ -215,6 +218,24 @@ export const backendApi = {
     if (!window.a3Desktop?.knowledgeOpenSource) throw new Error('来源预览仅桌面版可用。')
     return desktopEnvelope<{ mode: string; displayName: string }>(await window.a3Desktop.knowledgeOpenSource(documentId, locator))
   },
+  async pet(): Promise<PetSnapshot> {
+    const bridge = window.a3Desktop
+    if (!bridge) return unavailablePetSnapshot()
+    if (!bridge.petGet) throw desktopBridgeUnavailableError()
+    return desktopEnvelope<PetSnapshot>(await bridge.petGet())
+  },
+  async updatePetSettings(input: Partial<PetSettings>): Promise<PetSnapshot> {
+    const bridge = window.a3Desktop
+    if (!bridge) throw desktopOnlyError()
+    if (!bridge.petUpdateSettings) throw desktopBridgeUnavailableError()
+    return desktopEnvelope<PetSnapshot>(await bridge.petUpdateSettings(input))
+  },
+  async setPetTaskState(state: PetTaskState): Promise<PetTaskState> {
+    const bridge = window.a3Desktop
+    if (!bridge) return state
+    if (!bridge.petSetTaskState) throw desktopBridgeUnavailableError()
+    return desktopEnvelope<PetTaskState>(await bridge.petSetTaskState(state))
+  },
 }
 
 function legacyConfig(input: ModelProfileInput): ModelConfigInput {
@@ -275,4 +296,13 @@ function desktopOnlyError() {
 
 function desktopBridgeUnavailableError() {
   return new BackendApiError(503, 'DESKTOP_BRIDGE_UNAVAILABLE', '桌面模型配置桥接尚未就绪，请重启应用。', true)
+}
+
+function unavailablePetSnapshot(): PetSnapshot {
+  return {
+    available: false,
+    pet: null,
+    settings: { visible: false, scale: 1, speed: 1 },
+    state: 'idle',
+  }
 }

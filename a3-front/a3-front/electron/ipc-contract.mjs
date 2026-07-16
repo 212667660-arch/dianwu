@@ -24,6 +24,10 @@ const REASONING_ADAPTERS = new Set(['none', 'openai_reasoning_effort', 'anthropi
 const KNOWLEDGE_DROPPED_FIELDS = new Set(['collectionId', 'paths'])
 const KNOWLEDGE_LOCATOR_FIELDS = new Set(['type', 'start', 'end', 'sheet_name'])
 const KNOWLEDGE_LOCATOR_TYPES = new Set(['page', 'slide', 'sheet_rows', 'paragraph'])
+const PET_SETTINGS_FIELDS = new Set(['visible', 'scale', 'speed'])
+const PET_SCALE_VALUES = new Set([0.5, 0.75, 1, 1.25, 1.5])
+const PET_SPEED_VALUES = new Set([0.5, 0.75, 1, 1.25, 1.5, 2])
+const PET_TASK_STATES = new Set(['idle', 'running', 'waiting', 'review', 'failed'])
 
 export function desktopError(code, message, retryable = false, requestId) {
   return {
@@ -243,6 +247,35 @@ export function validateKnowledgeLocator(input) {
     return invalid('Only sheet row locators accept a sheet name.')
   }
   return { ok: true, value }
+}
+
+export function validatePetSettingsInput(input) {
+  if (!isPlainObject(input) || Object.keys(input).length === 0) {
+    return invalid('Pet settings must be a non-empty object.')
+  }
+  for (const field of Object.keys(input)) {
+    if (!PET_SETTINGS_FIELDS.has(field)) return denied('Pet settings contain an unsupported field.')
+  }
+  const value = {}
+  if (Object.hasOwn(input, 'visible')) {
+    if (typeof input.visible !== 'boolean') return invalid('Pet visibility is invalid.')
+    value.visible = input.visible
+  }
+  if (Object.hasOwn(input, 'scale')) {
+    if (!PET_SCALE_VALUES.has(input.scale)) return invalid('Pet scale is invalid.')
+    value.scale = input.scale
+  }
+  if (Object.hasOwn(input, 'speed')) {
+    if (!PET_SPEED_VALUES.has(input.speed)) return invalid('Pet speed is invalid.')
+    value.speed = input.speed
+  }
+  return { ok: true, value }
+}
+
+export function validatePetTaskStateInput(input) {
+  return PET_TASK_STATES.has(input)
+    ? { ok: true, value: input }
+    : invalid('Pet task state is invalid.')
 }
 
 export function validateDesktopRequest(input, { stream = false } = {}) {

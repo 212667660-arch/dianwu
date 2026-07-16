@@ -22,6 +22,9 @@ contextBridge.exposeInMainWorld('a3Desktop', Object.freeze({
     ipcRenderer.on('a3:knowledge-import-progress', callback)
     return () => ipcRenderer.removeListener('a3:knowledge-import-progress', callback)
   },
+  petGet: () => ipcRenderer.invoke('a3:pet-get'),
+  petUpdateSettings: input => ipcRenderer.invoke('a3:pet-update-settings', input),
+  petSetTaskState: state => ipcRenderer.invoke('a3:pet-set-task-state', state),
   startStream: (streamId, input) => ipcRenderer.send('a3:stream-start', streamId, input),
   cancelStream: (streamId) => ipcRenderer.send('a3:stream-cancel', streamId),
   onStreamEvent: (listener) => {

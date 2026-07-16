@@ -30,7 +30,7 @@
       <a v-for="source in sources.slice(0, 3)" :key="source.url" :href="source.url" target="_blank" rel="noreferrer">{{ source.title }}</a>
     </section>
 
-    <div class="widget-slot" aria-label="桌宠功能预留">桌宠功能预留</div>
+    <PetSettingsCard />
   </aside>
 </template>
 
@@ -38,6 +38,7 @@
 import { computed } from 'vue'
 import { ArrowRight, EditPen } from '@element-plus/icons-vue'
 import type { NextAction, SourceItem } from '@/api'
+import PetSettingsCard from '@/components/pet/PetSettingsCard.vue'
 
 const props = defineProps<{
   nextAction?: NextAction | null
@@ -85,5 +86,4 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('zh-CN', { month: 'lon
 .desk-sources { padding-top: 4px; }
 .desk-sources .desk-card-heading { margin-bottom: 8px; }
 .desk-sources a { display: block; padding: 7px 0; overflow: hidden; color: #7f9795; font-size: 11px; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; border-bottom: 1px solid #eee6dc; }
-.widget-slot { margin-top: 20px; color: #c2b6a8; font-size: 10px; text-align: center; }
 </style>
