@@ -56,12 +56,17 @@ def save_bundle(db: Session, session_id: str, bundle: ResourceBundle) -> None:
 def save_artifact(db: Session, bundle_id: str, artifact: ResourceArtifact) -> None:
     tsd = json.dumps(artifact.type_specific_data, ensure_ascii=False)
     qi = json.dumps(artifact.quality_issues, ensure_ascii=False)
+    safety = (
+        json.dumps(artifact.safety.model_dump(mode="json"), ensure_ascii=False)
+        if artifact.safety is not None
+        else None
+    )
     db.execute(
         text("""
             INSERT INTO resource_artifacts (artifact_id, bundle_id, type, title, status,
                 body, type_specific_data_json, quality_score, quality_issues_json,
-                error_code, retryable)
-            VALUES (:aid, :bid, :type, :title, :status, :body, :tsd, :qs, :qi, :ec, :retry)
+                error_code, retryable, safety_json)
+            VALUES (:aid, :bid, :type, :title, :status, :body, :tsd, :qs, :qi, :ec, :retry, :safety)
             ON CONFLICT(artifact_id) DO UPDATE SET
                 bundle_id = excluded.bundle_id,
                 title = excluded.title, status = excluded.status,
@@ -69,13 +74,15 @@ def save_artifact(db: Session, bundle_id: str, artifact: ResourceArtifact) -> No
                 type_specific_data_json = excluded.type_specific_data_json,
                 quality_score = excluded.quality_score,
                 quality_issues_json = excluded.quality_issues_json,
-                error_code = excluded.error_code, retryable = excluded.retryable
+                error_code = excluded.error_code, retryable = excluded.retryable,
+                safety_json = excluded.safety_json
         """),
         {"aid": artifact.artifact_id, "bid": bundle_id,
          "type": artifact.type.value, "title": artifact.title,
          "status": artifact.status.value, "body": artifact.body,
          "tsd": tsd, "qs": artifact.quality_score, "qi": qi,
-         "ec": artifact.error_code, "retry": 1 if artifact.retryable else 0},
+         "ec": artifact.error_code, "retry": 1 if artifact.retryable else 0,
+         "safety": safety},
     )
 
 
@@ -99,6 +106,11 @@ def get_bundle(db: Session, bundle_id: str) -> Optional[dict[str, Any]]:
             artifact.get("quality_issues_json") or "[]"
         )
         artifact["retryable"] = bool(artifact.get("retryable"))
+        artifact["safety"] = (
+            json.loads(artifact["safety_json"])
+            if artifact.get("safety_json")
+            else None
+        )
         artifacts.append(artifact)
     result["artifacts"] = artifacts
     result["requested_types"] = json.loads(result.get("requested_types") or "[]")

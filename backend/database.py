@@ -54,6 +54,7 @@ def _sqlite_migrate() -> None:
         "error_code": "VARCHAR(64)",
         "quality_score": "INTEGER NOT NULL DEFAULT 0",
         "quality_issues_json": "TEXT NOT NULL DEFAULT '[]'",
+        "safety_json": "TEXT",
     })
     with engine.begin() as connection:
         connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_messages_session_seq ON messages(session_id, seq)"))
@@ -89,7 +90,8 @@ def _sqlite_migrate() -> None:
                 quality_score INTEGER NOT NULL DEFAULT 0,
                 quality_issues_json TEXT NOT NULL DEFAULT '[]',
                 error_code VARCHAR(100),
-                retryable INTEGER NOT NULL DEFAULT 0
+                retryable INTEGER NOT NULL DEFAULT 0,
+                safety_json TEXT
             )
         """))
         connection.execute(text(
@@ -99,6 +101,9 @@ def _sqlite_migrate() -> None:
             "CREATE INDEX IF NOT EXISTS ix_resource_bundles_session_created "
             "ON resource_bundles(session_id, created_at)"
         ))
+    _add_missing_columns("resource_artifacts", {
+        "safety_json": "TEXT",
+    })
 
 
 def init_db() -> None:

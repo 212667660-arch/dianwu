@@ -119,6 +119,7 @@ class Resource(Base):
     error_code = Column(String(64), nullable=True)
     quality_score = Column(Integer, default=0, nullable=False)
     quality_issues_json = Column(Text, nullable=False, default="[]")
+    safety_json = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     session = relationship("ChatSession", back_populates="resources")

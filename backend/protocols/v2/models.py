@@ -5,6 +5,8 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from backend.services.content_safety.models import SafetyMetadata
+
 
 class ArtifactType(str, Enum):
     COURSE_EXPLANATION = "course_explanation"
@@ -80,6 +82,7 @@ class ResourceArtifact(BaseModel):
     quality_issues: list[str] = Field(default_factory=list)
     error_code: Optional[str] = Field(default=None, max_length=100)
     retryable: bool = False
+    safety: Optional[SafetyMetadata] = None
 
 
 class ResourceBundle(BaseModel):

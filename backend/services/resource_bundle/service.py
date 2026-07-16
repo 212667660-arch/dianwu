@@ -32,6 +32,7 @@ from backend.protocols.v2.models import (
 from backend.services import db as repo
 from backend.services import learning
 from backend.services.model_runtime import RuntimeSelection, model_runtime_router
+from backend.services.content_safety.models import SafetyMetadata
 from backend.services.resource_bundle.cancel import (
     cancel_bundle,
     cleanup_cancellation,
@@ -157,6 +158,11 @@ def _bundle_from_record(record: dict[str, Any]) -> ResourceBundle:
             quality_issues=list(item.get("quality_issues") or []),
             error_code=item.get("error_code"),
             retryable=bool(item.get("retryable")),
+            safety=(
+                SafetyMetadata.model_validate(item["safety"])
+                if item.get("safety") is not None
+                else None
+            ),
         )
         for item in record.get("artifacts", [])
     ]

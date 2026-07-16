@@ -7,6 +7,7 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.services.model_capabilities import ReasoningAdapter, ReasoningEffort
+from backend.services.content_safety.models import SafetyMetadata
 
 SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
@@ -146,6 +147,7 @@ class ResourceArtifactResponse(BaseModel):
     quality_issues: list[str] = Field(default_factory=list)
     error_code: Optional[str] = None
     retryable: bool = False
+    safety: Optional[SafetyMetadata] = None
 
 
 class BundleResponse(BaseModel):
