@@ -115,6 +115,26 @@ test('upsert tests candidate first resolves blank edit keys and never returns se
   assert.doesNotMatch(JSON.stringify(result), /primary-secret-key/)
 })
 
+test('disabling an existing non-default profile does not require a live provider but re-enabling still does', async () => {
+  const vault = fakeVault(vaultValue([primary, backup]))
+  let testCalls = 0
+  const controller = createModelProfileController({
+    validateSender: () => true,
+    vault,
+    testProfile: async () => { testCalls += 1; throw new Error('provider unavailable') },
+    applySnapshot: async () => ({ ready: true }),
+    runtimeStatus: async () => ({ ready: true }),
+  })
+
+  const disabled = await controller.upsert({}, { ...backup, enabled: false, api_key: '' })
+  const reenabled = await controller.upsert({}, { ...backup, enabled: true, api_key: '' })
+
+  assert.equal(disabled.ok, true)
+  assert.equal((await vault.load()).profiles.find(value => value.id === 'backup').enabled, false)
+  assert.equal(testCalls, 1)
+  assert.equal(reenabled.error.code, 'MODEL_UNAVAILABLE')
+})
+
 test('default deletion last-profile disabling and untrusted senders are rejected', async () => {
   const controller = createModelProfileController({
     validateSender: event => event?.trusted === true,

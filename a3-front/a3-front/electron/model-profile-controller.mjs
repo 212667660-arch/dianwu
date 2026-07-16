@@ -71,14 +71,17 @@ export function createModelProfileController({
   async function upsert(event, input) {
     if (!trusted(event)) return denied()
     const current = await vault.load()
+    const existing = current.profiles.find(value => value.id === input?.id)
     const candidate = resolveKey(input, current)
     if (!candidate) return failure('MODEL_API_KEY_REQUIRED', '首次配置模型时必须输入 API Key。', 400)
     const profiles = current.profiles.filter(value => value.id !== candidate.id)
     profiles.push(candidate)
     if (!profiles.some(value => value.enabled)) return failure('MODEL_PROFILE_LAST_ENABLED', '至少需要保留一个启用的模型配置。', 409)
     if (candidate.id === current.global.default_profile_id && !candidate.enabled) return failure('MODEL_PROFILE_DEFAULT_DISABLE_DENIED', '请先选择新的默认模型配置，再停用当前默认配置。', 409)
-    const tested = await test(event, candidate)
-    if (!tested?.ok) return tested
+    if (!existing || candidate.enabled) {
+      const tested = await test(event, candidate)
+      if (!tested?.ok) return tested
+    }
     const next = {
       ...current,
       global: {
