@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -15,6 +15,8 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
     session_id: str = Field(default="default", min_length=1, max_length=64)
     request_id: Optional[str] = Field(default=None, max_length=64)
+    resource_mode: Optional[Literal["bundle", "single"]] = Field(default=None)
+    resource_type: Optional[str] = Field(default=None, max_length=32)
 
     @field_validator("message")
     @classmethod
@@ -30,6 +32,22 @@ class ChatRequest(BaseModel):
         if not SESSION_ID_PATTERN.fullmatch(value):
             raise ValueError("session_id 只能包含字母、数字、下划线和连字符")
         return value
+
+    @field_validator("resource_type")
+    @classmethod
+    def validate_resource_type(cls, value):
+        if value is not None:
+            allowed = {"course_explanation", "mind_map", "question_bank",
+                       "extended_reading", "adaptive_practice"}
+            if value not in allowed:
+                raise ValueError("resource_type must be one of " + str(allowed))
+        return value
+
+    @model_validator(mode="after")
+    def validate_resource_mode_requires_type(self):
+        if self.resource_mode == "single" and not self.resource_type:
+            raise ValueError("resource_type is required when resource_mode is single")
+        return self
 
 
 class ProfileRequest(BaseModel):
@@ -396,3 +414,14 @@ class SessionModelPreferenceResponse(SessionModelPreferenceUpdate):
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 
     session_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
+from typing import Any
+
+
+class BundleResponse(BaseModel):
+    bundle_id: str
+    protocol_version: str
+    topic: str
+    status: str
+    artifacts: list[dict[str, Any]] = Field(default_factory=list)
+    aggregate_quality: float = 0.0
+
