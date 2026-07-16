@@ -10,7 +10,7 @@
       <button class="card-toggle">{{ expanded ? '收起' : '展开' }}</button>
     </div>
     <div v-if="expanded" class="card-body">
-      <div v-if="artifact.status === 'FAILED'" class="card-error">
+      <div v-if="artifact.status !== 'SUCCEEDED'" class="card-error">
         <p>错误码: {{ artifact.error_code }}</p>
         <p v-if="artifact.quality_issues.length">问题: {{ artifact.quality_issues.join(', ') }}</p>
         <button v-if="artifact.retryable" class="retry-btn" @click.stop="$emit('retry', artifact.artifact_id)">
@@ -18,9 +18,14 @@
         </button>
       </div>
       <div v-else class="card-content">
-        <div class="markdown-body" v-html="renderedMarkdown" />
+        <SafeMermaid
+          v-if="artifact.type === 'mind_map'"
+          :content="artifact.body"
+          :outline="mindMapOutline"
+        />
+        <SafeMarkdown v-else :content="artifact.body" />
       </div>
-      <div class="card-actions">
+      <div v-if="artifact.status === 'SUCCEEDED' && artifact.body" class="card-actions">
         <button @click.stop="copyContent" class="copy-btn">复制 Markdown</button>
       </div>
     </div>
@@ -29,20 +34,12 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import type { ResourceArtifact } from "@/api/types";
+import SafeMarkdown from "./SafeMarkdown.vue";
+import SafeMermaid from "./SafeMermaid.vue";
 
 const props = defineProps<{
-  artifact: {
-    artifact_id: string;
-    type: string;
-    title: string;
-    status: string;
-    body: string;
-    quality_score: number;
-    quality_issues: string[];
-    error_code?: string;
-    retryable?: boolean;
-    type_specific_data?: Record<string, any>;
-  };
+  artifact: ResourceArtifact;
 }>();
 
 defineEmits<{ retry: [artifactId: string] }>();
@@ -59,10 +56,9 @@ const typeLabels: Record<string, string> = {
 
 const typeLabel = computed(() => typeLabels[props.artifact.type] || props.artifact.type);
 
-const renderedMarkdown = computed(() => {
-  return props.artifact.body
-    .replace(/## (.+)/g, "<h3>$1</h3>")
-    .replace(/\n/g, "<br>");
+const mindMapOutline = computed(() => {
+  const outline = props.artifact.type_specific_data?.outline;
+  return typeof outline === "string" ? outline : undefined;
 });
 
 function toggle() {

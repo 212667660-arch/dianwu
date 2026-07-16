@@ -1,6 +1,6 @@
-﻿<template>
+<template>
   <div class="safe-mermaid">
-    <div v-if="safeToRender" class="mermaid-container">
+    <div v-if="canRender" class="mermaid-container">
       <div ref="mermaidEl" class="mermaid-render"></div>
     </div>
     <div v-else class="outline-fallback">
@@ -16,43 +16,56 @@
   </div>
 </template>
 
+<script lang="ts">
+let safeMermaidSequence = 0;
+</script>
+
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 
 const props = defineProps<{
   content: string;
   outline?: string;
 }>();
 
+const componentId = `safe-mermaid-${++safeMermaidSequence}`;
 const mermaidEl = ref<HTMLElement | null>(null);
+const renderFailed = ref(false);
+let renderVersion = 0;
 
-const SAFE_PREFIX = /^(flowchart|graph)\s/;
+const MAX_SOURCE_CHARACTERS = 20_000;
+const MAX_SOURCE_LINES = 250;
+const SAFE_PREFIX = /^(flowchart|graph)(?:\s|$)/;
 const UNSAFE_PATTERNS = [
-  /<script/i,
+  /%%\s*\{/i,
+  /\bclick\b/i,
+  /\bhref\b/i,
   /javascript:/i,
-  /onerror\s*=/i,
-  /onclick\s*=/i,
-  /<iframe/i,
-  /<object/i,
-  /<embed/i,
-  /click\s+.*href/i,
+  /htmlLabels/i,
+  /securityLevel/i,
+  /<\/?(?:script|iframe|object|embed|foreignObject)/i,
+  /on(?:error|load|click)\s*=/i,
 ];
 
 const mermaidCode = computed(() => {
-  const lines = props.content.split("\n");
-  const startIdx = lines.findIndex(
-    (l) => l.trim().startsWith("flowchart") || l.trim().startsWith("graph")
+  const lines = props.content.replace(/\r\n?/g, "\n").split("\n");
+  const startIndex = lines.findIndex(
+    line => line.trim().startsWith("flowchart") || line.trim().startsWith("graph"),
   );
-  if (startIdx < 0) return "";
-  const endIdx = lines.findIndex((l, i) => i > startIdx && /^##\s/.test(l));
-  return lines.slice(startIdx, endIdx > 0 ? endIdx : undefined).join("\n").trim();
+  if (startIndex < 0) return "";
+  const endIndex = lines.findIndex((line, index) => index > startIndex && /^##\s/.test(line));
+  return lines.slice(startIndex, endIndex > startIndex ? endIndex : undefined).join("\n").trim();
 });
 
 const safeToRender = computed(() => {
-  if (!mermaidCode.value) return false;
-  if (!SAFE_PREFIX.test(mermaidCode.value.trim())) return false;
-  return !UNSAFE_PATTERNS.some((p) => p.test(mermaidCode.value));
+  const normalized = props.content.replace(/\r\n?/g, "\n");
+  if (!mermaidCode.value || normalized.length > MAX_SOURCE_CHARACTERS) return false;
+  if (normalized.split("\n").length > MAX_SOURCE_LINES) return false;
+  if (!SAFE_PREFIX.test(mermaidCode.value)) return false;
+  return !UNSAFE_PATTERNS.some(pattern => pattern.test(normalized));
 });
+
+const canRender = computed(() => safeToRender.value && !renderFailed.value);
 
 const outlineText = computed(() => {
   if (props.outline) return props.outline;
@@ -60,25 +73,36 @@ const outlineText = computed(() => {
   return match ? match[1].trim() : "大纲不可用";
 });
 
-onMounted(async () => {
-  if (safeToRender.value && mermaidEl.value) {
-    try {
-      const mermaid = await import("mermaid");
-      mermaid.default.initialize({
-        startOnLoad: false,
-        securityLevel: "strict",
-        theme: "default",
-      });
-      const { svg } = await mermaid.default.render(
-        `mermaid-${Date.now()}`,
-        mermaidCode.value
-      );
-      mermaidEl.value.innerHTML = svg;
-    } catch {
-      // render failure -> fallback handled by safeToRender
+async function renderDiagram() {
+  const version = ++renderVersion;
+  renderFailed.value = false;
+  if (!safeToRender.value) return;
+  await nextTick();
+  if (!mermaidEl.value || version !== renderVersion) return;
+  mermaidEl.value.textContent = "";
+  try {
+    const mermaid = await import("mermaid");
+    mermaid.default.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: "default",
+    });
+    const { svg } = await mermaid.default.render(
+      `${componentId}-${version}`,
+      mermaidCode.value,
+    );
+    if (version !== renderVersion || !mermaidEl.value) return;
+    mermaidEl.value.innerHTML = svg;
+  } catch {
+    if (version === renderVersion) {
+      if (mermaidEl.value) mermaidEl.value.textContent = "";
+      renderFailed.value = true;
     }
   }
-});
+}
+
+watch([mermaidCode, safeToRender], renderDiagram, { immediate: true, flush: "post" });
+onBeforeUnmount(() => { renderVersion += 1; });
 </script>
 
 <style scoped>
