@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import tempfile
-import time
 
 from backend.config import ENV_FILE, Settings, get_settings
 
@@ -15,8 +14,7 @@ _MODEL_ENV_KEYS = {
     "REQUEST_TIMEOUT_SECONDS",
 }
 from backend.errors import DesktopAuthRequiredError, ModelCredentialStoreRequiredError, ModelSettingsAccessError
-from backend.services.llm_service import ModelGateway
-from backend.services.model_runtime import model_runtime_router
+from backend.services.model_runtime import legacy_snapshot_from_settings, model_runtime_router
 from backend.models.schemas import ModelConnectionTestResponse, ModelSettingsResponse, ModelSettingsUpdate
 from backend.services.security import is_production, require_desktop_token, validate_model_base_url
 
@@ -104,15 +102,5 @@ async def test_model_connection(update: ModelSettingsUpdate) -> ModelConnectionT
         app_env=current.app_env,
         allow_local_model_gateway=current.allow_local_model_gateway,
     )
-    gateway = ModelGateway(candidate)
-    started = time.perf_counter()
-    try:
-        await gateway.complete([{"role": "user", "content": "Reply with exactly: OK"}], temperature=0)
-    finally:
-        await gateway.aclose()
-    return ModelConnectionTestResponse(
-        provider=update.provider,
-        model_name=update.model_name,
-        status="connected",
-        latency_ms=round((time.perf_counter() - started) * 1000),
-    )
+    snapshot = legacy_snapshot_from_settings(candidate)
+    return await model_runtime_router.test_profile(snapshot.profiles[0])

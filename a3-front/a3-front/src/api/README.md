@@ -4,9 +4,11 @@
 
 - Web 模式使用 `WebTransport`，由 Vite 将 `/api` 和 `/health` 代理至 `127.0.0.1:8000`。
 - Electron 模式使用 `DesktopTransport`，通过固定的 `window.a3Desktop` 桥接方法访问主进程 HTTP/SSE 代理。
-- 模型连接测试和安全保存使用 `modelConfigTest`、`modelConfigSave` 固定 bridge；候选 API Key 不进入通用 URL、header 或路由代理能力。
+- 旧单配置兼容入口使用 `modelConfigTest`、`modelConfigSave`；正式多配置使用 `modelProfilesList`、`modelProfileTest`、`modelProfileUpsert`、`modelProfileDelete`、`modelProfilePolicySave` 和 `modelRuntimeStatus` 固定 bridge。候选 API Key 不进入通用 URL、header 或路由代理能力。
 - 后端地址和短期 `desktopToken` 只由 Electron 主进程保存；渲染进程、preload 和桌面前端包不接收这些值。
-- 桌面端由主进程使用 `safeStorage` 保存模型密文并在后端启动时注入；Web 开发模式才使用后端 POST/PUT 设置接口。
+- 桌面端由主进程使用版本 2 `safeStorage` 保险库保存多配置密文，在 renderer 创建前 bootstrap 后端运行时，并通过串行事务热应用和回滚；Web 开发模式才使用公开单配置 POST/PUT 设置接口。
+- renderer 只接收脱敏配置、能力声明和运行状态。学习空间偏好只保存 profile/model ID、思考强度和自动备用覆盖，不保存密钥；`/internal/model-runtime/*` 永远不经通用 transport 暴露。
+- SSE `meta` 返回实际配置、模型、请求/生效思考强度和是否使用备用。首个 delta 前可自动切换；已有输出后只返回 `interrupted`，前端保留部分文本并通过新的明确请求使用备用继续。
 - 桌面 SSE 事件通过 preload 转发；普通请求和流式请求均由主进程执行白名单校验、令牌注入和错误映射。
 - 知识库集合、文档状态、搜索和学习空间绑定可经普通 API 管理；Web 模式不上传文件或文件路径，只能管理已经由桌面端导入的资料。
 - 文件选择与拖放导入只能调用固定的 `knowledgeChooseFiles` / `knowledgeImportDroppedFiles` bridge。Electron 主进程复制并哈希文件后只向后端提交 manifest，renderer 不接触原路径、对象路径或桌面令牌。

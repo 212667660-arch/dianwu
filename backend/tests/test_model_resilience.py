@@ -56,6 +56,18 @@ def test_breaker_uses_progressive_cooldown_and_terminal_errors_do_not_open() -> 
     assert breaker.cooldown_until - now[0] == pytest.approx(60)
 
 
+def test_breaker_uses_retry_after_as_immediate_rate_limit_cooldown() -> None:
+    now = [100.0]
+    breaker = CircuitBreaker(clock=lambda: now[0])
+
+    breaker.record_failure(RetryClass.RETRYABLE, retry_after_seconds=90.0)
+
+    assert breaker.state == "open"
+    assert breaker.consecutive_failures == 1
+    assert breaker.cooldown_until == pytest.approx(190.0)
+    assert breaker.allow_request() is False
+
+
 @pytest.mark.parametrize("status", [408, 429, 502, 503, 504])
 def test_retryable_http_statuses_are_classified(status: int) -> None:
     assert classify_error(status) is RetryClass.RETRYABLE

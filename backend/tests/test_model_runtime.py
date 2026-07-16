@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import asyncio
 
+import httpx
 import pytest
 
-from backend.errors import ModelAuthenticationError, ModelRuntimeApplyFailedError, ModelTimeoutError, ModelUnavailableError
+from backend.errors import ModelAccessError, ModelAuthenticationError, ModelFailoverExhaustedError, ModelNotFoundError, ModelProfileNeedsAttentionError, ModelRateLimitError, ModelRuntimeApplyFailedError, ModelTimeoutError, ModelUnavailableError
 from backend.models.schemas import ModelDefinition, ModelProfileSecret, ModelRuntimeSnapshotInput
 from backend.services.model_runtime import ModelRuntimeRouter, RuntimeSelection
 from backend.tests.fake_model_gateway import ScriptedGateway
@@ -26,7 +27,12 @@ def definition(
     })
 
 
-def profile(profile_id: str, *, models: list[ModelDefinition] | None = None) -> ModelProfileSecret:
+def profile(
+    profile_id: str,
+    *,
+    models: list[ModelDefinition] | None = None,
+    request_timeout_seconds: int = 60,
+) -> ModelProfileSecret:
     model_values = models or [definition()]
     return ModelProfileSecret(
         id=profile_id,
@@ -35,7 +41,7 @@ def profile(profile_id: str, *, models: list[ModelDefinition] | None = None) -> 
         provider="openai",
         base_url=f"https://{profile_id}.example.test/v1",
         api_key=f"{profile_id}-secret-key",
-        request_timeout_seconds=60,
+        request_timeout_seconds=request_timeout_seconds,
         default_model_id=model_values[0].id,
         models=model_values,
     )
@@ -79,6 +85,183 @@ def test_retryable_primary_failure_uses_backup_once() -> None:
     asyncio.run(exercise())
 
 
+def test_rate_limit_waits_for_retry_after_and_retries_same_profile_within_deadline() -> None:
+    async def exercise() -> None:
+        now = [100.0]
+        sleeps: list[float] = []
+
+        async def sleep(delay: float) -> None:
+            sleeps.append(delay)
+            now[0] += delay
+
+        gateways = {
+            "primary": ScriptedGateway(completions=[ModelRateLimitError(2.0), "OK"]),
+            "backup": ScriptedGateway(completions=["must-not-run"]),
+        }
+        router = ModelRuntimeRouter(
+            gateway_factory=lambda value: gateways[value.id],
+            clock=lambda: now[0],
+            sleeper=sleep,
+        )
+        await router.apply_snapshot(snapshot(profile("primary"), profile("backup")))
+
+        result = await router.complete(selection(), [{"role": "user", "content": "hello"}], 0.2)
+
+        assert result.text == "OK"
+        assert result.profile_id == "primary"
+        assert sleeps == [2.0]
+        assert len(gateways["primary"].calls) == 2
+        assert gateways["backup"].calls == []
+    asyncio.run(exercise())
+
+
+def test_rate_limit_longer_than_remaining_deadline_uses_backup_without_waiting() -> None:
+    async def exercise() -> None:
+        sleeps: list[float] = []
+
+        async def sleep(delay: float) -> None:
+            sleeps.append(delay)
+
+        gateways = {
+            "primary": ScriptedGateway(completions=[ModelRateLimitError(6.0)]),
+            "backup": ScriptedGateway(completions=["OK"]),
+        }
+        router = ModelRuntimeRouter(
+            gateway_factory=lambda value: gateways[value.id],
+            clock=lambda: 100.0,
+            sleeper=sleep,
+        )
+        await router.apply_snapshot(snapshot(
+            profile("primary", request_timeout_seconds=5),
+            profile("backup"),
+        ))
+
+        result = await router.complete(selection(), [{"role": "user", "content": "hello"}], 0.2)
+
+        assert result.profile_id == "backup"
+        assert sleeps == []
+        assert len(gateways["primary"].calls) == 1
+        assert len(gateways["backup"].calls) == 1
+    asyncio.run(exercise())
+
+
+def test_rate_limit_retry_wait_is_cancellable_without_starting_backup() -> None:
+    async def exercise() -> None:
+        entered_sleep = asyncio.Event()
+
+        async def sleep(_delay: float) -> None:
+            entered_sleep.set()
+            await asyncio.Event().wait()
+
+        gateways = {
+            "primary": ScriptedGateway(completions=[ModelRateLimitError(2.0)]),
+            "backup": ScriptedGateway(completions=["must-not-run"]),
+        }
+        router = ModelRuntimeRouter(
+            gateway_factory=lambda value: gateways[value.id],
+            sleeper=sleep,
+        )
+        await router.apply_snapshot(snapshot(profile("primary"), profile("backup")))
+        running = asyncio.create_task(router.complete(
+            selection(),
+            [{"role": "user", "content": "hello"}],
+            0.2,
+        ))
+
+        await entered_sleep.wait()
+        running.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await running
+        assert gateways["backup"].calls == []
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        ModelTimeoutError(),
+        ModelUnavailableError(),
+        ModelRateLimitError(),
+        httpx.ConnectError(
+            "offline",
+            request=httpx.Request("POST", "https://primary.example.test/v1/chat"),
+        ),
+    ],
+)
+def test_retryable_fault_matrix_uses_at_most_one_backup_attempt(failure) -> None:
+    async def exercise() -> None:
+        gateways = {
+            "primary": ScriptedGateway(completions=[failure]),
+            "backup": ScriptedGateway(completions=["OK"]),
+        }
+        router = ModelRuntimeRouter(gateway_factory=lambda value: gateways[value.id])
+        await router.apply_snapshot(snapshot(profile("primary"), profile("backup")))
+
+        result = await router.complete(selection(), [{"role": "user", "content": "hello"}], 0.2)
+
+        assert result.profile_id == "backup"
+        assert len(gateways["primary"].calls) == 1
+        assert len(gateways["backup"].calls) == 1
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [ModelAuthenticationError(), ModelAccessError(), ModelNotFoundError()],
+)
+def test_terminal_fault_matrix_never_uses_backup(failure) -> None:
+    async def exercise() -> None:
+        gateways = {
+            "primary": ScriptedGateway(completions=[failure]),
+            "backup": ScriptedGateway(completions=["must-not-run"]),
+        }
+        router = ModelRuntimeRouter(gateway_factory=lambda value: gateways[value.id])
+        await router.apply_snapshot(snapshot(profile("primary"), profile("backup")))
+
+        with pytest.raises(type(failure)):
+            await router.complete(selection(), [{"role": "user", "content": "hello"}], 0.2)
+
+        assert len(gateways["primary"].calls) == 1
+        assert gateways["backup"].calls == []
+    asyncio.run(exercise())
+
+
+def test_attempt_budget_stops_after_retry_and_one_backup_profile() -> None:
+    async def exercise() -> None:
+        now = [100.0]
+
+        async def sleep(delay: float) -> None:
+            now[0] += delay
+
+        gateways = {
+            "primary": ScriptedGateway(completions=[
+                ModelRateLimitError(1.0),
+                ModelUnavailableError(),
+            ]),
+            "backup": ScriptedGateway(completions=[ModelUnavailableError()]),
+            "third": ScriptedGateway(completions=["must-not-run"]),
+        }
+        router = ModelRuntimeRouter(
+            gateway_factory=lambda value: gateways[value.id],
+            clock=lambda: now[0],
+            sleeper=sleep,
+        )
+        await router.apply_snapshot(snapshot(
+            profile("primary"),
+            profile("backup"),
+            profile("third"),
+        ))
+
+        with pytest.raises(ModelFailoverExhaustedError) as exc_info:
+            await router.complete(selection(), [{"role": "user", "content": "hello"}], 0.2)
+
+        assert getattr(exc_info.value, "code", None) == "MODEL_FAILOVER_EXHAUSTED"
+        assert len(gateways["primary"].calls) == 2
+        assert len(gateways["backup"].calls) == 1
+        assert gateways["third"].calls == []
+    asyncio.run(exercise())
+
+
 def test_authentication_error_does_not_use_backup() -> None:
     async def exercise() -> None:
         gateways = {
@@ -91,6 +274,25 @@ def test_authentication_error_does_not_use_backup() -> None:
             await router.complete(selection(), [{"role": "user", "content": "hello"}], 0.2)
         assert gateways["backup"].calls == []
         assert router.status().profiles[0].needs_attention is True
+    asyncio.run(exercise())
+
+
+def test_profile_needing_attention_blocks_later_calls_until_snapshot_replaced() -> None:
+    async def exercise() -> None:
+        gateways = {
+            "primary": ScriptedGateway(completions=[ModelAuthenticationError()]),
+            "backup": ScriptedGateway(completions=["must-not-run"]),
+        }
+        router = ModelRuntimeRouter(gateway_factory=lambda value: gateways[value.id])
+        await router.apply_snapshot(snapshot(profile("primary"), profile("backup")))
+
+        with pytest.raises(ModelAuthenticationError):
+            await router.complete(selection(), [{"role": "user", "content": "first"}], 0.2)
+        with pytest.raises(ModelProfileNeedsAttentionError):
+            await router.complete(selection(), [{"role": "user", "content": "second"}], 0.2)
+
+        assert len(gateways["primary"].calls) == 1
+        assert gateways["backup"].calls == []
     asyncio.run(exercise())
 
 
@@ -191,5 +393,42 @@ def test_stream_failure_after_output_is_interrupted_without_backup_text() -> Non
         assert events[1].content == "partial"
         assert events[2].code == "MODEL_STREAM_INTERRUPTED"
         assert events[2].can_continue_with_backup is True
+        assert gateways["backup"].calls == []
+    asyncio.run(exercise())
+
+
+def test_zero_output_stream_rate_limit_waits_then_retries_same_profile() -> None:
+    async def exercise() -> None:
+        now = [100.0]
+        sleeps: list[float] = []
+
+        async def sleep(delay: float) -> None:
+            sleeps.append(delay)
+            now[0] += delay
+
+        gateways = {
+            "primary": ScriptedGateway(streams=[
+                [ModelRateLimitError(1.0)],
+                ["A", "B"],
+            ]),
+            "backup": ScriptedGateway(streams=[["must-not-run"]]),
+        }
+        router = ModelRuntimeRouter(
+            gateway_factory=lambda value: gateways[value.id],
+            clock=lambda: now[0],
+            sleeper=sleep,
+        )
+        await router.apply_snapshot(snapshot(profile("primary"), profile("backup")))
+
+        events = [event async for event in router.stream(
+            selection(),
+            [{"role": "user", "content": "hello"}],
+            0.2,
+        )]
+
+        assert [event.event for event in events] == ["meta", "delta", "delta"]
+        assert events[0].profile_id == "primary"
+        assert sleeps == [1.0]
+        assert len(gateways["primary"].calls) == 2
         assert gateways["backup"].calls == []
     asyncio.run(exercise())

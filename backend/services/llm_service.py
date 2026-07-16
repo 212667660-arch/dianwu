@@ -150,6 +150,18 @@ class ModelGateway:
         ).strip()
 
     @staticmethod
+    def _retry_after_seconds(response: httpx.Response | None) -> float | None:
+        if response is None:
+            return None
+        header = response.headers.get("Retry-After", "").strip()
+        if not header.isdigit():
+            return None
+        value = float(header)
+        if value <= 0:
+            return None
+        return min(value, 300.0)
+
+    @staticmethod
     def _raise_anthropic_response(response: httpx.Response) -> None:
         if response.status_code == 401:
             raise ModelAuthenticationError()
@@ -158,7 +170,7 @@ class ModelGateway:
         if response.status_code == 404:
             raise ModelNotFoundError()
         if response.status_code == 429:
-            raise ModelRateLimitError()
+            raise ModelRateLimitError(ModelGateway._retry_after_seconds(response))
         if response.status_code == 408 or response.status_code == 504:
             raise ModelTimeoutError()
         if response.status_code >= 500:
@@ -214,7 +226,7 @@ class ModelGateway:
         except NotFoundError as exc:
             raise ModelNotFoundError() from exc
         except RateLimitError as exc:
-            raise ModelRateLimitError() from exc
+            raise ModelRateLimitError(self._retry_after_seconds(exc.response)) from exc
         except (APITimeoutError, TimeoutError) as exc:
             raise ModelTimeoutError() from exc
         except BadRequestError as exc:
@@ -301,7 +313,7 @@ class ModelGateway:
         except NotFoundError as exc:
             raise ModelNotFoundError() from exc
         except RateLimitError as exc:
-            raise ModelRateLimitError() from exc
+            raise ModelRateLimitError(self._retry_after_seconds(exc.response)) from exc
         except (APITimeoutError, TimeoutError) as exc:
             raise ModelTimeoutError() from exc
         except (APIConnectionError, InternalServerError) as exc:

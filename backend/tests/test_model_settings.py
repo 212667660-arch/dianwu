@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from backend.config import Settings
 from backend.main import app
 from backend.routers import model_settings as model_settings_router
-from backend.models.schemas import ModelRuntimeSnapshotInput, ModelSettingsResponse, ModelSettingsUpdate
+from backend.models.schemas import ModelConnectionTestResponse, ModelRuntimeSnapshotInput, ModelSettingsResponse, ModelSettingsUpdate
 from backend.errors import ModelSettingsAccessError
 from backend.errors import ModelCredentialStoreRequiredError
 from backend.services import model_settings
@@ -138,6 +138,45 @@ def test_save_model_settings_writes_generic_variables(monkeypatch, tmp_path: Pat
     assert "DESKTOP_TOKEN=local-token" in content
     assert cleared == [True]
     assert result == expected
+
+
+def test_legacy_model_test_uses_runtime_profile_tester(monkeypatch) -> None:
+    calls = []
+
+    class DirectGateway:
+        def __init__(self, _settings) -> None:
+            pass
+
+        async def complete(self, *_args, **_kwargs) -> str:
+            return "OK"
+
+        async def aclose(self) -> None:
+            return None
+
+    async def runtime_test(profile):
+        calls.append(profile)
+        return ModelConnectionTestResponse(
+            provider=profile.provider,
+            model_name=profile.models[0].provider_model_name,
+            status="connected",
+            latency_ms=7,
+        )
+
+    monkeypatch.setattr(model_settings, "ModelGateway", DirectGateway, raising=False)
+    monkeypatch.setattr(model_settings.model_runtime_router, "test_profile", runtime_test)
+    result = asyncio.run(model_settings.test_model_connection(ModelSettingsUpdate(
+        provider="openai",
+        api_key="test-secret-key",
+        base_url="https://example.test/v1",
+        model_name="compat-model",
+        request_timeout_seconds=45,
+    )))
+
+    assert result.latency_ms == 7
+    assert len(calls) == 1
+    assert calls[0].default_model_id == "legacy-model"
+    assert calls[0].models[0].provider_model_name == "compat-model"
+    assert calls[0].api_key == "test-secret-key"
 
 
 def test_model_settings_route_never_returns_raw_key(monkeypatch) -> None:

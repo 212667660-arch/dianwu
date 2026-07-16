@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 import time
@@ -12,7 +12,9 @@ from backend.errors import (
     ModelAccessError,
     ModelAuthenticationError,
     ModelFailoverExhaustedError,
+    ModelRateLimitError,
     ModelProfileDisabledError,
+    ModelProfileNeedsAttentionError,
     ModelProfileNotFoundError,
     ModelRuntimeApplyFailedError,
 )
@@ -111,9 +113,11 @@ class ModelRuntimeRouter:
         *,
         gateway_factory: Callable[[ModelProfileSecret], object] = _default_gateway_factory,
         clock: Callable[[], float] = time.monotonic,
+        sleeper: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
         self._gateway_factory = gateway_factory
         self._clock = clock
+        self._sleeper = sleeper
         self._snapshot = _RuntimeSnapshot(
             value=ModelRuntimeSnapshotInput(
                 default_profile_id=None,
@@ -273,6 +277,26 @@ class ModelRuntimeRouter:
                     return model
         return next(model for model in profile.models if model.id == profile.default_model_id)
 
+    @staticmethod
+    def _retry_after_seconds(error: BaseException) -> float | None:
+        if not isinstance(error, ModelRateLimitError):
+            return None
+        return error.retry_after_seconds
+
+    def _can_retry_after(
+        self,
+        budget: AttemptBudget,
+        retry_after_seconds: float | None,
+        retry_used: bool,
+    ) -> bool:
+        if retry_used or retry_after_seconds is None:
+            return False
+        remaining = budget.deadline - self._clock()
+        return (
+            retry_after_seconds < remaining
+            and budget.attempts < budget.max_attempts
+        )
+
     async def complete(
         self,
         selection: RuntimeSelection,
@@ -292,44 +316,56 @@ class ModelRuntimeRouter:
                 runtime_profile = snapshot.profiles.get(profile_id)
                 if runtime_profile is None or not runtime_profile.definition.enabled:
                     continue
-                if not runtime_profile.breaker.allow_request():
+                if runtime_profile.needs_attention:
+                    if profile_id == first_profile_id:
+                        raise ModelProfileNeedsAttentionError()
                     continue
-                if not budget.consume(profile_id, self._clock()):
-                    break
                 model = self._model_for(runtime_profile.definition, selection.model_id)
                 effective = effective_effort(
                     selection.reasoning_effort,
                     model.supported_reasoning_efforts,
                 )
                 reasoning = reasoning_payload(model.reasoning_adapter, effective)
-                try:
-                    text = await runtime_profile.gateway.complete(
-                        messages,
-                        temperature,
-                        model_name=model.provider_model_name,
-                        reasoning=reasoning,
-                        max_output_tokens=model.max_output_tokens,
-                    )
-                except asyncio.CancelledError:
-                    raise
-                except Exception as exc:
-                    retry_class = classify_error(exc)
-                    runtime_profile.breaker.record_failure(retry_class)
-                    if isinstance(exc, (ModelAuthenticationError, ModelAccessError)):
-                        runtime_profile.needs_attention = True
-                    if retry_class is RetryClass.TERMINAL:
+                retry_after_used = False
+                while runtime_profile.breaker.allow_request():
+                    if not budget.consume(profile_id, self._clock()):
+                        break
+                    try:
+                        text = await runtime_profile.gateway.complete(
+                            messages,
+                            temperature,
+                            model_name=model.provider_model_name,
+                            reasoning=reasoning,
+                            max_output_tokens=model.max_output_tokens,
+                        )
+                    except asyncio.CancelledError:
                         raise
-                    continue
-                runtime_profile.breaker.record_success()
-                runtime_profile.needs_attention = False
-                return RoutedCompletion(
-                    text=text,
-                    profile_id=profile_id,
-                    model_id=model.id,
-                    requested_reasoning_effort=selection.reasoning_effort,
-                    effective_reasoning_effort=effective,
-                    failover_used=profile_id != first_profile_id,
-                )
+                    except Exception as exc:
+                        retry_class = classify_error(exc)
+                        retry_after_seconds = self._retry_after_seconds(exc)
+                        runtime_profile.breaker.record_failure(
+                            retry_class,
+                            retry_after_seconds=retry_after_seconds,
+                        )
+                        if isinstance(exc, (ModelAuthenticationError, ModelAccessError)):
+                            runtime_profile.needs_attention = True
+                        if retry_class is RetryClass.TERMINAL:
+                            raise
+                        if self._can_retry_after(budget, retry_after_seconds, retry_after_used):
+                            retry_after_used = True
+                            await self._sleeper(retry_after_seconds)
+                            continue
+                        break
+                    runtime_profile.breaker.record_success()
+                    runtime_profile.needs_attention = False
+                    return RoutedCompletion(
+                        text=text,
+                        profile_id=profile_id,
+                        model_id=model.id,
+                        requested_reasoning_effort=selection.reasoning_effort,
+                        effective_reasoning_effort=effective,
+                        failover_used=profile_id != first_profile_id,
+                    )
         raise ModelFailoverExhaustedError()
 
     async def stream(
@@ -349,59 +385,72 @@ class ModelRuntimeRouter:
                 runtime_profile = snapshot.profiles.get(profile_id)
                 if runtime_profile is None or not runtime_profile.definition.enabled:
                     continue
-                if not runtime_profile.breaker.allow_request():
+                if runtime_profile.needs_attention:
+                    if profile_id == first_profile_id:
+                        raise ModelProfileNeedsAttentionError()
                     continue
-                if not budget.consume(profile_id, self._clock()):
-                    break
                 model = self._model_for(runtime_profile.definition, selection.model_id)
                 effective = effective_effort(selection.reasoning_effort, model.supported_reasoning_efforts)
                 reasoning = reasoning_payload(model.reasoning_adapter, effective)
-                emitted = False
-                try:
-                    async for delta in runtime_profile.gateway.stream(
-                        messages,
-                        temperature,
-                        model_name=model.provider_model_name,
-                        reasoning=reasoning,
-                        max_output_tokens=model.max_output_tokens,
-                    ):
-                        if not emitted:
-                            emitted = True
+                retry_after_used = False
+                while runtime_profile.breaker.allow_request():
+                    if not budget.consume(profile_id, self._clock()):
+                        break
+                    emitted = False
+                    try:
+                        async for delta in runtime_profile.gateway.stream(
+                            messages,
+                            temperature,
+                            model_name=model.provider_model_name,
+                            reasoning=reasoning,
+                            max_output_tokens=model.max_output_tokens,
+                        ):
+                            if not emitted:
+                                emitted = True
+                                yield RoutedStreamEvent(
+                                    event="meta",
+                                    profile_id=profile_id,
+                                    model_id=model.id,
+                                    requested_reasoning_effort=selection.reasoning_effort,
+                                    effective_reasoning_effort=effective,
+                                    failover_used=profile_id != first_profile_id,
+                                )
+                            yield RoutedStreamEvent(event="delta", content=delta)
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as exc:
+                        retry_class = classify_error(exc)
+                        retry_after_seconds = self._retry_after_seconds(exc)
+                        runtime_profile.breaker.record_failure(
+                            retry_class,
+                            retry_after_seconds=retry_after_seconds,
+                        )
+                        if isinstance(exc, (ModelAuthenticationError, ModelAccessError)):
+                            runtime_profile.needs_attention = True
+                        if emitted and retry_class is RetryClass.RETRYABLE:
                             yield RoutedStreamEvent(
-                                event="meta",
+                                event="interrupted",
                                 profile_id=profile_id,
                                 model_id=model.id,
                                 requested_reasoning_effort=selection.reasoning_effort,
                                 effective_reasoning_effort=effective,
                                 failover_used=profile_id != first_profile_id,
+                                code="MODEL_STREAM_INTERRUPTED",
+                                can_continue_with_backup=index + 1 < len(candidates),
                             )
-                        yield RoutedStreamEvent(event="delta", content=delta)
-                except asyncio.CancelledError:
-                    raise
-                except Exception as exc:
-                    retry_class = classify_error(exc)
-                    runtime_profile.breaker.record_failure(retry_class)
-                    if isinstance(exc, (ModelAuthenticationError, ModelAccessError)):
-                        runtime_profile.needs_attention = True
-                    if emitted and retry_class is RetryClass.RETRYABLE:
-                        yield RoutedStreamEvent(
-                            event="interrupted",
-                            profile_id=profile_id,
-                            model_id=model.id,
-                            requested_reasoning_effort=selection.reasoning_effort,
-                            effective_reasoning_effort=effective,
-                            failover_used=profile_id != first_profile_id,
-                            code="MODEL_STREAM_INTERRUPTED",
-                            can_continue_with_backup=index + 1 < len(candidates),
-                        )
+                            return
+                        if retry_class is RetryClass.TERMINAL:
+                            raise
+                        if self._can_retry_after(budget, retry_after_seconds, retry_after_used):
+                            retry_after_used = True
+                            await self._sleeper(retry_after_seconds)
+                            continue
+                        break
+                    if emitted:
+                        runtime_profile.breaker.record_success()
+                        runtime_profile.needs_attention = False
                         return
-                    if retry_class is RetryClass.TERMINAL:
-                        raise
-                    continue
-                if emitted:
-                    runtime_profile.breaker.record_success()
-                    runtime_profile.needs_attention = False
-                    return
+                    break
         raise ModelFailoverExhaustedError()
 
     async def stream_text(

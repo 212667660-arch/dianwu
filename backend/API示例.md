@@ -215,7 +215,7 @@ Content-Type: application/json
 
 ## 本地模型设置
 
-桌面端可调用以下接口读取或更新本机模型配置。读取接口不会返回完整 API Key，只会返回脱敏提示。开发模式配置 `DESKTOP_TOKEN` 后，以及生产模式下的全部业务接口，都必须携带匹配的 `X-A3-Desktop-Token` 请求头；生产模式还拒绝非 `127.0.0.1` 或 `::1` 的连接。`/health/live` 是唯一匿名健康检查接口。
+以下接口是 Web 开发模式和旧客户端的单配置兼容层。`GET` 返回当前运行时默认配置的脱敏视图，绝不返回完整 API Key；连接测试已经转接多配置运行时的统一测试器。开发模式配置 `DESKTOP_TOKEN` 后，以及生产模式下的全部业务接口，都必须携带匹配的 `X-A3-Desktop-Token` 请求头；生产模式还拒绝非 `127.0.0.1` 或 `::1` 的连接。`/health/live` 是唯一匿名健康检查接口。
 
 ```http
 GET /api/settings/model
@@ -247,6 +247,10 @@ Anthropic 格式 API 使用：
 ```
 
 开发模式更新会原子写入 `.env`，并立即让后续模型请求使用新网关。生产模式拒绝后端明文写入密钥，必须由 Electron `safeStorage` 或 Windows Credential Manager 保存后在启动时注入。生产模式仅允许 HTTPS 公网网关；localhost、私网、链路本地地址和非标准端口会被拒绝。开发环境测试本地网关时，需要显式设置 `ALLOW_LOCAL_MODEL_GATEWAY=true`。
+
+正式 Electron 多配置控制面为 `/internal/model-runtime/bootstrap`、`/internal/model-runtime/test`、`/internal/model-runtime/snapshot` 和 `/internal/model-runtime/status`。这些接口只供 Electron 主进程在 loopback 上携带短期桌面令牌调用，不属于公开 API；renderer、Web 客户端和第三方调用方不得直接访问。主进程只通过固定 IPC 传递经过白名单校验的配置字段，并在 `safeStorage` 中保存密文。
+
+运行时默认最多尝试 3 次、最多使用 2 套配置。408、429、502、503、504、连接失败和超时可进入重试或备用；401、403、404 与参数/协议错误直接终止。上游 429 的数字 `Retry-After` 会限制在 300 秒内并同步为该配置的熔断冷却；等待会越过本次请求总截止时间时不会阻塞，而是直接尝试备用配置或返回失败。
 
 ## 在线公开资料检索
 
@@ -290,6 +294,8 @@ Content-Type: application/json
 ```json
 {"provider":"openai","model_name":"deepseek-v4-pro","status":"connected","latency_ms":326}
 ```
+
+该响应只包含供应商、模型名、连接状态和安全延迟，不包含测试回复正文、API Key 或完整运行时配置。
 
 ## 缓存行为
 

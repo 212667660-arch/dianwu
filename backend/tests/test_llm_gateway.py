@@ -3,8 +3,8 @@ import asyncio
 import pytest
 import httpx
 
-from backend.errors import ModelAccessError, ModelAuthenticationError, ModelBadResponseError, ModelNotFoundError
-from openai import NotFoundError, PermissionDeniedError
+from backend.errors import ModelAccessError, ModelAuthenticationError, ModelBadResponseError, ModelNotFoundError, ModelRateLimitError, ModelTimeoutError, ModelUnavailableError
+from openai import NotFoundError, PermissionDeniedError, RateLimitError
 
 from backend.config import Settings
 from backend.errors import ConfigurationError
@@ -82,6 +82,76 @@ def test_anthropic_error_statuses_have_distinct_safe_codes(status_code, expected
     response = httpx.Response(status_code, request=httpx.Request("POST", "https://example.test/v1/messages"))
     with pytest.raises(expected_error):
         ModelGateway._raise_anthropic_response(response)
+
+
+@pytest.mark.parametrize(
+    ("status_code", "expected_error"),
+    [
+        (408, ModelTimeoutError),
+        (502, ModelUnavailableError),
+        (503, ModelUnavailableError),
+        (504, ModelTimeoutError),
+    ],
+)
+def test_anthropic_retryable_status_matrix_uses_safe_errors(status_code, expected_error) -> None:
+    response = httpx.Response(
+        status_code,
+        request=httpx.Request("POST", "https://example.test/v1/messages"),
+    )
+    with pytest.raises(expected_error):
+        ModelGateway._raise_anthropic_response(response)
+
+
+@pytest.mark.parametrize(
+    ("header", "expected_seconds"),
+    [
+        ("17", 17.0),
+        ("999999", 300.0),
+        ("not-a-number", None),
+        ("-1", None),
+    ],
+)
+def test_anthropic_rate_limit_carries_bounded_retry_after(header, expected_seconds) -> None:
+    response = httpx.Response(
+        429,
+        headers={"Retry-After": header},
+        request=httpx.Request("POST", "https://example.test/v1/messages"),
+    )
+
+    with pytest.raises(ModelRateLimitError) as exc_info:
+        ModelGateway._raise_anthropic_response(response)
+
+    assert exc_info.value.retry_after_seconds == expected_seconds
+
+
+def test_openai_rate_limit_carries_retry_after(monkeypatch) -> None:
+    response = httpx.Response(
+        429,
+        headers={"Retry-After": "23"},
+        request=httpx.Request("POST", "https://example.test/v1/chat/completions"),
+    )
+    gateway = ModelGateway(Settings(
+        model_provider="openai",
+        model_api_key="test-key",
+        model_base_url="https://example.test/v1",
+        model_name="custom-model",
+    ))
+
+    class FakeCompletions:
+        async def create(self, *args, **kwargs):
+            raise RateLimitError("busy", response=response, body=None)
+
+    class FakeClient:
+        class Chat:
+            completions = FakeCompletions()
+
+        chat = Chat()
+
+    monkeypatch.setattr(gateway, "_openai_client_or_raise", lambda: FakeClient())
+    with pytest.raises(ModelRateLimitError) as exc_info:
+        asyncio.run(gateway.complete([{"role": "user", "content": "hello"}]))
+
+    assert exc_info.value.retry_after_seconds == 23.0
 
 
 def test_gateway_close_releases_openai_client() -> None:

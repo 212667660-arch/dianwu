@@ -87,12 +87,21 @@ class CircuitBreaker:
         self._open_count = 0
         self._half_open_in_flight = False
 
-    def record_failure(self, retry_class: RetryClass) -> None:
+    def record_failure(
+        self,
+        retry_class: RetryClass,
+        *,
+        retry_after_seconds: float | None = None,
+    ) -> None:
         if retry_class is RetryClass.TERMINAL:
             if self.state == "half_open":
                 self.record_success()
             return
         self._half_open_in_flight = False
+        if retry_after_seconds is not None and retry_after_seconds > 0:
+            self.consecutive_failures += 1
+            self._open(cooldown_seconds=min(float(retry_after_seconds), _COOLDOWNS[-1]))
+            return
         if self.state == "half_open":
             self._open()
             return
@@ -100,8 +109,12 @@ class CircuitBreaker:
         if self.consecutive_failures >= self.failure_threshold:
             self._open()
 
-    def _open(self) -> None:
+    def _open(self, *, cooldown_seconds: float | None = None) -> None:
         self.state = "open"
         self._open_count += 1
-        cooldown = _COOLDOWNS[min(self._open_count - 1, len(_COOLDOWNS) - 1)]
+        cooldown = (
+            cooldown_seconds
+            if cooldown_seconds is not None
+            else _COOLDOWNS[min(self._open_count - 1, len(_COOLDOWNS) - 1)]
+        )
         self.cooldown_until = self._clock() + cooldown

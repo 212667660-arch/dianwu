@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Any
 
 
@@ -90,8 +91,28 @@ class ModelAuthenticationError(AppError):
 
 
 class ModelRateLimitError(AppError):
-    def __init__(self) -> None:
-        super().__init__("MODEL_RATE_LIMITED", "模型服务繁忙，请稍后重试。", 429, retryable=True)
+    def __init__(self, retry_after_seconds: float | None = None) -> None:
+        bounded_retry_after = None
+        if retry_after_seconds is not None:
+            try:
+                numeric_retry_after = float(retry_after_seconds)
+            except (TypeError, ValueError):
+                numeric_retry_after = 0.0
+            if math.isfinite(numeric_retry_after) and numeric_retry_after > 0:
+                bounded_retry_after = min(numeric_retry_after, 300.0)
+        self.retry_after_seconds = bounded_retry_after
+        details = (
+            {"retry_after_seconds": bounded_retry_after}
+            if bounded_retry_after is not None
+            else None
+        )
+        super().__init__(
+            "MODEL_RATE_LIMITED",
+            "模型服务繁忙，请稍后重试。",
+            429,
+            retryable=True,
+            details_safe=details,
+        )
 
 
 class ModelTimeoutError(AppError):
