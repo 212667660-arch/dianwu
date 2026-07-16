@@ -58,6 +58,43 @@ def _sqlite_migrate() -> None:
     with engine.begin() as connection:
         connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_messages_session_seq ON messages(session_id, seq)"))
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_resources_cache_lookup ON resources(session_id, profile_version, request_message, created_at)"))
+    with engine.begin() as connection:
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS resource_bundles (
+                bundle_id VARCHAR(64) PRIMARY KEY,
+                session_id VARCHAR(64) NOT NULL DEFAULT '',
+                protocol_version VARCHAR(64) NOT NULL DEFAULT 'learning-resource-bundle/v2',
+                topic VARCHAR(200) NOT NULL DEFAULT '',
+                profile_version INTEGER NOT NULL DEFAULT 1,
+                learning_state_version VARCHAR(128) NOT NULL DEFAULT 'v1',
+                mode VARCHAR(16) NOT NULL DEFAULT 'bundle',
+                status VARCHAR(32) NOT NULL DEFAULT 'FAILED',
+                requested_types TEXT NOT NULL DEFAULT '[]',
+                artifacts_json TEXT NOT NULL DEFAULT '[]',
+                aggregate_quality REAL NOT NULL DEFAULT 0.0,
+                created_at VARCHAR(64) NOT NULL DEFAULT '',
+                knowledge_sources_json TEXT NOT NULL DEFAULT '[]',
+                public_sources_json TEXT NOT NULL DEFAULT '[]'
+            )
+        """))
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS resource_artifacts (
+                artifact_id VARCHAR(64) PRIMARY KEY,
+                bundle_id VARCHAR(64) NOT NULL DEFAULT '',
+                type VARCHAR(32) NOT NULL DEFAULT '',
+                title VARCHAR(300) NOT NULL DEFAULT '',
+                status VARCHAR(16) NOT NULL DEFAULT 'FAILED',
+                body TEXT NOT NULL DEFAULT '',
+                type_specific_data_json TEXT NOT NULL DEFAULT '{}',
+                quality_score INTEGER NOT NULL DEFAULT 0,
+                quality_issues_json TEXT NOT NULL DEFAULT '[]',
+                error_code VARCHAR(100),
+                retryable INTEGER NOT NULL DEFAULT 0
+            )
+        """))
+        connection.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_artifacts_bundle_id ON resource_artifacts(bundle_id)"
+        ))
 
 
 def init_db() -> None:
