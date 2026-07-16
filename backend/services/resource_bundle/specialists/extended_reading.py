@@ -1,5 +1,7 @@
 ﻿from __future__ import annotations
 
+import re
+
 from backend.protocols.v2.models import ArtifactType, ArtifactStatus, ResourceArtifact, ResourceBrief
 from backend.services.resource_bundle.safety import check_dangerous_content
 from backend.services.resource_bundle.specialists.base import Specialist, SpecialistResult
@@ -40,7 +42,10 @@ class ExtendedReadingSpecialist(Specialist):
             {"role": "user", "content": user_msg},
         ]
 
-    def parse(self, raw_output: str, artifact_id: str) -> SpecialistResult:
+    def parse(
+        self, raw_output: str, artifact_id: str, *,
+        source_allowlist: tuple[str, ...] = (), subject_category=None,
+    ) -> SpecialistResult:
         safety = check_dangerous_content(raw_output)
         if not safety.passed:
             return SpecialistResult(
@@ -49,9 +54,10 @@ class ExtendedReadingSpecialist(Specialist):
                     type=self.artifact_type,
                     title="延伸阅读",
                     status=ArtifactStatus.FAILED,
-                    body=raw_output,
+                    body="",
                     error_code="SAFETY_FAILED",
                     quality_score=0,
+                    quality_issues=safety.issues,
                 ),
                 raw_output=raw_output,
             )
@@ -63,9 +69,40 @@ class ExtendedReadingSpecialist(Specialist):
                     type=self.artifact_type,
                     title="延伸阅读",
                     status=ArtifactStatus.FAILED,
-                    body=raw_output,
+                    body="",
                     error_code="MISSING_SECTION",
                     quality_score=0,
+                ),
+                raw_output=raw_output,
+            )
+
+        cited = set(re.findall(r"\[(资料\d+)\]", raw_output))
+        unknown = sorted(cited - set(source_allowlist))
+        if unknown:
+            return SpecialistResult(
+                artifact=ResourceArtifact(
+                    artifact_id=artifact_id,
+                    type=self.artifact_type,
+                    title="延伸阅读",
+                    status=ArtifactStatus.FAILED,
+                    body="",
+                    error_code="CITATION_NOT_ALLOWED",
+                    quality_score=0,
+                    quality_issues=[f"UNKNOWN_CITATION:{item}" for item in unknown],
+                ),
+                raw_output=raw_output,
+            )
+        if not source_allowlist and "无可引用外部来源" not in raw_output:
+            return SpecialistResult(
+                artifact=ResourceArtifact(
+                    artifact_id=artifact_id,
+                    type=self.artifact_type,
+                    title="延伸阅读",
+                    status=ArtifactStatus.FAILED,
+                    body="",
+                    error_code="MISSING_NO_SOURCE_DISCLOSURE",
+                    quality_score=0,
+                    quality_issues=["MISSING_NO_SOURCE_DISCLOSURE"],
                 ),
                 raw_output=raw_output,
             )

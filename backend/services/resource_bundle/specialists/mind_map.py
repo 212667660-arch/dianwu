@@ -36,7 +36,10 @@ class MindMapSpecialist(Specialist):
             {"role": "user", "content": user_msg},
         ]
 
-    def parse(self, raw_output: str, artifact_id: str) -> SpecialistResult:
+    def parse(
+        self, raw_output: str, artifact_id: str, *,
+        source_allowlist: tuple[str, ...] = (), subject_category=None,
+    ) -> SpecialistResult:
         safety = check_dangerous_content(raw_output)
         if not safety.passed:
             return SpecialistResult(
@@ -45,15 +48,16 @@ class MindMapSpecialist(Specialist):
                     type=self.artifact_type,
                     title="思维导图",
                     status=ArtifactStatus.FAILED,
-                    body=raw_output,
+                    body="",
                     error_code="SAFETY_FAILED",
                     quality_score=0,
+                    quality_issues=safety.issues,
                 ),
                 raw_output=raw_output,
             )
 
         mermaid_match = re.search(r'##\s*Mermaid\s*\n(.*?)(?=##\s*大纲|\Z)', raw_output, re.DOTALL)
-        outline_match = re.search(r'##\s*大纲', raw_output)
+        outline_match = re.search(r'##\s*大纲\s*\n([\s\S]*?)\Z', raw_output)
 
         if not mermaid_match:
             return SpecialistResult(
@@ -62,7 +66,7 @@ class MindMapSpecialist(Specialist):
                     type=self.artifact_type,
                     title="思维导图",
                     status=ArtifactStatus.FAILED,
-                    body=raw_output,
+                    body="",
                     error_code="MISSING_MERMAID",
                     quality_score=0,
                 ),
@@ -71,14 +75,14 @@ class MindMapSpecialist(Specialist):
 
         mermaid_body = mermaid_match.group(1).strip()
 
-        if not outline_match:
+        if not outline_match or not outline_match.group(1).strip():
             return SpecialistResult(
                 artifact=ResourceArtifact(
                     artifact_id=artifact_id,
                     type=self.artifact_type,
                     title="思维导图",
                     status=ArtifactStatus.FAILED,
-                    body=raw_output,
+                    body="",
                     error_code="MISSING_OUTLINE",
                     quality_score=0,
                 ),
@@ -99,9 +103,10 @@ class MindMapSpecialist(Specialist):
                     type=self.artifact_type,
                     title="思维导图",
                     status=ArtifactStatus.FAILED,
-                    body=raw_output,
+                    body="",
                     error_code=";".join(issues),
                     quality_score=0,
+                    quality_issues=issues,
                 ),
                 raw_output=raw_output,
             )
@@ -114,7 +119,11 @@ class MindMapSpecialist(Specialist):
                 status=ArtifactStatus.SUCCEEDED,
                 body=raw_output,
                 quality_score=80,
-                type_specific_data={"has_mermaid": True, "has_outline": True},
+                type_specific_data={
+                    "has_mermaid": True,
+                    "has_outline": True,
+                    "outline": outline_match.group(1).strip(),
+                },
             ),
             raw_output=raw_output,
         )

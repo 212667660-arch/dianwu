@@ -108,7 +108,12 @@ class BundlePipeline:
                 messages = specialist.build_prompt(brief, profile_text, learning_context, knowledge_context)
                 try:
                     raw = await self._gateway.complete(messages, temperature=0.4)
-                    return specialist.parse(raw, f"{bundle_id}-{at.value}")
+                    return specialist.parse(
+                        raw,
+                        f"{bundle_id}-{at.value}",
+                        source_allowlist=tuple(brief.source_allowlist),
+                        subject_category=brief.subject_category,
+                    )
                 except Exception as exc:
                     logger.warning("Specialist %s failed: %s", at.value, exc)
                     return SpecialistResult(

@@ -35,7 +35,10 @@ class CourseExplanationSpecialist(Specialist):
             {"role": "user", "content": user_msg},
         ]
 
-    def parse(self, raw_output: str, artifact_id: str) -> SpecialistResult:
+    def parse(
+        self, raw_output: str, artifact_id: str, *,
+        source_allowlist: tuple[str, ...] = (), subject_category=None,
+    ) -> SpecialistResult:
         safety = check_dangerous_content(raw_output)
         if not safety.passed:
             return SpecialistResult(
@@ -44,16 +47,17 @@ class CourseExplanationSpecialist(Specialist):
                     type=self.artifact_type,
                     title="课程讲解",
                     status=ArtifactStatus.FAILED,
-                    body=raw_output,
+                    body="",
                     error_code="SAFETY_FAILED",
                     quality_score=0,
+                    quality_issues=safety.issues,
                 ),
                 raw_output=raw_output,
             )
 
         found = sum(1 for s in _COURSE_SECTIONS if f"## {s}" in raw_output)
         score = min(found * 20, 100)
-        if found >= 3:
+        if found == len(_COURSE_SECTIONS):
             return SpecialistResult(
                 artifact=ResourceArtifact(
                     artifact_id=artifact_id,
@@ -72,9 +76,14 @@ class CourseExplanationSpecialist(Specialist):
                 type=self.artifact_type,
                 title="课程讲解",
                 status=ArtifactStatus.FAILED,
-                body=raw_output,
-                error_code="INSUFFICIENT_SECTIONS",
+                body="",
+                error_code="COURSE_EXPLANATION_INCOMPLETE",
                 quality_score=score,
+                quality_issues=[
+                    f"MISSING_SECTION:{section}"
+                    for section in _COURSE_SECTIONS
+                    if f"## {section}" not in raw_output
+                ],
             ),
             raw_output=raw_output,
         )

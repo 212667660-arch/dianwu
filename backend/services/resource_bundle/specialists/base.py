@@ -21,7 +21,14 @@ class Specialist(abc.ABC):
         ...
 
     @abc.abstractmethod
-    def parse(self, raw_output: str, artifact_id: str) -> SpecialistResult:
+    def parse(
+        self,
+        raw_output: str,
+        artifact_id: str,
+        *,
+        source_allowlist: tuple[str, ...] = (),
+        subject_category=None,
+    ) -> SpecialistResult:
         ...
 
     @property

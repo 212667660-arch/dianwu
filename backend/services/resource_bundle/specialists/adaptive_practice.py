@@ -1,5 +1,7 @@
 ﻿from __future__ import annotations
 
+import re
+
 from backend.protocols.v2.models import ArtifactType, ArtifactStatus, ResourceArtifact, ResourceBrief, SubjectCategory
 from backend.services.resource_bundle.safety import check_dangerous_content
 from backend.services.resource_bundle.specialists.base import Specialist, SpecialistResult
@@ -51,7 +53,11 @@ class AdaptivePracticeSpecialist(Specialist):
             {"role": "user", "content": user_msg},
         ]
 
-    def parse(self, raw_output: str, artifact_id: str) -> SpecialistResult:
+    def parse(
+        self, raw_output: str, artifact_id: str, *,
+        source_allowlist: tuple[str, ...] = (),
+        subject_category: SubjectCategory = SubjectCategory.OTHER,
+    ) -> SpecialistResult:
         safety = check_dangerous_content(raw_output)
         if not safety.passed:
             return SpecialistResult(
@@ -60,21 +66,27 @@ class AdaptivePracticeSpecialist(Specialist):
                     type=self.artifact_type,
                     title="适应性练习",
                     status=ArtifactStatus.FAILED,
-                    body=raw_output,
+                    body="",
                     error_code="SAFETY_FAILED",
                     quality_score=0,
+                    quality_issues=safety.issues,
                 ),
                 raw_output=raw_output,
             )
 
-        has_starter = "## 起始代码" in raw_output
-        has_env = "## 环境" in raw_output
-        fmt = "code_lab" if (has_starter or has_env) else "experiment_or_case"
-
-        required = _CODE_LAB_SECTIONS if fmt == "code_lab" else _EXPERIMENT_SECTIONS
+        fmt = "code_lab" if subject_category == SubjectCategory.CS else "experiment_or_case"
+        required = _CODE_LAB_SECTIONS if subject_category == SubjectCategory.CS else _EXPERIMENT_SECTIONS
         found = sum(1 for s in required if f"## {s}" in raw_output)
+        starter_match = (
+            re.search(r"##\s*起始代码\s*\n([\s\S]*?)\Z", raw_output)
+            if subject_category == SubjectCategory.CS
+            else None
+        )
+        starter_ok = subject_category != SubjectCategory.CS or bool(
+            starter_match and starter_match.group(1).strip()
+        )
 
-        if found >= len(required) - 1:
+        if found == len(required) and starter_ok:
             return SpecialistResult(
                 artifact=ResourceArtifact(
                     artifact_id=artifact_id,
@@ -93,9 +105,17 @@ class AdaptivePracticeSpecialist(Specialist):
                 type=self.artifact_type,
                 title="适应性练习",
                 status=ArtifactStatus.FAILED,
-                body=raw_output,
-                error_code="INSUFFICIENT_SECTIONS",
+                body="",
+                error_code="ADAPTIVE_PRACTICE_INCOMPLETE",
                 quality_score=min(found * 15, 100),
+                quality_issues=[
+                    *[
+                        f"MISSING_SECTION:{section}"
+                        for section in required
+                        if f"## {section}" not in raw_output
+                    ],
+                    *([] if starter_ok else ["STARTER_CODE_EMPTY"]),
+                ],
             ),
             raw_output=raw_output,
         )

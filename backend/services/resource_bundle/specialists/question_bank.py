@@ -40,7 +40,10 @@ class QuestionBankSpecialist(Specialist):
             {"role": "user", "content": user_msg},
         ]
 
-    def parse(self, raw_output: str, artifact_id: str) -> SpecialistResult:
+    def parse(
+        self, raw_output: str, artifact_id: str, *,
+        source_allowlist: tuple[str, ...] = (), subject_category=None,
+    ) -> SpecialistResult:
         safety = check_dangerous_content(raw_output)
         if not safety.passed:
             return SpecialistResult(
@@ -49,15 +52,17 @@ class QuestionBankSpecialist(Specialist):
                     type=self.artifact_type,
                     title="题库",
                     status=ArtifactStatus.FAILED,
-                    body=raw_output,
+                    body="",
                     error_code="SAFETY_FAILED",
                     quality_score=0,
+                    quality_issues=safety.issues,
                 ),
                 raw_output=raw_output,
             )
 
         type_specific: dict[str, object] = {}
         total_questions = 0
+        complete_levels = True
         for level in _QB_LEVELS:
             # Count questions in each level section
             pattern = re.compile(rf'##\s*{level}\s*\n(.*?)(?=##\s*(?:{"|".join(_QB_LEVELS)})|\Z)', re.DOTALL)
@@ -65,18 +70,21 @@ class QuestionBankSpecialist(Specialist):
             if section_match:
                 section_body = section_match.group(1)
                 q_count = len(re.findall(r'题目\d+[：:]', section_body))
+                answer_count = len(re.findall(r'答案\d+[：:]', section_body))
+                explanation_count = len(re.findall(r'解析\d+[：:]', section_body))
                 type_specific[f"{level}_count"] = q_count
                 total_questions += q_count
+                complete_levels = complete_levels and q_count >= 1
+                complete_levels = complete_levels and answer_count >= q_count
+                complete_levels = complete_levels and explanation_count >= q_count
             else:
                 type_specific[f"{level}_count"] = 0
-
-        has_answer = "答案" in raw_output
-        has_explanation = "解析" in raw_output
+                complete_levels = False
 
         # Add a "basic_count" alias for backward compatibility in tests
         type_specific["basic_count"] = type_specific.get("基础_count", 0)
 
-        if total_questions > 0 and has_answer and has_explanation:
+        if complete_levels:
             return SpecialistResult(
                 artifact=ResourceArtifact(
                     artifact_id=artifact_id,
@@ -95,9 +103,14 @@ class QuestionBankSpecialist(Specialist):
                 type=self.artifact_type,
                 title="题库",
                 status=ArtifactStatus.FAILED,
-                body=raw_output,
-                error_code="INSUFFICIENT_QUESTIONS",
+                body="",
+                error_code="QUESTION_BANK_INCOMPLETE",
                 quality_score=min(total_questions * 10, 100),
+                quality_issues=[
+                    f"INCOMPLETE_LEVEL:{level}"
+                    for level in _QB_LEVELS
+                    if type_specific.get(f"{level}_count", 0) == 0
+                ],
             ),
             raw_output=raw_output,
         )
