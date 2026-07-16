@@ -9,7 +9,7 @@
     <article class="chat-panel">
       <div ref="messageList" class="message-list">
         <div v-if="failoverNotice" class="connection-notice" data-testid="failover-notice">↝ {{ failoverNotice }}，这次回答仍保持同一条清晰的上下文。</div>
-        <div v-if="!messages.length && !pendingUser" class="welcome" :data-companion-id="companionId">
+        <div v-if="!displayMessages.length && !historicalBundles.length && !pendingUser" class="welcome" :data-companion-id="companionId">
           <div class="companion-portrait" aria-hidden="true"><span>学</span></div>
           <h1>今天想一起学点什么？</h1>
           <p>不用急着把目标说得很完整。先告诉我你最近在困惑什么，我们慢慢把它变成一条清晰的路。</p>
@@ -23,10 +23,28 @@
           </div>
         </div>
 
-        <div v-for="message in messages" :key="message.seq" class="message" :class="message.role">
+        <div v-for="message in displayMessages" :key="message.seq" class="message" :class="message.role">
           <div class="message-meta">{{ message.role === 'user' ? '你' : '学习伙伴' }}</div>
           <pre>{{ message.content }}</pre>
         </div>
+        <div v-if="resourceProgress" class="resource-progress" role="status">
+          <span>资源生成进度</span>
+          <strong>{{ resourceProgress.completed }} / {{ resourceProgress.total }}</strong>
+          <span>{{ resourceProgress.currentType }}</span>
+        </div>
+        <ResourceBundle
+          v-for="bundle in historicalBundles"
+          :key="bundle.bundle_id"
+          :bundle="bundle"
+          :retrying-types="retryingTypesFor(bundle.bundle_id)"
+          @retry-artifact="artifactType => retryArtifact(bundle.bundle_id, artifactType)"
+        />
+        <ResourceBundle
+          v-if="visibleActiveBundle"
+          :bundle="visibleActiveBundle"
+          :retrying-types="retryingTypesFor(visibleActiveBundle.bundle_id)"
+          @retry-artifact="artifactType => retryArtifact(visibleActiveBundle?.bundle_id || '', artifactType)"
+        />
         <div v-for="item in retainedInterruptions" :key="item.id" class="message assistant retained-interruption">
           <div class="message-meta">学习伙伴 · 中断前保留</div><pre>{{ item.content }}</pre>
         </div>
@@ -65,11 +83,12 @@
                 :effective-reasoning-effort="effectiveReasoningEffort"
                 @save="saveModelPreference"
               />
+              <ResourceMenu v-if="canGenerateResources" v-model="resourceSelection" />
               <span class="gentle-tip">写下目标、问题，或此刻的困惑</span><span class="stream-toggle">流式 <el-switch v-model="useStream" /></span>
             </div>
             <div class="toolbar">
               <el-button v-if="generating" type="danger" plain :icon="Close" @click="cancel">取消</el-button>
-              <el-button type="primary" :icon="Promotion" :loading="generating" :disabled="!editor.trim() || !backend.modelConfigured" @click="send">发送</el-button>
+              <el-button data-testid="send" type="primary" :icon="Promotion" :loading="generating" :disabled="!editor.trim() || !backend.modelConfigured" @click="send">发送</el-button>
             </div>
           </div>
         </div>
@@ -91,10 +110,12 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Close, Promotion } from '@element-plus/icons-vue'
-import { backendApi, DesktopApiError, errorMessage, type KnowledgeSource, type ReasoningEffort, type SessionModelPreferenceInput, type SourceItem, type StreamEvent } from '@/api'
+import { backendApi, DesktopApiError, errorMessage, type ArtifactType, type KnowledgeSource, type ReasoningEffort, type ResourceArtifact, type ResourceBundle as ResourceBundleType, type ResourceSelection, type SessionModelPreferenceInput, type SourceItem, type StreamEvent } from '@/api'
 import { useBackendStore } from '@/stores/backend'
 import KnowledgeSourceList from '@/components/knowledge/KnowledgeSourceList.vue'
 import ModelSelectionPopover from '@/components/model/ModelSelectionPopover.vue'
+import ResourceBundle from '@/components/learning/ResourceBundle.vue'
+import ResourceMenu from '@/components/learning/ResourceMenu.vue'
 import { petTaskState, type PetTaskTicket } from '@/pet/task-state'
 
 const backend = useBackendStore()
@@ -120,6 +141,10 @@ const effectiveReasoningEffort = ref<ReasoningEffort>()
 const retainedInterruptions = ref<Array<{ id: number; content: string }>>([])
 const sources = ref<SourceItem[]>([])
 const knowledgeSources = ref<KnowledgeSource[]>([])
+const resourceSelection = ref<ResourceSelection>({ mode: 'bundle' })
+const activeBundle = ref<ResourceBundleType | null>(null)
+const resourceProgress = ref<{ completed: number; total: number; currentType: string } | null>(null)
+const retryingArtifacts = ref<Set<string>>(new Set())
 const knowledgeSpaceOpen = ref(false)
 const bindingIds = ref<number[]>([])
 const bindingPrivacy = ref<'allow_model_context' | 'local_search_only'>('allow_model_context')
@@ -129,6 +154,15 @@ let interruptionId = 0
 let activePetTask: PetTaskTicket | null = null
 
 const messages = computed(() => backend.session?.messages || [])
+const displayMessages = computed(() => messages.value.filter(message => !isBundleMessage(message.content)))
+const historicalBundles = computed(() => backend.resourceBundles || [])
+const visibleActiveBundle = computed(() => {
+  if (!activeBundle.value) return null
+  return historicalBundles.value.some(bundle => bundle.bundle_id === activeBundle.value?.bundle_id)
+    ? null
+    : activeBundle.value
+})
+const canGenerateResources = computed(() => ['PROFILED', 'GENERATING'].includes(backend.session?.state || ''))
 const phaseLabel = computed(() => generating.value ? `${activePhase.value}中` : backend.session?.state || '等待开始')
 const starters = ['我想学习一次函数，请先了解我的基础。', '我正在准备英语考试，希望制定复习计划。', '根据我的薄弱点生成一份笔记和分层练习。']
 
@@ -154,6 +188,43 @@ function handleEvent(event: StreamEvent) {
   }
   if (event.event === 'sources') sources.value = (event.sources || []).filter((item): item is SourceItem => 'url' in item)
   if (event.event === 'knowledge_sources') knowledgeSources.value = (event.sources || []).filter((item): item is KnowledgeSource => 'reference_id' in item)
+  if (event.event === 'resource_plan' && event.bundle_id) {
+    activeBundle.value = provisionalBundle(
+      event.bundle_id,
+      event.topic || '正在生成资源',
+      event.requested_types || [],
+    )
+    resourceProgress.value = {
+      completed: 0,
+      total: event.requested_types?.length || 0,
+      currentType: '',
+    }
+  }
+  if (event.event === 'resource_progress') {
+    resourceProgress.value = {
+      completed: event.completed_count || 0,
+      total: event.total_count || 0,
+      currentType: event.current_type || '',
+    }
+  }
+  if (event.event === 'resource_artifact') {
+    const artifact = artifactFromEvent(event)
+    if (artifact) {
+      if (!activeBundle.value) {
+        activeBundle.value = provisionalBundle(
+          `pending-${generationId.value || Date.now()}`,
+          '正在生成资源',
+          [artifact.type],
+        )
+      }
+      const artifacts = activeBundle.value.artifacts.filter(item => item.type !== artifact.type)
+      activeBundle.value = { ...activeBundle.value, artifacts: [...artifacts, artifact] }
+    }
+  }
+  if (event.event === 'resource_bundle') {
+    const bundle = bundleFromEvent(event)
+    if (bundle) activeBundle.value = bundle
+  }
   if (event.event === 'error') {
     streamError.value = event.message || event.code || '生成失败，请检查后重试。'
     ElMessage.error(streamError.value)
@@ -186,19 +257,32 @@ async function send() {
   activeSessionId.value = requestSessionId
   sources.value = []
   knowledgeSources.value = []
+  activeBundle.value = null
+  resourceProgress.value = null
   controller = new AbortController()
   const petTask = petTaskState.begin('running')
   activePetTask = petTask
   await scrollBottom()
   try {
     if (useStream.value) {
-      await backendApi.streamChat(requestSessionId, message, handleEvent, controller.signal)
+      await backendApi.streamChat(
+        requestSessionId,
+        message,
+        handleEvent,
+        controller.signal,
+        canGenerateResources.value ? resourceSelection.value : undefined,
+      )
     } else {
-      const response = await backendApi.chat(requestSessionId, message)
+      const response = await backendApi.chat(
+        requestSessionId,
+        message,
+        canGenerateResources.value ? resourceSelection.value : undefined,
+      )
       streamText.value = response.reply
       sources.value = response.sources
       knowledgeSources.value = response.knowledge_sources || []
       activePhase.value = response.phase === 'profile' ? '画像' : response.phase === 'resource' ? '资源' : '诊断'
+      activeBundle.value = response.bundle || null
     }
     if (backend.sessionId === requestSessionId) await backend.refreshSession()
     if (streamInterrupted.value) { failedMessage.value = message; pendingUser.value = ''; petTask.complete('waiting') }
@@ -221,6 +305,100 @@ async function send() {
     if (activePetTask === petTask) activePetTask = null
     await scrollBottom()
   }
+}
+
+function isBundleMessage(content: string): boolean {
+  try {
+    return JSON.parse(content)?.protocol_version === 'learning-resource-bundle/v2'
+  } catch {
+    return false
+  }
+}
+
+function provisionalBundle(bundleId: string, topic: string, requestedTypes: ArtifactType[]): ResourceBundleType {
+  return {
+    bundle_id: bundleId,
+    protocol_version: 'learning-resource-bundle/v2',
+    topic,
+    profile_version: backend.session?.profile_version || 0,
+    learning_state_version: String(backend.session?.learning_state_version || 0),
+    mode: resourceSelection.value.mode,
+    status: 'PARTIAL',
+    requested_types: requestedTypes,
+    artifacts: [],
+    aggregate_quality: 0,
+    created_at: new Date().toISOString(),
+    knowledge_sources: [],
+    public_sources: [],
+  }
+}
+
+function artifactFromEvent(event: StreamEvent): ResourceArtifact | null {
+  if (!event.artifact_id || !event.type || !event.title || !event.status) return null
+  if (!['SUCCEEDED', 'FAILED', 'CANCELLED'].includes(event.status)) return null
+  return {
+    artifact_id: event.artifact_id,
+    type: event.type,
+    title: event.title,
+    status: event.status as ResourceArtifact['status'],
+    body: event.body || '',
+    type_specific_data: event.type_specific_data || {},
+    quality_score: event.quality_score || 0,
+    quality_issues: event.quality_issues || [],
+    error_code: event.error_code || null,
+    retryable: event.retryable === true,
+  }
+}
+
+function bundleFromEvent(event: StreamEvent): ResourceBundleType | null {
+  if (
+    !event.bundle_id
+    || event.protocol_version !== 'learning-resource-bundle/v2'
+    || !event.topic
+    || !event.mode
+    || !event.status
+    || !event.requested_types
+    || !event.artifacts
+    || !event.created_at
+  ) return null
+  if (!['COMPLETED', 'PARTIAL', 'FAILED', 'CANCELLED'].includes(event.status)) return null
+  return {
+    bundle_id: event.bundle_id,
+    protocol_version: event.protocol_version,
+    topic: event.topic,
+    profile_version: event.profile_version || 0,
+    learning_state_version: event.learning_state_version || '0',
+    mode: event.mode,
+    status: event.status as ResourceBundleType['status'],
+    requested_types: event.requested_types,
+    artifacts: event.artifacts,
+    aggregate_quality: event.aggregate_quality || 0,
+    created_at: event.created_at,
+    knowledge_sources: event.knowledge_sources || [],
+    public_sources: event.public_sources || [],
+  }
+}
+
+async function retryArtifact(bundleId: string, artifactType: ArtifactType) {
+  if (!bundleId) return
+  const key = `${bundleId}:${artifactType}`
+  retryingArtifacts.value = new Set(retryingArtifacts.value).add(key)
+  try {
+    const updated = await backend.retryResourceArtifact(bundleId, artifactType)
+    if (activeBundle.value?.bundle_id === bundleId) activeBundle.value = updated
+  } catch (error) {
+    ElMessage.error(errorMessage(error))
+  } finally {
+    const next = new Set(retryingArtifacts.value)
+    next.delete(key)
+    retryingArtifacts.value = next
+  }
+}
+
+function retryingTypesFor(bundleId: string): ArtifactType[] {
+  return [...retryingArtifacts.value]
+    .filter(key => key.startsWith(`${bundleId}:`))
+    .map(key => key.slice(bundleId.length + 1) as ArtifactType)
 }
 
 function preserveInterruptedText() {
@@ -271,6 +449,9 @@ watch(() => backend.sessionId, currentSessionId => {
   streamText.value = ''
   sources.value = []
   knowledgeSources.value = []
+  activeBundle.value = null
+  resourceProgress.value = null
+  retryingArtifacts.value = new Set()
   streamError.value = ''
   failedMessage.value = ''
   failoverNotice.value = ''
@@ -297,6 +478,8 @@ onBeforeUnmount(() => { controller?.abort(); activePetTask?.complete('idle'); ac
 .knowledge-space-button { margin-right: auto; min-height: 26px; padding: 3px 10px; color: #6e8f8e; background: #edf5f1; border: 1px solid #dbe9e3; border-radius: 999px; cursor: pointer; font-size: 10px; }
 .chat-panel { min-height: calc(100vh - 166px); display: flex; flex-direction: column; }
 .message-list { height: calc(100vh - 340px); min-height: 390px; overflow: auto; padding: 10px 28px 24px; scrollbar-width: thin; scrollbar-color: #ded5c9 transparent; }
+.resource-progress { display: flex; align-items: center; gap: 10px; margin: 8px 0; padding: 8px 12px; color: #476d72; background: #edf5f1; border: 1px solid #d6e7df; border-radius: 8px; font-size: 12px; }
+.resource-progress strong { font-size: 14px; }
 .welcome { max-width: 650px; margin: 38px auto 20px; text-align: center; }
 .companion-portrait { width: 78px; height: 78px; display: grid; place-items: center; margin: 0 auto 18px; color: #fff; background: radial-gradient(circle at 36% 30%, #98b9b7 0 18%, #527c84 19% 72%, #315760 73%); border: 5px double #d8c9b9; border-radius: 50%; box-shadow: 0 10px 24px rgba(68, 91, 90, .12); }
 .companion-portrait span { font-family: Georgia, "Times New Roman", serif; font-size: 25px; }

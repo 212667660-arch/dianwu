@@ -190,6 +190,7 @@ export interface StreamEvent {
   knowledge_sources?: KnowledgeSource[]
   resource_id?: number
   profile_version?: number
+  learning_state_version?: string
   cached?: boolean
   provisional?: boolean
   profile_id?: string

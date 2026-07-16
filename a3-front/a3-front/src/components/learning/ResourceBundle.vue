@@ -10,7 +10,8 @@
         v-for="artifact in bundle.artifacts"
         :key="artifact.artifact_id"
         :artifact="artifact"
-        @retry="(id: string) => $emit('retry-artifact', id)"
+        :retrying="retryingTypes.includes(artifact.type)"
+        @retry="() => $emit('retry-artifact', artifact.type)"
       />
     </div>
   </div>
@@ -18,18 +19,14 @@
 
 <script setup lang="ts">
 import ResourceCard from "./ResourceCard.vue";
+import type { ArtifactType, ResourceBundle } from "@/api/types";
 
-defineProps<{
-  bundle: {
-    bundle_id: string;
-    status: string;
-    topic: string;
-    aggregate_quality: number;
-    artifacts: any[];
-  };
-}>();
+withDefaults(defineProps<{
+  bundle: ResourceBundle;
+  retryingTypes?: ArtifactType[];
+}>(), { retryingTypes: () => [] });
 
-defineEmits<{ "retry-artifact": [artifactId: string] }>();
+defineEmits<{ "retry-artifact": [artifactType: ArtifactType] }>();
 </script>
 
 <style scoped>

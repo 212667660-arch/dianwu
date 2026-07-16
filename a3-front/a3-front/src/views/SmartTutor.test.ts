@@ -22,6 +22,7 @@ const storeMock = vi.hoisted(() => ({
   refreshModelProfiles: vi.fn(), loadSessionModelPreference: vi.fn(), saveSessionModelPreference: vi.fn(),
   knowledgeCollections: [{ id: 3, name: '高数' }], boundKnowledgeCollectionIds: [], knowledgePrivacyMode: 'allow_model_context',
   refreshKnowledge: vi.fn(), saveSessionKnowledgeCollections: vi.fn(),
+  retryResourceArtifact: vi.fn(), resourceBundles: [],
 }))
 const storeHarness = vi.hoisted(() => ({ current: null as null | typeof storeMock }))
 const petMock = vi.hoisted(() => ({
@@ -63,6 +64,8 @@ describe('SmartTutor failure recovery', () => {
     vi.clearAllMocks()
     backendStore.modelConfigured = true
     backendStore.sessionId = 'test-session'
+    backendStore.session = null
+    backendStore.resourceBundles = []
     backendStore.refreshSession.mockResolvedValue(undefined)
     backendStore.refreshModelProfiles.mockResolvedValue(undefined)
     backendStore.loadSessionModelPreference.mockResolvedValue(undefined)
@@ -86,7 +89,7 @@ describe('SmartTutor failure recovery', () => {
     await router.push('/tutor'); await router.isReady()
     const wrapper = mount(SmartTutor, { global: { plugins: [router], stubs } })
     await wrapper.get('textarea').setValue('测试桌宠状态')
-    await wrapper.findAll('button').find(button => button.text() === '发送')!.trigger('click')
+    await wrapper.get('[data-testid="send"]').trigger('click')
     await flushPromises()
 
     expect(petMock.begin).toHaveBeenCalledWith('running')
@@ -96,9 +99,87 @@ describe('SmartTutor failure recovery', () => {
 
     apiMock.streamChat.mockRejectedValueOnce(new Error('连接失败'))
     await wrapper.get('textarea').setValue('再次测试')
-    await wrapper.findAll('button').find(button => button.text() === '发送')!.trigger('click')
+    await wrapper.get('[data-testid="send"]').trigger('click')
     await flushPromises()
     expect(petMock.fail).toHaveBeenCalled()
+  })
+
+  it('sends the selected resource mode from the composer', async () => {
+    backendStore.session = { state: 'PROFILED', messages: [], resource_bundles: [] } as any
+    apiMock.streamChat.mockResolvedValue(undefined)
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/tutor', component: SmartTutor }] })
+    await router.push('/tutor'); await router.isReady()
+    const wrapper = mount(SmartTutor, { global: { plugins: [router], stubs } })
+
+    await wrapper.get('[data-testid="resource-mode"]').setValue('single:mind_map')
+    await wrapper.get('textarea').setValue('生成导图')
+    await wrapper.findAll('button').find(button => button.text() === '发送')!.trigger('click')
+    await flushPromises()
+
+    expect(apiMock.streamChat).toHaveBeenCalledWith(
+      'test-session',
+      '生成导图',
+      expect.any(Function),
+      expect.any(AbortSignal),
+      { mode: 'single', resourceType: 'mind_map' },
+    )
+  })
+
+  it('renders resource progress and the final bundle', async () => {
+    backendStore.session = { state: 'PROFILED', messages: [], resource_bundles: [] } as any
+    apiMock.streamChat.mockImplementation(async (_sessionId, _message, onEvent) => {
+      onEvent({ event: 'resource_progress', current_type: 'course_explanation', completed_count: 1, total_count: 5, status: 'SUCCEEDED' })
+      onEvent({
+        event: 'resource_artifact', artifact_id: 'b1-course', type: 'course_explanation',
+        title: '课程讲解', status: 'SUCCEEDED', body: '## 内容\n讲解', type_specific_data: {},
+        quality_score: 90, quality_issues: [], error_code: null, retryable: false,
+      })
+      onEvent({
+        event: 'resource_bundle', bundle_id: 'b1', protocol_version: 'learning-resource-bundle/v2',
+        topic: '一次函数', profile_version: 1, learning_state_version: '1', mode: 'bundle',
+        status: 'COMPLETED', requested_types: ['course_explanation'],
+        artifacts: [{ artifact_id: 'b1-course', type: 'course_explanation', title: '课程讲解', status: 'SUCCEEDED', body: '## 内容\n讲解', type_specific_data: {}, quality_score: 90, quality_issues: [], error_code: null, retryable: false }],
+        aggregate_quality: 90, created_at: '2026-07-17T00:00:00Z', knowledge_sources: [], public_sources: [],
+      })
+    })
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/tutor', component: SmartTutor }] })
+    await router.push('/tutor'); await router.isReady()
+    const wrapper = mount(SmartTutor, { global: { plugins: [router], stubs } })
+
+    await wrapper.get('textarea').setValue('生成资源')
+    await wrapper.findAll('button').find(button => button.text() === '发送')!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('1 / 5')
+    expect(wrapper.find('.resource-bundle').exists()).toBe(true)
+  })
+
+  it('restores bundles from history and retries one artifact', async () => {
+    let resolveRetry!: () => void
+    backendStore.retryResourceArtifact.mockReturnValue(new Promise<void>(resolve => { resolveRetry = resolve }))
+    backendStore.session = { state: 'PROFILED', messages: [], resource_bundles: [] } as any
+    backendStore.resourceBundles = [{
+      bundle_id: 'history-b1', protocol_version: 'learning-resource-bundle/v2', topic: '一次函数',
+      profile_version: 1, learning_state_version: '1', mode: 'bundle', status: 'PARTIAL',
+      requested_types: ['mind_map'], aggregate_quality: 0, created_at: '2026-07-17T00:00:00Z',
+      knowledge_sources: [], public_sources: [], artifacts: [{
+        artifact_id: 'history-b1-mind', type: 'mind_map', title: '思维导图', status: 'FAILED',
+        body: '', type_specific_data: {}, quality_score: 0, quality_issues: ['FAILED'],
+        error_code: 'SPECIALIST_FAILED', retryable: true,
+      }],
+    }] as any
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/tutor', component: SmartTutor }] })
+    await router.push('/tutor'); await router.isReady()
+    const wrapper = mount(SmartTutor, { global: { plugins: [router], stubs } })
+    const historical = wrapper.find('.resource-bundle')
+    await historical.find('.card-header').trigger('click')
+    await historical.find('.retry-btn').trigger('click')
+    await Promise.resolve()
+
+    expect(backendStore.retryResourceArtifact).toHaveBeenCalledWith('history-b1', 'mind_map')
+    expect(historical.find('.retry-btn').attributes('disabled')).toBeDefined()
+    resolveRetry()
+    await flushPromises()
   })
 
   it('keeps a streaming failure visible and restores the draft for retry', async () => {

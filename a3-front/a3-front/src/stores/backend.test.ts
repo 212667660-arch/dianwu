@@ -12,6 +12,7 @@ const apiMock = vi.hoisted(() => ({
   knowledgeStatus: vi.fn(), knowledgeCollections: vi.fn(), knowledgeDocuments: vi.fn(),
   knowledgeImports: vi.fn(), sessionKnowledgeCollections: vi.fn(),
   saveSessionKnowledgeCollections: vi.fn(),
+  retryResourceArtifact: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
@@ -26,7 +27,7 @@ const session = {
   profile_text: '画像', messages: [], resources: [{
     id: 1, topic: '一次函数', content: '笔记', profile_version: 1, learning_state_version: 2,
     sources: [], quality_score: 90, quality_issues: [], questions: [{ id: 7, ordinal: 1, difficulty: '基础', prompt: 'y=2x+1 的斜率？' }],
-  }],
+  }], resource_bundles: [],
 }
 
 function deferred<T>() {
@@ -64,6 +65,7 @@ beforeEach(() => {
   apiMock.knowledgeImports.mockResolvedValue([])
   apiMock.sessionKnowledgeCollections.mockResolvedValue({ session_id: 'test-session', collection_ids: [1], privacy_mode: 'allow_model_context' })
   apiMock.saveSessionKnowledgeCollections.mockResolvedValue({ session_id: 'test-session', collection_ids: [2], privacy_mode: 'allow_model_context' })
+  apiMock.retryResourceArtifact.mockResolvedValue({ bundle: { bundle_id: 'b1', artifacts: [] } })
 })
 
 describe('backend store', () => {
@@ -86,6 +88,21 @@ describe('backend store', () => {
     expect(apiMock.submitAttempt).toHaveBeenCalledWith(store.sessionId, 7, '2', 0)
     expect(result.correct).toBe(true)
     expect(apiMock.session).toHaveBeenCalledTimes(2)
+  })
+
+  it('exposes bundle history and replaces a retried bundle in place', async () => {
+    const original = { bundle_id: 'b1', artifacts: [{ type: 'mind_map', status: 'FAILED' }] }
+    const updated = { bundle_id: 'b1', artifacts: [{ type: 'mind_map', status: 'SUCCEEDED' }] }
+    apiMock.session.mockResolvedValueOnce({ ...session, resource_bundles: [original] })
+    apiMock.retryResourceArtifact.mockResolvedValueOnce({ bundle: updated })
+    const store = useBackendStore()
+
+    await store.refreshSession()
+    expect(store.resourceBundles).toEqual([original])
+    await store.retryResourceArtifact('b1', 'mind_map')
+
+    expect(apiMock.retryResourceArtifact).toHaveBeenCalledWith('b1', 'mind_map', store.sessionId)
+    expect(store.resourceBundles).toEqual([updated])
   })
 
   it('reports an online backend with missing credentials as not configured', async () => {

@@ -13,8 +13,8 @@
       <div v-if="artifact.status !== 'SUCCEEDED'" class="card-error">
         <p>错误码: {{ artifact.error_code }}</p>
         <p v-if="artifact.quality_issues.length">问题: {{ artifact.quality_issues.join(', ') }}</p>
-        <button v-if="artifact.retryable" class="retry-btn" @click.stop="$emit('retry', artifact.artifact_id)">
-          重试
+        <button v-if="artifact.retryable" class="retry-btn" :disabled="retrying" @click.stop="$emit('retry', artifact.artifact_id)">
+          {{ retrying ? '重试中…' : '重试' }}
         </button>
       </div>
       <div v-else class="card-content">
@@ -40,6 +40,7 @@ import SafeMermaid from "./SafeMermaid.vue";
 
 const props = defineProps<{
   artifact: ResourceArtifact;
+  retrying?: boolean;
 }>();
 
 defineEmits<{ retry: [artifactId: string] }>();

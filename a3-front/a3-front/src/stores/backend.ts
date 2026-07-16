@@ -19,6 +19,8 @@ import type {
   NextAction,
   ProgressSnapshot,
   ReviewTask,
+  ArtifactType,
+  ResourceBundle,
   SessionHistory,
 } from '@/api'
 
@@ -60,6 +62,7 @@ export const useBackendStore = defineStore('backend', () => {
   let committedSessionModelPreference: SessionModelPreference | null = null
 
   const resources = computed(() => session.value?.resources || [])
+  const resourceBundles = computed(() => session.value?.resource_bundles || [])
   const questions = computed(() => resources.value.flatMap(resource => resource.questions))
   const profileReady = computed(() => Boolean(session.value?.profile_text))
   const modelConfigured = computed(() => model.value?.api_key_configured === true)
@@ -129,6 +132,18 @@ export const useBackendStore = defineStore('backend', () => {
     } finally {
       loading.value = false
     }
+  }
+
+  async function retryResourceArtifact(bundleId: string, artifactType: ArtifactType): Promise<ResourceBundle> {
+    const result = await backendApi.retryResourceArtifact(bundleId, artifactType, sessionId.value)
+    if (session.value) {
+      const bundles = [...(session.value.resource_bundles || [])]
+      const index = bundles.findIndex(bundle => bundle.bundle_id === result.bundle.bundle_id)
+      if (index >= 0) bundles[index] = result.bundle
+      else bundles.unshift(result.bundle)
+      session.value = { ...session.value, resource_bundles: bundles }
+    }
+    return result.bundle
   }
 
   async function submitAnswer(questionId: number, answer: string, hintCount = 0) {
@@ -311,9 +326,9 @@ export const useBackendStore = defineStore('backend', () => {
     sessionId, live, ready, model, session, progress, nextAction, reviews, mistakes,
     knowledgeStatus, knowledgeCollections, knowledgeDocuments, knowledgeJobs,
     boundKnowledgeCollectionIds, knowledgePrivacyMode, knowledgeLoading, knowledgeError,
-    resources, questions, profileReady, modelConfigured, modelLoaded, loading, modelConfigBusy, modelProfileBusy, lastError,
+    resources, resourceBundles, questions, profileReady, modelConfigured, modelLoaded, loading, modelConfigBusy, modelProfileBusy, lastError,
     modelProfiles, modelPolicy, modelRuntimeStatus, sessionModelPreference,
-    setSessionId, refreshHealth, refreshSession, refreshAll, submitAnswer,
+    setSessionId, refreshHealth, refreshSession, refreshAll, submitAnswer, retryResourceArtifact,
     testModelSettings, saveModelSettings,
     refreshModelProfiles, testModelProfile, upsertModelProfile, deleteModelProfile, saveModelPolicy,
     loadSessionModelPreference, saveSessionModelPreference,
