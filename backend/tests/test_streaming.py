@@ -49,7 +49,8 @@ class FakeGateway:
 
 class ResourceGateway:
     async def stream(self, messages, temperature=0.4):
-        assert any('<knowledge_data untrusted="true">' in item["content"] for item in messages)
+        assert any('<resource_data trust="untrusted">' in item["content"] for item in messages)
+        assert any('\\u003cknowledge_data untrusted=\\"true\\"\\u003e' in item["content"] for item in messages)
         for part in (RESOURCE[:80], RESOURCE[80:]):
             yield part
 

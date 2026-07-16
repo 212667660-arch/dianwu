@@ -33,6 +33,7 @@ from backend.services import db as repo
 from backend.services import learning
 from backend.services.model_runtime import RuntimeSelection, model_runtime_router
 from backend.services.content_safety.models import SafetyMetadata
+from backend.services.content_safety.service import content_safety_service
 from backend.services.resource_bundle.cancel import (
     cancel_bundle,
     cleanup_cancellation,
@@ -188,13 +189,12 @@ class _RuntimeGateway:
         self._db = db
         self._session_id = session_id
 
-    async def complete(self, messages, temperature=0.3) -> str:
-        result = await model_runtime_router.complete(
+    async def complete(self, messages, temperature=0.3) -> Any:
+        return await model_runtime_router.complete(
             _runtime_selection(self._db, self._session_id),
             messages,
             temperature,
         )
-        return result.text
 
 
 class ResourceBundleService:
@@ -205,11 +205,13 @@ class ResourceBundleService:
         learning_context_provider: Callable[[Session, str], str] = learning.learning_context,
         knowledge_retriever: Callable[[Session, str, str], KnowledgeContext] = retrieve_knowledge_context,
         web_search: Callable[[str], Awaitable[list[Any]]] = search_web_optional,
+        safety_service: Any = content_safety_service,
     ) -> None:
         self._pipeline = pipeline
         self._learning_context_provider = learning_context_provider
         self._knowledge_retriever = knowledge_retriever
         self._web_search = web_search
+        self._safety_service = safety_service
 
     async def generate(
         self,
@@ -228,13 +230,24 @@ class ResourceBundleService:
         if not session.profile_text:
             raise DomainStateError("会话画像缺失，请重新诊断。", "PROFILE_MISSING")
 
-        repo.begin_generation(db, session)
         try:
+            subject_category = "other"
+            try:
+                subject_category = parse_profile(session.profile_text).subject or "other"
+            except Exception:
+                logger.info("Profile subject unavailable for bundle generation")
+            request_safety = await self._safety_service.gate_request(
+                message,
+                intent=message,
+                subject_category=subject_category,
+            )
+            safe_message = request_safety.safe_text
+            repo.begin_generation(db, session)
             learning_context = self._learning_context_provider(db, session_id)
-            query = build_knowledge_retrieval_query(db, session_id, message)
+            query = build_knowledge_retrieval_query(db, session_id, safe_message)
             knowledge_context = self._knowledge_retriever(db, session_id, query)
             knowledge_sources = knowledge_source_payload(knowledge_context)
-            public_results = await self._web_search(message)
+            public_results = await self._web_search(safe_message)
             public_context, public_sources = _public_source_context(
                 public_results,
                 first_reference=len(knowledge_sources) + 1,
@@ -246,14 +259,11 @@ class ResourceBundleService:
                 str(source["reference_id"])
                 for source in [*knowledge_sources, *public_sources]
             ]
-            subject_category = "other"
-            try:
-                subject_category = parse_profile(session.profile_text).subject or "other"
-            except Exception:
-                logger.info("Profile subject unavailable for bundle generation")
-
             bundle_id = f"bundle-{generation_id or uuid.uuid4().hex}"
-            pipeline = self._pipeline or BundlePipeline(_RuntimeGateway(db, session_id))
+            pipeline = self._pipeline or BundlePipeline(
+                _RuntimeGateway(db, session_id),
+                safety_service=self._safety_service,
+            )
             get_or_create_cancellation(bundle_id)
             disconnect_task = None
             if is_disconnected is not None:
@@ -273,7 +283,7 @@ class ResourceBundleService:
                     profile_text=session.profile_text,
                     learning_context=learning_context,
                     knowledge_context=prompt_context,
-                    user_request=message,
+                    user_request=safe_message,
                     source_allowlist=source_allowlist,
                     subject_category_hint=subject_category,
                     profile_version=session.profile_version,

@@ -54,12 +54,12 @@ class TestCourseExplanationSpecialist:
         assert result.artifact.status.value == "SUCCEEDED"
         assert "学习目标" in result.artifact.body
 
-    def test_parse_dangerous_content_rejected(self):
+    def test_parse_invalid_structure_is_rejected_before_pipeline_safety_review(self):
         spec = CourseExplanationSpecialist()
         raw = "<script>alert(""xss"")</script>"
         result = spec.parse(raw, "a-bad")
         assert result.artifact.status.value == "FAILED"
-        assert result.artifact.error_code == "SAFETY_FAILED"
+        assert result.artifact.error_code == "COURSE_EXPLANATION_INCOMPLETE"
 
     def test_parse_requires_all_five_sections(self):
         spec = CourseExplanationSpecialist()

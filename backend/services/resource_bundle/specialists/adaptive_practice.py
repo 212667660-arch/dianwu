@@ -3,7 +3,6 @@
 import re
 
 from backend.protocols.v2.models import ArtifactType, ArtifactStatus, ResourceArtifact, ResourceBrief, SubjectCategory
-from backend.services.resource_bundle.safety import check_dangerous_content
 from backend.services.resource_bundle.specialists.base import Specialist, SpecialistResult, build_specialist_prompt
 
 _CODE_LAB_SECTIONS = ["目标", "环境", "步骤", "验收标准", "参考方法", "起始代码"]
@@ -45,22 +44,6 @@ class AdaptivePracticeSpecialist(Specialist):
         source_allowlist: tuple[str, ...] = (),
         subject_category: SubjectCategory = SubjectCategory.OTHER,
     ) -> SpecialistResult:
-        safety = check_dangerous_content(raw_output)
-        if not safety.passed:
-            return SpecialistResult(
-                artifact=ResourceArtifact(
-                    artifact_id=artifact_id,
-                    type=self.artifact_type,
-                    title="适应性练习",
-                    status=ArtifactStatus.FAILED,
-                    body="",
-                    error_code="SAFETY_FAILED",
-                    quality_score=0,
-                    quality_issues=safety.issues,
-                ),
-                raw_output=raw_output,
-            )
-
         fmt = "code_lab" if subject_category == SubjectCategory.CS else "experiment_or_case"
         required = _CODE_LAB_SECTIONS if subject_category == SubjectCategory.CS else _EXPERIMENT_SECTIONS
         found = sum(1 for s in required if f"## {s}" in raw_output)

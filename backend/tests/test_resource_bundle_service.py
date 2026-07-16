@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from types import SimpleNamespace
 
 import pytest
 
@@ -20,6 +21,11 @@ from backend.services.resource_bundle.pipeline import PipelineResult
 from backend.services.resource_bundle.service import ResourceBundleService, ResourceSelection
 from backend.services.resource_db import get_bundle_for_session
 from backend.services.resource_db import list_bundles, save_bundle
+
+
+class AllowSafety:
+    async def gate_request(self, text, **_kwargs):
+        return SimpleNamespace(safe_text=text, metadata=None)
 
 
 def _session_id(prefix: str) -> str:
@@ -99,6 +105,7 @@ async def test_service_passes_learning_knowledge_and_sources_to_pipeline() -> No
     pipeline = CapturingPipeline()
     service = ResourceBundleService(
         pipeline=pipeline,
+        safety_service=AllowSafety(),
         learning_context_provider=lambda _db, _sid: "薄弱知识点：斜率",
         knowledge_retriever=lambda _db, _sid, _query: _knowledge_context(),
         web_search=lambda _message: _async_value([
@@ -139,6 +146,7 @@ async def test_service_restores_profiled_state_and_maps_unexpected_failure() -> 
     _seed_profiled_session(session_id)
     service = ResourceBundleService(
         pipeline=CapturingPipeline(failure=ValueError("private failure detail")),
+        safety_service=AllowSafety(),
         learning_context_provider=lambda _db, _sid: "",
         knowledge_retriever=lambda _db, _sid, _query: KnowledgeContext.empty(),
         web_search=lambda _message: _async_value([]),
@@ -168,6 +176,7 @@ async def test_v2_request_never_reads_v1_resource_cache(monkeypatch) -> None:
     pipeline = CapturingPipeline()
     service = ResourceBundleService(
         pipeline=pipeline,
+        safety_service=AllowSafety(),
         learning_context_provider=lambda _db, _sid: "",
         knowledge_retriever=lambda _db, _sid, _query: KnowledgeContext.empty(),
         web_search=lambda _message: _async_value([]),
@@ -254,6 +263,7 @@ async def test_retry_replaces_only_failed_artifact_in_original_bundle() -> None:
 
     service = ResourceBundleService(
         pipeline=RetryPipeline(),
+        safety_service=AllowSafety(),
         learning_context_provider=lambda _db, _sid: "",
         knowledge_retriever=lambda _db, _sid, _query: KnowledgeContext.empty(),
         web_search=lambda _message: _async_value([]),

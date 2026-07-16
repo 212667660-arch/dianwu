@@ -3,7 +3,6 @@
 import re
 
 from backend.protocols.v2.models import ArtifactType, ArtifactStatus, ResourceArtifact, ResourceBrief
-from backend.services.resource_bundle.safety import check_dangerous_content
 from backend.services.resource_bundle.specialists.base import Specialist, SpecialistResult, build_specialist_prompt
 
 
@@ -34,22 +33,6 @@ class ExtendedReadingSpecialist(Specialist):
         self, raw_output: str, artifact_id: str, *,
         source_allowlist: tuple[str, ...] = (), subject_category=None,
     ) -> SpecialistResult:
-        safety = check_dangerous_content(raw_output)
-        if not safety.passed:
-            return SpecialistResult(
-                artifact=ResourceArtifact(
-                    artifact_id=artifact_id,
-                    type=self.artifact_type,
-                    title="延伸阅读",
-                    status=ArtifactStatus.FAILED,
-                    body="",
-                    error_code="SAFETY_FAILED",
-                    quality_score=0,
-                    quality_issues=safety.issues,
-                ),
-                raw_output=raw_output,
-            )
-
         if "## 延伸阅读" not in raw_output:
             return SpecialistResult(
                 artifact=ResourceArtifact(

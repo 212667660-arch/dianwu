@@ -8,9 +8,19 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+from backend.errors import AppError, SafetyReviewUnavailableError
 from backend.protocols.v2.models import (
     ArtifactStatus, ArtifactType, BundleStatus, ResourceArtifact, ResourceBundle,
 )
+from backend.services.content_safety.concurrency import model_call_slot
+from backend.services.content_safety.models import (
+    RiskLevel,
+    SafetyAction,
+    SafetyMetadata,
+    SafetyStage,
+)
+from backend.services.content_safety.prompt_boundary import untrusted_json_block
+from backend.services.content_safety.reviewer import ReviewContext
 from backend.services.resource_bundle.aggregator import aggregate_bundle
 from backend.services.resource_bundle.cancel import (
     cleanup_cancellation, get_or_create_cancellation,
@@ -35,11 +45,18 @@ class PipelineResult:
     error: str | None = None
 
 
+@dataclass(frozen=True)
+class CompletionOutput:
+    text: str
+    profile_id: str | None = None
+
+
 def _make_failed_bundle(
     bundle_id: str, profile_version: int, learning_state_version: str,
     mode: str, requested_types: list[ArtifactType], topic: str = "规划失败",
     knowledge_sources: list[dict[str, object]] | None = None,
     public_sources: list[dict[str, object]] | None = None,
+    error_code: str = "PLAN_FAILED",
 ) -> ResourceBundle:
     return ResourceBundle(
         bundle_id=bundle_id,
@@ -55,9 +72,10 @@ def _make_failed_bundle(
                 type=artifact_type,
                 title="规划失败",
                 status=ArtifactStatus.FAILED,
-                error_code="PLAN_FAILED",
+                error_code=error_code,
                 quality_score=0,
-                quality_issues=["PLAN_FAILED"],
+                quality_issues=[error_code],
+                retryable=error_code == "SAFETY_REVIEW_UNAVAILABLE",
             )
             for artifact_type in requested_types
         ],
@@ -82,6 +100,38 @@ def _cancelled_artifact(bundle_id: str, artifact_type: ArtifactType) -> Resource
     )
 
 
+def _blocked_artifact(
+    bundle_id: str,
+    artifact_type: ArtifactType,
+    *,
+    metadata: SafetyMetadata | None,
+    error_code: str = "CONTENT_ARTIFACT_BLOCKED",
+    reason_codes: list[str] | None = None,
+) -> ResourceArtifact:
+    return ResourceArtifact(
+        artifact_id=f"{bundle_id}-{artifact_type.value}",
+        type=artifact_type,
+        title=artifact_type.value,
+        status=ArtifactStatus.FAILED,
+        body="",
+        quality_score=0,
+        quality_issues=list(reason_codes or [error_code]),
+        error_code=error_code,
+        retryable=True,
+        safety=metadata,
+    )
+
+
+def _review_unavailable_metadata() -> SafetyMetadata:
+    return SafetyMetadata(
+        stage=SafetyStage.ARTIFACT,
+        decision=SafetyAction.BLOCK,
+        risk_level=RiskLevel.HIGH,
+        reason_codes=["SAFETY_REVIEW_UNAVAILABLE"],
+        checked_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
 async def _emit(on_event, event: dict[str, object]) -> None:
     if on_event is None:
         return
@@ -90,10 +140,15 @@ async def _emit(on_event, event: dict[str, object]) -> None:
         await result
 
 
-async def _complete_or_cancel(gateway, messages, temperature, cancellation) -> str:
+async def _complete_or_cancel(gateway, messages, temperature, cancellation) -> CompletionOutput:
     if cancellation.is_cancelled():
         raise BundleCancelled()
-    model_task = asyncio.create_task(gateway.complete(messages, temperature=temperature))
+
+    async def _complete():
+        async with model_call_slot():
+            return await gateway.complete(messages, temperature=temperature)
+
+    model_task = asyncio.create_task(_complete())
     cancel_task = asyncio.create_task(cancellation.event.wait())
     try:
         done, _ = await asyncio.wait(
@@ -105,7 +160,16 @@ async def _complete_or_cancel(gateway, messages, temperature, cancellation) -> s
             with suppress(asyncio.CancelledError):
                 await model_task
             raise BundleCancelled()
-        return await model_task
+        value = await model_task
+        if isinstance(value, str):
+            return CompletionOutput(text=value)
+        text = getattr(value, "text", None)
+        if not isinstance(text, str):
+            return CompletionOutput(text=str(value))
+        return CompletionOutput(
+            text=text,
+            profile_id=getattr(value, "profile_id", None),
+        )
     finally:
         cancel_task.cancel()
         with suppress(asyncio.CancelledError):
@@ -113,8 +177,9 @@ async def _complete_or_cancel(gateway, messages, temperature, cancellation) -> s
 
 
 class BundlePipeline:
-    def __init__(self, gateway: Any) -> None:
+    def __init__(self, gateway: Any, *, safety_service: Any | None = None) -> None:
         self._gateway = gateway
+        self._safety_service = safety_service
 
     async def run(
         self, bundle_id: str, mode: str, single_type: ArtifactType | None,
@@ -133,10 +198,18 @@ class BundlePipeline:
                 user_request, source_allowlist, subject_category_hint,
             )
             try:
-                plan_raw = await _complete_or_cancel(
+                plan_completion = await _complete_or_cancel(
                     self._gateway, plan_messages, 0.3, cancellation,
                 )
+                plan_raw = plan_completion.text
                 brief = parse_plan_output(plan_raw, source_allowlist=source_allowlist)
+                if self._safety_service is not None:
+                    await self._safety_service.review_plan(
+                        plan_raw,
+                        intent=user_request,
+                        subject_category=brief.subject_category.value,
+                        generation_profile_id=plan_completion.profile_id,
+                    )
             except BundleCancelled:
                 artifacts = [_cancelled_artifact(bundle_id, item) for item in requested_types]
                 bundle = aggregate_bundle(
@@ -146,6 +219,16 @@ class BundlePipeline:
                 )
                 await _emit(on_event, {"event": "resource_bundle", **bundle.model_dump(mode="json")})
                 return PipelineResult(bundle=bundle)
+            except AppError as exc:
+                logger.warning("Resource plan safety failed: %s", exc.code)
+                bundle = _make_failed_bundle(
+                    bundle_id, profile_version, learning_state_version, mode, requested_types,
+                    knowledge_sources=knowledge_sources,
+                    public_sources=public_sources,
+                    error_code=exc.code,
+                )
+                await _emit(on_event, {"event": "resource_bundle", **bundle.model_dump(mode="json")})
+                return PipelineResult(bundle=bundle, error=exc.code)
             except Exception as exc:
                 logger.warning("Resource plan failed: %s", type(exc).__name__)
                 bundle = _make_failed_bundle(
@@ -188,18 +271,121 @@ class BundlePipeline:
                             brief, profile_text, learning_context, knowledge_context,
                         )
                         try:
-                            raw = await _complete_or_cancel(
+                            completion = await _complete_or_cancel(
                                 self._gateway, messages, 0.4, cancellation,
                             )
                             result = specialist.parse(
-                                raw,
+                                completion.text,
                                 f"{bundle_id}-{at.value}",
                                 source_allowlist=tuple(brief.source_allowlist),
                                 subject_category=brief.subject_category,
                             )
+                            if (
+                                self._safety_service is not None
+                                and result.artifact.status == ArtifactStatus.SUCCEEDED
+                            ):
+                                review = await self._safety_service.review_artifact(
+                                    result.artifact,
+                                    source_allowlist=set(brief.source_allowlist),
+                                    intent=user_request,
+                                    subject_category=brief.subject_category.value,
+                                    generation_profile_id=completion.profile_id,
+                                )
+                                if review.action in {SafetyAction.ALLOW, SafetyAction.REDACT}:
+                                    result = SpecialistResult(
+                                        artifact=review.artifact,
+                                        raw_output="",
+                                    )
+                                elif review.action == SafetyAction.REGENERATE:
+                                    regeneration = untrusted_json_block(
+                                        "safety_regeneration",
+                                        {"reason_codes": review.reason_codes},
+                                        field_limit=128,
+                                        total_limit=2_000,
+                                    )
+                                    regeneration_messages = [
+                                        *messages,
+                                        {
+                                            "role": "user",
+                                            "content": (
+                                                f"{regeneration}\n"
+                                                "上一版未通过安全检查。只依据原 resource_specialist_data 和上述受控原因码重新生成完整资源，不要复述或引用上一版内容。"
+                                            ),
+                                        },
+                                    ]
+                                    repaired_completion = await _complete_or_cancel(
+                                        self._gateway,
+                                        regeneration_messages,
+                                        0.2,
+                                        cancellation,
+                                    )
+                                    repaired = specialist.parse(
+                                        repaired_completion.text,
+                                        f"{bundle_id}-{at.value}",
+                                        source_allowlist=tuple(brief.source_allowlist),
+                                        subject_category=brief.subject_category,
+                                    )
+                                    if repaired.artifact.status == ArtifactStatus.SUCCEEDED:
+                                        second_review = await self._safety_service.review_artifact(
+                                            repaired.artifact,
+                                            source_allowlist=set(brief.source_allowlist),
+                                            intent=user_request,
+                                            subject_category=brief.subject_category.value,
+                                            generation_profile_id=repaired_completion.profile_id,
+                                        )
+                                    else:
+                                        second_review = None
+                                    if (
+                                        second_review is not None
+                                        and second_review.action in {SafetyAction.ALLOW, SafetyAction.REDACT}
+                                    ):
+                                        result = SpecialistResult(
+                                            artifact=second_review.artifact,
+                                            raw_output="",
+                                        )
+                                    else:
+                                        metadata = (
+                                            second_review.metadata
+                                            if second_review is not None
+                                            else review.metadata
+                                        )
+                                        reasons = list(dict.fromkeys([
+                                            *review.reason_codes,
+                                            *(second_review.reason_codes if second_review is not None else []),
+                                        ]))
+                                        result = SpecialistResult(
+                                            artifact=_blocked_artifact(
+                                                bundle_id,
+                                                at,
+                                                metadata=metadata,
+                                                reason_codes=reasons,
+                                            ),
+                                            raw_output="",
+                                        )
+                                else:
+                                    result = SpecialistResult(
+                                        artifact=_blocked_artifact(
+                                            bundle_id,
+                                            at,
+                                            metadata=review.metadata,
+                                            reason_codes=review.reason_codes,
+                                        ),
+                                        raw_output="",
+                                    )
                         except BundleCancelled:
                             result = SpecialistResult(
                                 artifact=_cancelled_artifact(bundle_id, at),
+                                raw_output="",
+                            )
+                        except SafetyReviewUnavailableError:
+                            result = SpecialistResult(
+                                artifact=_blocked_artifact(
+                                    bundle_id,
+                                    at,
+                                    metadata=_review_unavailable_metadata(),
+                                    error_code="SAFETY_REVIEW_UNAVAILABLE",
+                                    reason_codes=["SAFETY_REVIEW_UNAVAILABLE"],
+                                ),
                                 raw_output="",
                             )
                         except Exception as exc:

@@ -1,7 +1,6 @@
 ﻿from __future__ import annotations
 
 from backend.protocols.v2.models import ArtifactType, ArtifactStatus, ResourceArtifact, ResourceBrief
-from backend.services.resource_bundle.safety import check_dangerous_content
 from backend.services.resource_bundle.specialists.base import Specialist, SpecialistResult, build_specialist_prompt
 
 _COURSE_SECTIONS = ["学习目标", "核心概念", "逐步讲解", "常见误区", "个性化建议"]
@@ -30,22 +29,6 @@ class CourseExplanationSpecialist(Specialist):
         self, raw_output: str, artifact_id: str, *,
         source_allowlist: tuple[str, ...] = (), subject_category=None,
     ) -> SpecialistResult:
-        safety = check_dangerous_content(raw_output)
-        if not safety.passed:
-            return SpecialistResult(
-                artifact=ResourceArtifact(
-                    artifact_id=artifact_id,
-                    type=self.artifact_type,
-                    title="课程讲解",
-                    status=ArtifactStatus.FAILED,
-                    body="",
-                    error_code="SAFETY_FAILED",
-                    quality_score=0,
-                    quality_issues=safety.issues,
-                ),
-                raw_output=raw_output,
-            )
-
         found = sum(1 for s in _COURSE_SECTIONS if f"## {s}" in raw_output)
         score = min(found * 20, 100)
         if found == len(_COURSE_SECTIONS):

@@ -3,7 +3,6 @@
 import re
 
 from backend.protocols.v2.models import ArtifactType, ArtifactStatus, ResourceArtifact, ResourceBrief
-from backend.services.resource_bundle.safety import check_dangerous_content
 from backend.services.resource_bundle.specialists.base import Specialist, SpecialistResult, build_specialist_prompt
 
 _QB_LEVELS = ["基础", "提高", "挑战"]
@@ -38,22 +37,6 @@ class QuestionBankSpecialist(Specialist):
         self, raw_output: str, artifact_id: str, *,
         source_allowlist: tuple[str, ...] = (), subject_category=None,
     ) -> SpecialistResult:
-        safety = check_dangerous_content(raw_output)
-        if not safety.passed:
-            return SpecialistResult(
-                artifact=ResourceArtifact(
-                    artifact_id=artifact_id,
-                    type=self.artifact_type,
-                    title="题库",
-                    status=ArtifactStatus.FAILED,
-                    body="",
-                    error_code="SAFETY_FAILED",
-                    quality_score=0,
-                    quality_issues=safety.issues,
-                ),
-                raw_output=raw_output,
-            )
-
         type_specific: dict[str, object] = {}
         total_questions = 0
         complete_levels = True
