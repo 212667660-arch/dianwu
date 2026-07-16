@@ -32,7 +32,9 @@ async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)) -> Chat
 @router.post("/chat/stream")
 async def chat_stream_endpoint(req: ChatRequest, request: Request, db: Session = Depends(get_db)) -> StreamingResponse:
     async def events():
-        async for event in stream_message(db, req.session_id, req.message, request.is_disconnected):
+        async for event in stream_message(db, req.session_id, req.message, request.is_disconnected,
+                                  resource_mode=req.resource_mode,
+                                  resource_type=req.resource_type):
             name = str(event.pop("event"))
             payload = json.dumps(event, ensure_ascii=False)
             yield f"event: {name}\ndata: {payload}\n\n"

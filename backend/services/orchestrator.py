@@ -22,6 +22,13 @@ from backend.services.model_runtime import RoutedStreamEvent, RuntimeSelection, 
 from backend.services.profile_agent import build_profile_messages, generate_diagnosis_decision, generate_profile
 from backend.services.resource_agent import build_resource_messages, generate_resources
 from backend.services.resource_quality import validate_resource_quality
+from backend.protocols.v2.sse_events import artifact_event, bundle_event, plan_event, progress_event
+from backend.services.resource_bundle.pipeline import BundlePipeline
+from backend.services.resource_bundle.cancel import get_or_create_cancellation as _bundle_get_cancel, cleanup_cancellation as _bundle_cleanup, cancel_bundle as _bundle_cancel
+from backend.protocols.v2.models import ArtifactType
+from backend.services.resource_bundle.planner import derive_requested_types
+from backend.services.resource_db import save_bundle
+import json
 from backend.services.web_search import search_web_optional
 
 _REDIAGNOSE_HINTS = ("重新诊断", "重新生成画像", "换画像", "重新分析我")
@@ -324,13 +331,19 @@ async def _handle_message(db: Session, session_id: str, message: str) -> ChatRes
         raise
 
 
-async def stream_message(db: Session, session_id: str, message: str, is_disconnected) -> AsyncIterator[dict[str, object]]:
+async def stream_message(db: Session, session_id: str, message: str, is_disconnected,
+                         resource_mode: str | None = None,
+                         resource_type: str | None = None) -> AsyncIterator[dict[str, object]]:
     async with _workflow_lock(session_id):
-        async for event in _stream_message(db, session_id, message, is_disconnected):
+        async for event in _stream_message(db, session_id, message, is_disconnected,
+                                        resource_mode=resource_mode,
+                                        resource_type=resource_type):
             yield event
 
 
-async def _stream_message(db: Session, session_id: str, message: str, is_disconnected) -> AsyncIterator[dict[str, object]]:
+async def _stream_message(db: Session, session_id: str, message: str, is_disconnected,
+                          resource_mode: str | None = None,
+                          resource_type: str | None = None) -> AsyncIterator[dict[str, object]]:
     request_id = uuid.uuid4().hex
     generation_id = uuid.uuid4().hex
     cancel_event = asyncio.Event()
@@ -420,6 +433,68 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
             return
         repo.begin_generation(db, session)
         yield {"event": "phase", "request_id": request_id, "generation_id": generation_id, "phase": "resource"}
+
+        if resource_mode:
+            bundle_id = f"bundle-{uuid.uuid4().hex[:12]}"
+            profile_text = session.profile_text or ""
+            profile_subject = "other"
+            try:
+                parsed_profile = parse_profile(profile_text)
+                profile_subject = parsed_profile.subject or "other"
+            except Exception:
+                pass
+
+            class _BundleGateway:
+                async def complete(self, messages, temperature=0.3):
+                    result = await model_runtime_router.complete(
+                        _runtime_selection(db, session_id), messages, temperature,
+                    )
+                    return result.text
+
+            pipeline = BundlePipeline(_BundleGateway())
+
+            try:
+                single_type: ArtifactType | None = None
+                if resource_mode == "single" and resource_type:
+                    try:
+                        single_type = ArtifactType(resource_type)
+                    except ValueError:
+                        pass
+
+                requested_types = derive_requested_types(resource_mode, single_type)
+
+                yield {"event": "resource_plan", "bundle_id": bundle_id,
+                       "topic": "generating...",
+                       "requested_types": [t.value for t in requested_types]}
+
+                result = await pipeline.run(
+                    bundle_id=bundle_id, mode=resource_mode, single_type=single_type,
+                    profile_text=profile_text, learning_context="", knowledge_context="",
+                    user_request=message, source_allowlist=[],
+                    subject_category_hint=profile_subject,
+                    profile_version=session.profile_version,
+                    learning_state_version=str(session.learning_state_version),
+                )
+
+                bundle_dict = result.bundle.model_dump()
+                yield {"event": "resource_bundle", **bundle_dict}
+
+                save_bundle(db, result.bundle)
+
+                yield {"event": "persisted", "bundle_id": bundle_id}
+
+                repo.append_message(db, session_id, "assistant", json.dumps(bundle_dict, ensure_ascii=False))
+                yield {"event": "done", "request_id": request_id, "status": "completed",
+                       "state": session.state}
+
+            except Exception as exc:
+                yield {"event": "error", "request_id": request_id,
+                       "code": "BUNDLE_FAILED", "message": str(exc)}
+            finally:
+                _bundle_cleanup(bundle_id)
+
+            return
+
         raw = ""
         sources = await search_web_optional(message)
         source_payload = [item.model_dump() for item in sources]
