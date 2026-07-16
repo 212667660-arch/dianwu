@@ -103,6 +103,41 @@ class TestPipelineSingleMode:
         )
         assert result.bundle.status == BundleStatus.FAILED
 
+    @pytest.mark.asyncio
+    async def test_emits_plan_progress_artifact_and_bundle_events(self):
+        gateway = ScriptedGateway(completions=[PLAN_OUT, COURSE_OUT])
+        pipeline = BundlePipeline(gateway=gateway)
+        events: list[dict[str, object]] = []
+
+        async def on_event(event: dict[str, object]) -> None:
+            events.append(event)
+
+        result = await pipeline.run(
+            bundle_id="test-events",
+            mode="single",
+            single_type=ArtifactType.COURSE_EXPLANATION,
+            profile_text="画像",
+            learning_context="",
+            knowledge_context="",
+            user_request="生成",
+            source_allowlist=[],
+            subject_category_hint="math",
+            profile_version=1,
+            learning_state_version="v1",
+            on_event=on_event,
+        )
+
+        assert result.bundle.status == BundleStatus.COMPLETED
+        assert [event["event"] for event in events] == [
+            "resource_plan",
+            "resource_progress",
+            "resource_artifact",
+            "resource_progress",
+            "resource_bundle",
+        ]
+        assert events[0]["topic"] == "测试主题"
+        assert events[-1]["status"] == "COMPLETED"
+
 
 class TestPipelineBundleMode:
     @pytest.mark.asyncio
@@ -161,3 +196,47 @@ class TestPipelineBundleMode:
         result = await task
         cleanup_cancellation(bundle_id)
         assert result.bundle.status in (BundleStatus.CANCELLED, BundleStatus.PARTIAL)
+
+    @pytest.mark.asyncio
+    async def test_cancel_interrupts_running_specialist_completion(self):
+        started = asyncio.Event()
+        cancelled = asyncio.Event()
+
+        class BlockingGateway:
+            def __init__(self):
+                self.calls = 0
+
+            async def complete(self, messages, temperature=0.3):
+                self.calls += 1
+                if self.calls == 1:
+                    return PLAN_OUT
+                started.set()
+                try:
+                    await asyncio.Event().wait()
+                except asyncio.CancelledError:
+                    cancelled.set()
+                    raise
+
+        bundle_id = "test-running-cancel"
+        pipeline = BundlePipeline(gateway=BlockingGateway())
+        task = asyncio.create_task(pipeline.run(
+            bundle_id=bundle_id,
+            mode="bundle",
+            single_type=None,
+            profile_text="画像",
+            learning_context="",
+            knowledge_context="",
+            user_request="生成",
+            source_allowlist=[],
+            subject_category_hint="math",
+            profile_version=1,
+            learning_state_version="v1",
+        ))
+
+        await asyncio.wait_for(started.wait(), timeout=1)
+        cancel_bundle(bundle_id)
+        result = await asyncio.wait_for(task, timeout=1)
+
+        assert cancelled.is_set()
+        assert result.bundle.status == BundleStatus.CANCELLED
+        assert all(artifact.status == ArtifactStatus.CANCELLED for artifact in result.bundle.artifacts)
