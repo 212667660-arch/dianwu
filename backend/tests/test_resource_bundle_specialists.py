@@ -70,6 +70,14 @@ class TestCourseExplanationSpecialist:
         assert result.artifact.status.value == "SUCCEEDED"
         assert "学习目标" in result.artifact.body
 
+    def test_parse_requires_actual_textbook_evidence_or_insufficiency(self):
+        raw = """## 学习目标\n目标\n## 核心概念与定义\n概念\n## 公式与适用条件\n公式\n## 知识依赖\n依赖\n## 逐步讲解\n讲解\n## 常见题型与易错点\n误区\n## 个性化建议\n建议"""
+        missing = CourseExplanationSpecialist().parse(raw, "a-no-evidence", source_allowlist=("资料1",))
+        disclosed = CourseExplanationSpecialist().parse(raw + "\n证据不足，无法确认教材原文。", "a-insufficient", source_allowlist=("资料1",))
+        assert missing.artifact.status.value == "FAILED"
+        assert missing.artifact.error_code == "TEXTBOOK_EVIDENCE_REQUIRED"
+        assert disclosed.artifact.status.value == "SUCCEEDED"
+
     def test_parse_invalid_structure_is_rejected_before_pipeline_safety_review(self):
         spec = CourseExplanationSpecialist()
         raw = "<script>alert(""xss"")</script>"
@@ -195,6 +203,12 @@ class TestQuestionBankSpecialist:
         assert result.artifact.status.value == "SUCCEEDED"
         assert result.artifact.type_specific_data["basic_count"] >= 1
 
+    def test_parse_requires_textbook_citation_or_insufficiency_when_sources_exist(self):
+        raw = """## 基础\n题目1：测试\n答案1：1\n解析1：已知条件与目标：测试；所用知识点：定义；分步推导：一步；最终答案：1；结果检查：成立\n## 提高\n题目2：测试\n答案2：1\n解析2：已知条件与目标：测试；所用知识点：定义；分步推导：一步；最终答案：1；结果检查：成立\n## 挑战\n题目3：测试\n答案3：1\n解析3：已知条件与目标：测试；所用知识点：定义；分步推导：一步；最终答案：1；结果检查：成立"""
+        result = QuestionBankSpecialist().parse(raw, "a-no-evidence", source_allowlist=("资料1",))
+        assert result.artifact.status.value == "FAILED"
+        assert result.artifact.error_code == "TEXTBOOK_EVIDENCE_REQUIRED"
+
     def test_parse_rejects_only_basic_level(self):
         raw = """## 基础
 题目1：测试
@@ -260,6 +274,8 @@ class TestAdaptivePracticeSpecialist:
         messages = spec.build_prompt(brief, "画像", "", "")
         combined = " ".join(m["content"] for m in messages)
         assert "起始代码" not in combined
+        for requirement in ["已知条件与目标", "所用知识点", "分步推导", "最终答案", "结果检查"]:
+            assert requirement in combined
 
     def test_parse_cs_code_lab(self):
         spec = AdaptivePracticeSpecialist()
@@ -280,21 +296,27 @@ for i in range(10):
         assert result.artifact.status.value == "SUCCEEDED"
         assert result.artifact.type_specific_data["format"] == "code_lab"
 
-    def test_parse_non_cs_experiment(self):
+    def test_parse_math_worked_practice(self):
         spec = AdaptivePracticeSpecialist()
         raw = """## 目标
 理解斜率
-## 前置条件
-无
-## 步骤
-1. 画图
+## 已知条件与目标
+给定两点，求斜率
+## 所用知识点
+斜率公式
+## 分步推导
+1. 代入两点坐标
+## 最终答案
+k=2
+## 结果检查
+代回两点成立
 ## 验收标准
 正确
 ## 参考方法
 两点法"""
         result = spec.parse(raw, "a6", subject_category=SubjectCategory.MATH)
         assert result.artifact.status.value == "SUCCEEDED"
-        assert result.artifact.type_specific_data["format"] == "experiment_or_case"
+        assert result.artifact.type_specific_data["format"] == "worked_practice"
 
     def test_parse_cs_rejects_missing_starter_code(self):
         raw = """## 目标

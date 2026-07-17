@@ -7,6 +7,12 @@ from backend.protocols.v2.models import ArtifactType, ArtifactStatus, ResourceAr
 from backend.services.content_safety.prompt_boundary import untrusted_json_block
 
 
+def has_required_grounding(raw_output: str, source_allowlist: tuple[str, ...]) -> bool:
+    if not source_allowlist:
+        return True
+    return "证据不足" in raw_output or any(f"[{source_id}]" in raw_output for source_id in source_allowlist)
+
+
 @dataclass
 class SpecialistResult:
     artifact: ResourceArtifact

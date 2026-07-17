@@ -3,7 +3,7 @@
 import re
 
 from backend.protocols.v2.models import ArtifactType, ArtifactStatus, ResourceArtifact, ResourceBrief
-from backend.services.resource_bundle.specialists.base import Specialist, SpecialistResult, build_specialist_prompt
+from backend.services.resource_bundle.specialists.base import Specialist, SpecialistResult, build_specialist_prompt, has_required_grounding
 
 _QB_LEVELS = ["基础", "提高", "挑战"]
 _SOLUTION_STEPS = ["已知条件与目标", "所用知识点", "分步推导", "最终答案", "结果检查"]
@@ -75,7 +75,8 @@ class QuestionBankSpecialist(Specialist):
         # Add a "basic_count" alias for backward compatibility in tests
         type_specific["basic_count"] = type_specific.get("基础_count", 0)
 
-        if complete_levels:
+        grounding_complete = has_required_grounding(raw_output, source_allowlist)
+        if complete_levels and grounding_complete:
             return SpecialistResult(
                 artifact=ResourceArtifact(
                     artifact_id=artifact_id,
@@ -95,7 +96,7 @@ class QuestionBankSpecialist(Specialist):
                 title="题库",
                 status=ArtifactStatus.FAILED,
                 body="",
-                error_code="QUESTION_BANK_INCOMPLETE",
+                error_code="QUESTION_BANK_INCOMPLETE" if not complete_levels else "TEXTBOOK_EVIDENCE_REQUIRED",
                 quality_score=min(total_questions * 10, 100),
                 quality_issues=[
                     (
@@ -106,7 +107,7 @@ class QuestionBankSpecialist(Specialist):
                     for level in _QB_LEVELS
                     if type_specific.get(f"{level}_count", 0) == 0
                     or not solution_steps_by_level.get(level, False)
-                ],
+                ] + ([] if grounding_complete else ["MISSING_TEXTBOOK_EVIDENCE_OR_INSUFFICIENCY"]),
             ),
             raw_output=raw_output,
         )

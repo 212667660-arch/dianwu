@@ -3,10 +3,11 @@
 import re
 
 from backend.protocols.v2.models import ArtifactType, ArtifactStatus, ResourceArtifact, ResourceBrief, SubjectCategory
-from backend.services.resource_bundle.specialists.base import Specialist, SpecialistResult, build_specialist_prompt
+from backend.services.resource_bundle.specialists.base import Specialist, SpecialistResult, build_specialist_prompt, has_required_grounding
 
 _CODE_LAB_SECTIONS = ["目标", "环境", "步骤", "验收标准", "参考方法", "起始代码"]
 _EXPERIMENT_SECTIONS = ["目标", "前置条件", "步骤", "验收标准", "参考方法"]
+_MATH_PRACTICE_SECTIONS = ["目标", "已知条件与目标", "所用知识点", "分步推导", "最终答案", "结果检查", "验收标准", "参考方法"]
 
 
 class AdaptivePracticeSpecialist(Specialist):
@@ -22,6 +23,13 @@ class AdaptivePracticeSpecialist(Specialist):
             sections = "\n".join(f"## {s}\n（在此填写{s}内容）" for s in _CODE_LAB_SECTIONS)
             static_instruction = (
                 "生成编程实验并包含非空起始代码，严格按以下部分输出：\n"
+                f"{sections}"
+            )
+        elif brief.subject_category == SubjectCategory.MATH:
+            sections = "\n".join(f"## {s}\n（在此填写{s}内容）" for s in _MATH_PRACTICE_SECTIONS)
+            static_instruction = (
+                "生成数学适应性练习并完整展示做题过程。使用教材时只能引用服务器提供的[资料N]；"
+                "证据不足时必须明确说明证据不足。严格按以下部分输出：\n"
                 f"{sections}"
             )
         else:
@@ -44,8 +52,16 @@ class AdaptivePracticeSpecialist(Specialist):
         source_allowlist: tuple[str, ...] = (),
         subject_category: SubjectCategory = SubjectCategory.OTHER,
     ) -> SpecialistResult:
-        fmt = "code_lab" if subject_category == SubjectCategory.CS else "experiment_or_case"
-        required = _CODE_LAB_SECTIONS if subject_category == SubjectCategory.CS else _EXPERIMENT_SECTIONS
+        fmt = (
+            "code_lab" if subject_category == SubjectCategory.CS
+            else "worked_practice" if subject_category == SubjectCategory.MATH
+            else "experiment_or_case"
+        )
+        required = (
+            _CODE_LAB_SECTIONS if subject_category == SubjectCategory.CS
+            else _MATH_PRACTICE_SECTIONS if subject_category == SubjectCategory.MATH
+            else _EXPERIMENT_SECTIONS
+        )
         found = sum(1 for s in required if f"## {s}" in raw_output)
         starter_match = (
             re.search(r"##\s*起始代码\s*\n([\s\S]*?)\Z", raw_output)
@@ -56,7 +72,8 @@ class AdaptivePracticeSpecialist(Specialist):
             starter_match and starter_match.group(1).strip()
         )
 
-        if found == len(required) and starter_ok:
+        grounding_ok = has_required_grounding(raw_output, source_allowlist)
+        if found == len(required) and starter_ok and grounding_ok:
             return SpecialistResult(
                 artifact=ResourceArtifact(
                     artifact_id=artifact_id,
@@ -76,7 +93,11 @@ class AdaptivePracticeSpecialist(Specialist):
                 title="适应性练习",
                 status=ArtifactStatus.FAILED,
                 body="",
-                error_code="ADAPTIVE_PRACTICE_INCOMPLETE",
+                error_code=(
+                    "TEXTBOOK_EVIDENCE_REQUIRED"
+                    if found == len(required) and starter_ok and not grounding_ok
+                    else "ADAPTIVE_PRACTICE_INCOMPLETE"
+                ),
                 quality_score=min(found * 15, 100),
                 quality_issues=[
                     *[
@@ -85,6 +106,7 @@ class AdaptivePracticeSpecialist(Specialist):
                         if f"## {section}" not in raw_output
                     ],
                     *([] if starter_ok else ["STARTER_CODE_EMPTY"]),
+                    *([] if grounding_ok else ["MISSING_TEXTBOOK_EVIDENCE_OR_INSUFFICIENCY"]),
                 ],
             ),
             raw_output=raw_output,

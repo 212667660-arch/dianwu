@@ -1,7 +1,7 @@
 ﻿from __future__ import annotations
 
 from backend.protocols.v2.models import ArtifactType, ArtifactStatus, ResourceArtifact, ResourceBrief
-from backend.services.resource_bundle.specialists.base import Specialist, SpecialistResult, build_specialist_prompt
+from backend.services.resource_bundle.specialists.base import Specialist, SpecialistResult, build_specialist_prompt, has_required_grounding
 
 _COURSE_SECTIONS = [
     "学习目标",
@@ -44,7 +44,9 @@ class CourseExplanationSpecialist(Specialist):
     ) -> SpecialistResult:
         found = sum(1 for s in _COURSE_SECTIONS if f"## {s}" in raw_output)
         score = min(found * 20, 100)
-        if found == len(_COURSE_SECTIONS):
+        structure_complete = found == len(_COURSE_SECTIONS)
+        grounding_complete = has_required_grounding(raw_output, source_allowlist)
+        if structure_complete and grounding_complete:
             return SpecialistResult(
                 artifact=ResourceArtifact(
                     artifact_id=artifact_id,
@@ -64,13 +66,13 @@ class CourseExplanationSpecialist(Specialist):
                 title="课程讲解",
                 status=ArtifactStatus.FAILED,
                 body="",
-                error_code="COURSE_EXPLANATION_INCOMPLETE",
+                error_code="COURSE_EXPLANATION_INCOMPLETE" if not structure_complete else "TEXTBOOK_EVIDENCE_REQUIRED",
                 quality_score=score,
                 quality_issues=[
                     f"MISSING_SECTION:{section}"
                     for section in _COURSE_SECTIONS
                     if f"## {section}" not in raw_output
-                ],
+                ] + ([] if grounding_complete else ["MISSING_TEXTBOOK_EVIDENCE_OR_INSUFFICIENCY"]),
             ),
             raw_output=raw_output,
         )
