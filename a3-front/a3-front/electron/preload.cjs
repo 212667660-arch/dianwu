@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('a3Desktop', Object.freeze({
   },
   knowledgeRevealSource: (documentId) => ipcRenderer.invoke('a3:knowledge-reveal-source', documentId),
   knowledgeOpenSource: (documentId, locator) => ipcRenderer.invoke('a3:knowledge-open-source', { documentId, locator }),
+  knowledgeOpenOfficialTextbook: (sourceId, url) => ipcRenderer.invoke('a3:knowledge-open-official-textbook', { sourceId, url }),
   knowledgeOnImportProgress: (listener) => {
     const callback = (_event, payload) => listener(payload)
     ipcRenderer.on('a3:knowledge-import-progress', callback)

@@ -19,6 +19,9 @@ export interface KnowledgeDocument { id: number; sha256: string; display_name: s
 export interface KnowledgeImportJob { id: number; document_id: number; status: string; progress: number; stage: string; retryable: boolean; safe_error_code: string | null; cancel_requested: boolean; version: number; created_at: string; updated_at: string }
 export interface KnowledgeBinding { session_id: string; collection_ids: number[]; privacy_mode: 'allow_model_context' | 'local_search_only' }
 export interface KnowledgeImportBatch { jobs: KnowledgeImportJob[] }
+export type TextbookAccessMode = 'OFFICIAL_READER' | 'LICENSED_DOWNLOAD' | 'EXTERNAL_CATALOG'
+export interface TextbookCatalogItem { source_id: string; publisher: string; title: string; stage: '初中' | '高中'; grade: string; semester: string; subject: '数学'; edition: string; official_url: string; access_mode: TextbookAccessMode; license_note: string; verified_at: string; download_url: string | null }
+export interface TextbookCatalog { version: string; items: TextbookCatalogItem[] }
 export interface KnowledgeSearchResult { mode: 'keyword' | 'hybrid'; items: Array<{ chunk_id: number; document_id: number; document_name: string; text: string; heading_path: string; locator: KnowledgeLocator; score: number; retrieval_mode: 'keyword' | 'hybrid' }> }
 
 export type ArtifactType = 'course_explanation' | 'mind_map' | 'question_bank' | 'extended_reading' | 'adaptive_practice'

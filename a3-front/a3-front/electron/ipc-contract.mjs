@@ -25,6 +25,9 @@ const REASONING_ADAPTERS = new Set(['none', 'openai_reasoning_effort', 'anthropi
 const KNOWLEDGE_DROPPED_FIELDS = new Set(['collectionId', 'paths'])
 const KNOWLEDGE_LOCATOR_FIELDS = new Set(['type', 'start', 'end', 'sheet_name'])
 const KNOWLEDGE_LOCATOR_TYPES = new Set(['page', 'slide', 'sheet_rows', 'paragraph'])
+const TEXTBOOK_OPEN_FIELDS = new Set(['sourceId', 'url'])
+const TEXTBOOK_SOURCE_ID_PATTERN = /^[a-z0-9][a-z0-9-]{2,63}$/
+const TEXTBOOK_HOSTS = new Set(['jc.pep.com.cn', 'book.pep.com.cn'])
 const PET_SETTINGS_FIELDS = new Set(['visible', 'scale', 'speed', 'soundEnabled', 'soundVolume', 'voiceEnabled', 'voiceVolume'])
 const PET_SCALE_VALUES = new Set([0.5, 0.75, 1, 1.25, 1.5])
 const PET_SPEED_VALUES = new Set([0.5, 0.75, 1, 1.25, 1.5, 2])
@@ -255,6 +258,35 @@ export function validateKnowledgeLocator(input) {
   return { ok: true, value }
 }
 
+export function validateTextbookOpen(input) {
+  if (!isPlainObject(input)) return invalid('Textbook open input must be an object.')
+  for (const field of Object.keys(input)) {
+    if (!TEXTBOOK_OPEN_FIELDS.has(field)) return denied('Textbook open input contains an unsupported field.')
+  }
+  if (!TEXTBOOK_SOURCE_ID_PATTERN.test(input.sourceId || '')) {
+    return invalid('Textbook source ID is invalid.')
+  }
+  if (typeof input.url !== 'string' || input.url.length < 1 || input.url.length > 512) {
+    return invalid('Textbook URL is invalid.')
+  }
+  let parsed
+  try {
+    parsed = new URL(input.url)
+  } catch {
+    return invalid('Textbook URL is invalid.')
+  }
+  if (
+    parsed.protocol !== 'https:'
+    || parsed.username
+    || parsed.password
+    || parsed.hash
+    || !TEXTBOOK_HOSTS.has(parsed.hostname.toLowerCase())
+  ) {
+    return denied('Textbook URL is not an approved official source.')
+  }
+  return { ok: true, value: { sourceId: input.sourceId, url: input.url } }
+}
+
 export function validatePetSettingsInput(input) {
   if (!isPlainObject(input) || Object.keys(input).length === 0) {
     return invalid('Pet settings must be a non-empty object.')
@@ -421,6 +453,7 @@ function matchAllowedRoute(method, path, stream) {
   if (
     (method === 'GET' && (
       path === '/api/knowledge/status'
+      || path === '/api/knowledge/textbooks'
       || path === '/api/knowledge/collections'
       || path === '/api/knowledge/documents'
       || path === '/api/knowledge/imports'

@@ -268,6 +268,42 @@ describe('multi-profile model API', () => {
 })
 
 describe('knowledge API', () => {
+  it('loads the textbook catalog and opens official entries through a fixed desktop bridge', async () => {
+    const request = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: { version: '2026-07-17', items: [] },
+    })
+    const knowledgeOpenOfficialTextbook = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: { sourceId: 'pep-high-math' },
+    })
+    window.a3Desktop = {
+      request,
+      modelConfigTest: vi.fn(),
+      modelConfigSave: vi.fn(),
+      knowledgeOpenOfficialTextbook,
+      startStream: vi.fn(),
+      cancelStream: vi.fn(),
+      onStreamEvent: vi.fn(() => () => {}),
+      onBackendExit: vi.fn(() => () => {}),
+    }
+
+    await backendApi.textbookCatalog({ stage: '高中', subject: '数学', publisher: '人民教育出版社' })
+    await backendApi.openOfficialTextbook('pep-high-math', 'https://jc.pep.com.cn/?filed=高中&subject=数学')
+
+    expect(request).toHaveBeenCalledWith({
+      method: 'GET',
+      path: '/api/knowledge/textbooks',
+      query: { stage: '高中', subject: '数学', publisher: '人民教育出版社' },
+    })
+    expect(knowledgeOpenOfficialTextbook).toHaveBeenCalledWith(
+      'pep-high-math',
+      'https://jc.pep.com.cn/?filed=高中&subject=数学',
+    )
+  })
+
   it('uses fixed desktop import bridge and posts no renderer paths', async () => {
     const manifest = {
       sha256: 'a'.repeat(64), display_name: 'lesson.txt', extension: '.txt',

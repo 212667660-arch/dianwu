@@ -13,6 +13,7 @@ import type {
   KnowledgeImportJob,
   KnowledgeLocator,
   KnowledgeStatus,
+  TextbookCatalog,
   KnowledgeSearchResult,
   MistakeItem,
   ModelConfigInput,
@@ -219,6 +220,7 @@ export const backendApi = {
     })
   },
   async knowledgeStatus() { return activeTransport().request<KnowledgeStatus>({ method: 'GET', path: '/api/knowledge/status' }) },
+  async textbookCatalog(query: { stage?: '初中' | '高中'; subject?: '数学'; publisher?: string } = {}) { return activeTransport().request<TextbookCatalog>({ method: 'GET', path: '/api/knowledge/textbooks', query }) },
   async knowledgeCollections() { return activeTransport().request<KnowledgeCollection[]>({ method: 'GET', path: '/api/knowledge/collections' }) },
   async createKnowledgeCollection(input: KnowledgeCollectionInput) { return activeTransport().request<KnowledgeCollection>({ method: 'POST', path: '/api/knowledge/collections', body: input }) },
   async updateKnowledgeCollection(collectionId: number, input: Partial<KnowledgeCollectionInput>) { return activeTransport().request<KnowledgeCollection>({ method: 'PUT', path: `/api/knowledge/collections/${collectionId}`, body: input }) },
@@ -246,6 +248,10 @@ export const backendApi = {
   async openKnowledgeSource(documentId: number, locator: KnowledgeLocator) {
     if (!window.a3Desktop?.knowledgeOpenSource) throw new Error('来源预览仅桌面版可用。')
     return desktopEnvelope<{ mode: string; displayName: string }>(await window.a3Desktop.knowledgeOpenSource(documentId, locator))
+  },
+  async openOfficialTextbook(sourceId: string, url: string) {
+    if (!window.a3Desktop?.knowledgeOpenOfficialTextbook) throw new Error('官方教材在线阅读仅桌面版可用。')
+    return desktopEnvelope<{ sourceId: string }>(await window.a3Desktop.knowledgeOpenOfficialTextbook(sourceId, url))
   },
   async pet(): Promise<PetSnapshot> {
     const bridge = window.a3Desktop

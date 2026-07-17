@@ -13,6 +13,7 @@ import {
   validateKnowledgeCollectionId,
   validateKnowledgeDroppedPaths,
   validateKnowledgeLocator,
+  validateTextbookOpen,
   validateModelConfigInput,
   validateModelProfileId,
   validateModelProfileInput,
@@ -367,6 +368,23 @@ ipcMain.handle('a3:knowledge-open-source', (event, input) => {
   const locator = validateKnowledgeLocator(input.locator)
   if (!locator.ok) return locator
   return knowledgeController.openSource(event, input.documentId, locator.value)
+})
+ipcMain.handle('a3:knowledge-open-official-textbook', async (event, input) => {
+  if (!trustedKnowledgeSender(event)) {
+    return { ok: false, status: 403, error: desktopError('DESKTOP_REQUEST_DENIED', '教材来源请求被拒绝。') }
+  }
+  const validated = validateTextbookOpen(input)
+  if (!validated.ok) return validated
+  try {
+    await shell.openExternal(validated.value.url)
+    return { ok: true, status: 200, data: { sourceId: validated.value.sourceId } }
+  } catch {
+    return {
+      ok: false,
+      status: 503,
+      error: desktopError('TEXTBOOK_SOURCE_OPEN_FAILED', '无法打开出版社官方教材页面。', true),
+    }
+  }
 })
 ipcMain.handle('a3:pet-get', event => {
   if (!trustedPetMainSender(event)) return deniedPetRequest()
