@@ -9,6 +9,8 @@ const apiMock = vi.hoisted(() => ({
   updateKnowledgeCollection: vi.fn(),
   deleteKnowledgeCollection: vi.fn(),
   openKnowledgeSource: vi.fn(),
+  textbookCatalog: vi.fn(),
+  openOfficialTextbook: vi.fn(),
 }))
 const messageMock = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }))
 const confirmMock = vi.hoisted(() => vi.fn())
@@ -45,7 +47,33 @@ beforeEach(() => {
   store.knowledgeDocuments = [{ id: 9, sha256: 'a'.repeat(64), display_name: '极限讲义.pdf', extension: '.pdf', mime_type: 'application/pdf', byte_size: 1024, status: 'COMPLETED', page_count: 3, slide_count: null, sheet_count: null, text_characters: 1200, chunk_count: 4, parser_version: 'chunk-v1', safe_error_code: null, created_at: '', updated_at: '' }]
   store.knowledgeJobs = []
   apiMock.knowledgeDocuments.mockResolvedValue(store.knowledgeDocuments)
+  apiMock.textbookCatalog.mockResolvedValue({
+    version: '2026-07-17',
+    items: [{
+      source_id: 'pep-high-math', publisher: '人民教育出版社', title: '人教版高中数学教材电子版目录',
+      stage: '高中', grade: '必修与选择性必修', semester: '全册', subject: '数学', edition: '人教 A/B 版',
+      official_url: 'https://jc.pep.com.cn/?filed=高中&subject=数学', access_mode: 'OFFICIAL_READER',
+      license_note: '版权所有，仅打开出版社官方在线阅读页。', verified_at: '2026-07-17', download_url: null,
+    }],
+  })
+  apiMock.openOfficialTextbook.mockResolvedValue({ sourceId: 'pep-high-math' })
   confirmMock.mockResolvedValue(undefined)
+})
+
+it('shows and opens the authorized textbook catalog', async () => {
+  setDesktopBridge({ knowledgeChooseFiles: vi.fn(), knowledgeOpenOfficialTextbook: vi.fn() })
+  const wrapper = mount(KnowledgeLibrary, { global: { stubs: { ElDrawer: { template: '<div><slot /></div>' } } } })
+  await flushPromises()
+
+  await wrapper.get('[aria-label="选择高中教材"]').trigger('click')
+  expect(wrapper.text()).toContain('人教版高中数学教材电子版目录')
+  await wrapper.get('[aria-label="在线阅读 人教版高中数学教材电子版目录"]').trigger('click')
+  await flushPromises()
+
+  expect(apiMock.openOfficialTextbook).toHaveBeenCalledWith(
+    'pep-high-math',
+    'https://jc.pep.com.cn/?filed=高中&subject=数学',
+  )
 })
 
 it('shows three safe knowledge panes and selects a document', async () => {

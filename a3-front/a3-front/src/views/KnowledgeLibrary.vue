@@ -1,6 +1,7 @@
 <template>
   <section class="knowledge-page">
     <header class="knowledge-header"><div><span class="knowledge-kicker">LOCAL LIBRARY</span><h1>把学过的风，收进一座小书房</h1><p>资料只留在这台设备。需要模型协助时，也只取与你问题相关的少量片段。</p></div><div class="knowledge-toolbar"><span class="mode-badge">{{ backend.knowledgeStatus?.semantic_pack.available?'混合检索':'关键词检索' }}</span><button type="button" :disabled="!desktopAvailable||!activeCollectionId" @click="importFiles">{{ desktopAvailable?'导入资料':'导入仅桌面版可用' }}</button></div></header>
+    <TextbookCatalog :items="textbookItems" :desktop-available="desktopAvailable" @open="openOfficialTextbook" />
     <div v-if="backend.knowledgeError" class="knowledge-error" role="alert">{{ backend.knowledgeError }}</div>
     <div class="knowledge-mobile-tools"><button type="button" @click="collectionDrawer=true">集合</button><button type="button" :disabled="!selectedDocument" @click="inspectorDrawer=true">资料详情</button></div>
     <div class="knowledge-workspace" :class="{ 'is-drop-active': dropActive }">
@@ -22,11 +23,13 @@ import {
   type KnowledgeCollection,
   type KnowledgeImportJob,
   type KnowledgeLocator,
+  type TextbookCatalogItem,
 } from '@/api'
 import { useBackendStore } from '@/stores/backend'
 import CollectionRail from '@/components/knowledge/CollectionRail.vue'
 import DocumentGrid from '@/components/knowledge/DocumentGrid.vue'
 import DocumentInspector from '@/components/knowledge/DocumentInspector.vue'
+import TextbookCatalog from '@/components/knowledge/TextbookCatalog.vue'
 
 const activeJobStatuses = new Set(['QUEUED', 'VALIDATING', 'PARSING', 'OCR_RUNNING', 'INDEXING'])
 const locatorTypes = new Set<KnowledgeLocator['type']>(['page', 'slide', 'sheet_rows', 'paragraph'])
@@ -38,6 +41,7 @@ const filter = ref('')
 const dropActive = ref(false)
 const collectionDrawer = ref(false)
 const inspectorDrawer = ref(false)
+const textbookItems = ref<TextbookCatalogItem[]>([])
 let disposeImportProgress: (() => void) | undefined
 let collectionRequestVersion = 0
 
@@ -158,6 +162,14 @@ async function openDocument(id: number) {
   }
 }
 
+async function openOfficialTextbook(item: TextbookCatalogItem) {
+  try {
+    await backendApi.openOfficialTextbook(item.source_id, item.official_url)
+  } catch (error) {
+    ElMessage.error(errorMessage(error))
+  }
+}
+
 async function rebuildDocument(id: number) {
   try {
     await ElMessageBox.confirm('重新解析会更新这份资料的检索片段。', '重新解析')
@@ -188,6 +200,11 @@ async function applyImportProgress(jobs: KnowledgeImportJob[]) {
 
 onMounted(async () => {
   disposeImportProgress = window.a3Desktop?.knowledgeOnImportProgress?.(jobs => { void applyImportProgress(jobs) })
+  try {
+    textbookItems.value = (await backendApi.textbookCatalog({ subject: '数学', publisher: '人民教育出版社' })).items
+  } catch (error) {
+    ElMessage.error(errorMessage(error))
+  }
   await backend.refreshKnowledge()
   if (
     Number.isInteger(routedDocumentId.value)
