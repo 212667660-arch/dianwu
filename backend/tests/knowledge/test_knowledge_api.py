@@ -87,6 +87,23 @@ def create_collection(client: TestClient, name: str = "高数") -> dict[str, obj
     return response.json()
 
 
+def test_official_textbook_catalog_is_readonly_and_filterable(api) -> None:
+    client, _service, _coordinator, _root = api
+
+    response = client.get(
+        "/api/knowledge/textbooks",
+        params={"stage": "高中", "subject": "数学", "publisher": "人民教育出版社"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["version"] == "2026-07-17"
+    assert payload["items"]
+    assert all(item["stage"] == "高中" for item in payload["items"])
+    assert all(item["access_mode"] == "OFFICIAL_READER" for item in payload["items"])
+    assert all(item["download_url"] is None for item in payload["items"])
+
+
 def write_object(root: Path, content: str) -> dict[str, object]:
     raw = content.encode("utf-8")
     digest = sha256(raw).hexdigest()

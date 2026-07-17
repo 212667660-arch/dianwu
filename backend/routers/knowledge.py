@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Path, Query, Response
 from sqlalchemy.orm import Session
@@ -23,9 +23,11 @@ from backend.knowledge.schemas import (
     KnowledgeStatusResponse,
     SessionKnowledgeCollectionsResponse,
     SessionKnowledgeCollectionsUpdate,
+    TextbookCatalogResponse,
 )
 from backend.knowledge.search import KnowledgeSearchRepository
 from backend.knowledge.service import KnowledgeService
+from backend.knowledge.textbook_catalog import list_textbooks
 
 
 router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
@@ -48,6 +50,18 @@ def get_knowledge_service(db: Session = Depends(get_db)) -> KnowledgeService:
 @router.get("/status", response_model=KnowledgeStatusResponse)
 def knowledge_status(service: KnowledgeService = Depends(get_knowledge_service)):
     return service.status()
+
+
+@router.get("/textbooks", response_model=TextbookCatalogResponse)
+def textbook_catalog(
+    stage: Literal["初中", "高中"] | None = Query(default=None),
+    subject: Literal["数学"] = Query(default="数学"),
+    publisher: str | None = Query(default=None, min_length=1, max_length=80),
+):
+    return TextbookCatalogResponse(
+        version="2026-07-17",
+        items=list_textbooks(stage=stage, subject=subject, publisher=publisher),
+    )
 
 
 @router.get("/collections", response_model=list[KnowledgeCollectionResponse])

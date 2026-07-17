@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -106,6 +107,51 @@ class KnowledgeStatusResponse(StrictKnowledgeModel):
     worker: CapabilityStatus
     ocr_pack: CapabilityStatus
     semantic_pack: CapabilityStatus
+
+
+class TextbookCatalogItem(StrictKnowledgeModel):
+    source_id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{2,63}$")
+    publisher: str = Field(min_length=1, max_length=80)
+    title: str = Field(min_length=1, max_length=200)
+    stage: Literal["初中", "高中"]
+    grade: str = Field(min_length=1, max_length=40)
+    semester: str = Field(min_length=1, max_length=40)
+    subject: Literal["数学"]
+    edition: str = Field(min_length=1, max_length=40)
+    official_url: str = Field(min_length=1, max_length=512)
+    access_mode: Literal["OFFICIAL_READER", "LICENSED_DOWNLOAD", "EXTERNAL_CATALOG"]
+    license_note: str = Field(min_length=1, max_length=300)
+    verified_at: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    download_url: str | None = Field(default=None, max_length=512)
+
+    @field_validator("official_url", "download_url")
+    @classmethod
+    def validate_catalog_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        parsed = urlsplit(value)
+        if parsed.scheme != "https" or parsed.username or parsed.password or parsed.fragment:
+            raise ValueError("textbook URL must be a clean HTTPS URL")
+        if (parsed.hostname or "").lower() not in {"jc.pep.com.cn", "book.pep.com.cn"}:
+            raise ValueError("textbook URL host is not approved")
+        return value
+
+    @model_validator(mode="after")
+    def validate_access_mode(self) -> "TextbookCatalogItem":
+        if self.publisher == "人民教育出版社" and (
+            self.access_mode == "LICENSED_DOWNLOAD" or self.download_url is not None
+        ):
+            raise ValueError("PEP textbooks are official-reader metadata only")
+        if self.access_mode == "LICENSED_DOWNLOAD" and self.download_url is None:
+            raise ValueError("licensed downloads require download_url")
+        if self.access_mode != "LICENSED_DOWNLOAD" and self.download_url is not None:
+            raise ValueError("only licensed downloads may expose download_url")
+        return self
+
+
+class TextbookCatalogResponse(StrictKnowledgeModel):
+    version: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    items: list[TextbookCatalogItem]
 
 
 class KnowledgeCollectionResponse(StrictKnowledgeModel):
