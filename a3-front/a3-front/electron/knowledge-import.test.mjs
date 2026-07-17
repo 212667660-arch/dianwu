@@ -11,7 +11,10 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 
-import { createKnowledgeImporter } from './knowledge-import.mjs'
+import {
+  createKnowledgeImporter,
+  validateKnowledgeFileSize,
+} from './knowledge-import.mjs'
 
 
 async function tempRoot() {
@@ -92,7 +95,7 @@ test('rejects unsupported formats directories and oversized individual files', a
   const oversized = path.join(root, 'oversized.txt')
   await writeFile(unsupported, 'binary', 'utf8')
   await writeFile(oversized, 'x', 'utf8')
-  await truncate(oversized, 100 * 1024 * 1024 + 1)
+  await truncate(oversized, 500 * 1024 * 1024 + 1)
 
   await assert.rejects(
     () => importer.importPaths([unsupported]),
@@ -104,7 +107,16 @@ test('rejects unsupported formats directories and oversized individual files', a
   )
   await assert.rejects(
     () => importer.importPaths([oversized]),
-    error => error?.code === 'KNOWLEDGE_FILE_TOO_LARGE',
+    error => error?.code === 'KNOWLEDGE_FILE_TOO_LARGE' && /500 MiB/.test(error.message),
+  )
+})
+
+
+test('accepts an individual file size up to five hundred MiB', () => {
+  assert.doesNotThrow(() => validateKnowledgeFileSize(500 * 1024 * 1024))
+  assert.throws(
+    () => validateKnowledgeFileSize(500 * 1024 * 1024 + 1),
+    error => error?.code === 'KNOWLEDGE_FILE_TOO_LARGE' && /500 MiB/.test(error.message),
   )
 })
 

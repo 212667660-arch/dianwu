@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
-MAX_FILE_BYTES = 100 * 1024 * 1024
+MAX_FILE_BYTES = 500 * 1024 * 1024
 MAX_BATCH_BYTES = 500 * 1024 * 1024
 MAX_BATCH_FILES = 50
 _SAFE_DISPLAY_NAME = re.compile(r"^[^/\\\x00\r\n]{1,255}$")

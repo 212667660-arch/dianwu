@@ -33,6 +33,14 @@ def test_import_manifest_accepts_only_controlled_object_metadata() -> None:
         ImportManifest.model_validate(manifest(object_relpath="../secret.txt"))
 
 
+def test_import_manifest_accepts_five_hundred_mib_boundary() -> None:
+    boundary = 500 * 1024 * 1024
+    assert ImportManifest.model_validate(manifest(byte_size=boundary)).byte_size == boundary
+
+    with pytest.raises(ValidationError):
+        ImportManifest.model_validate(manifest(byte_size=boundary + 1))
+
+
 def test_import_batch_enforces_file_count_and_total_size() -> None:
     value = ImportBatchRequest.model_validate(
         {"collection_id": 1, "files": [manifest(), manifest(sha256="b" * 64, object_relpath=f"objects/{'b' * 64}")]}

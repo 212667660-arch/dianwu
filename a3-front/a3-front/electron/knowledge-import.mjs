@@ -15,7 +15,7 @@ import { Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 
 
-const MAX_FILE_BYTES = 100 * 1024 * 1024
+const MAX_FILE_BYTES = 500 * 1024 * 1024
 const MAX_BATCH_BYTES = 500 * 1024 * 1024
 const MAX_BATCH_FILES = 50
 const SUPPORTED = Object.freeze({
@@ -41,6 +41,16 @@ export class KnowledgeImportError extends Error {
 
 function importError(code, message) {
   return new KnowledgeImportError(code, message)
+}
+
+
+export function validateKnowledgeFileSize(byteSize) {
+  if (!Number.isSafeInteger(byteSize) || byteSize < 1) {
+    throw importError('KNOWLEDGE_PARSE_FAILED', '空文件不能导入知识库。')
+  }
+  if (byteSize > MAX_FILE_BYTES) {
+    throw importError('KNOWLEDGE_FILE_TOO_LARGE', '单个文件不能超过 500 MiB。')
+  }
 }
 
 
@@ -104,12 +114,7 @@ async function validateSource(filePath) {
   if (!format) {
     throw importError('KNOWLEDGE_FORMAT_UNSUPPORTED', '暂不支持这种文件格式。')
   }
-  if (metadata.size <= 0) {
-    throw importError('KNOWLEDGE_PARSE_FAILED', '空文件不能导入知识库。')
-  }
-  if (metadata.size > MAX_FILE_BYTES) {
-    throw importError('KNOWLEDGE_FILE_TOO_LARGE', '单个文件不能超过 100 MB。')
-  }
+  validateKnowledgeFileSize(metadata.size)
   return {
     sourcePath: filePath,
     displayName: safeDisplayName(filePath),
