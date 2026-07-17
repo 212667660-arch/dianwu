@@ -439,9 +439,29 @@ async function cancel() {
   catch (error) { ElMessage.error(errorMessage(error)) }
 }
 
-watch(() => route.fullPath, () => {
-  const prompt = typeof route.query.prompt === 'string' ? route.query.prompt : ''
+watch(() => route.fullPath, async () => {
+  const rawPrompt = typeof route.query.prompt === 'string' ? route.query.prompt : ''
+  const prompt = rawPrompt.slice(0, 1000)
   if (prompt) editor.value = prompt
+
+  const rawCollectionId = typeof route.query.knowledge_collection === 'string'
+    ? route.query.knowledge_collection
+    : ''
+  const collectionId = Number(rawCollectionId)
+  if (Number.isSafeInteger(collectionId) && collectionId > 0) {
+    try {
+      await backend.saveSessionKnowledgeCollections([collectionId], 'allow_model_context')
+    } catch (error) {
+      ElMessage.error(errorMessage(error))
+    }
+  }
+
+  if (rawPrompt || rawCollectionId) {
+    const query = { ...route.query }
+    delete query.prompt
+    delete query.knowledge_collection
+    await router.replace({ path: route.path, query })
+  }
 }, { immediate: true })
 watch(() => backend.sessionId, currentSessionId => {
   const shouldCancel = generating.value && activeSessionId.value && currentSessionId !== activeSessionId.value

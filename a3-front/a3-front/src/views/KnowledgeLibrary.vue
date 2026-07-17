@@ -7,15 +7,15 @@
     <div class="knowledge-workspace" :class="{ 'is-drop-active': dropActive }">
       <CollectionRail :collections="backend.knowledgeCollections" :selected-id="activeCollectionId" @select="selectCollection" @create="createCollection" @rename="renameCollection" @delete="deleteCollection" />
       <div class="knowledge-center"><div class="center-heading"><div><strong>{{ activeCollection?.name||'全部资料' }}</strong><span>{{ filteredDocuments.length }} 份资料</span></div><input v-model="filter" aria-label="筛选知识库资料" placeholder="寻找一份记得的资料…"></div><DocumentGrid :documents="filteredDocuments" :jobs="backend.knowledgeJobs" :selected-id="selectedDocumentId" :cancel-job="backend.cancelKnowledgeJob" @select="selectDocument" @drag-active="dropActive=$event" @drop="handleDrop" /></div>
-      <DocumentInspector :document="selectedDocument" :desktop-available="desktopAvailable" @open="openDocument" @rebuild="rebuildDocument" @delete="deleteDocument" />
+      <DocumentInspector :document="selectedDocument" :desktop-available="desktopAvailable" @summarize="summarizeDocument" @worked-example="workedExampleDocument" @open="openDocument" @rebuild="rebuildDocument" @delete="deleteDocument" />
     </div>
     <el-drawer v-model="collectionDrawer" direction="ltr" size="280px" title="资料集合"><CollectionRail :collections="backend.knowledgeCollections" :selected-id="activeCollectionId" @select="selectCollection" @create="createCollection" @rename="renameCollection" @delete="deleteCollection" /></el-drawer>
-    <el-drawer v-model="inspectorDrawer" direction="rtl" size="330px" title="资料详情"><DocumentInspector :document="selectedDocument" :desktop-available="desktopAvailable" @open="openDocument" @rebuild="rebuildDocument" @delete="deleteDocument" /></el-drawer>
+    <el-drawer v-model="inspectorDrawer" direction="rtl" size="330px" title="资料详情"><DocumentInspector :document="selectedDocument" :desktop-available="desktopAvailable" @summarize="summarizeDocument" @worked-example="workedExampleDocument" @open="openDocument" @rebuild="rebuildDocument" @delete="deleteDocument" /></el-drawer>
   </section>
 </template>
 <script setup lang="ts">
 import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue'
-import { routeLocationKey } from 'vue-router'
+import { routeLocationKey, routerKey } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   backendApi,
@@ -35,6 +35,7 @@ const activeJobStatuses = new Set(['QUEUED', 'VALIDATING', 'PARSING', 'OCR_RUNNI
 const locatorTypes = new Set<KnowledgeLocator['type']>(['page', 'slide', 'sheet_rows', 'paragraph'])
 const backend = useBackendStore()
 const route = inject(routeLocationKey, null)
+const router = inject(routerKey, null)
 const activeCollectionId = ref<number | null>(null)
 const selectedDocumentId = ref<number | null>(null)
 const filter = ref('')
@@ -169,6 +170,21 @@ async function openOfficialTextbook(item: TextbookCatalogItem) {
     ElMessage.error(errorMessage(error))
   }
 }
+
+function launchDocumentLearning(id: number, mode: 'summary' | 'worked-example') {
+  const document = backend.knowledgeDocuments.find(item => item.id === id)
+  if (!document || !activeCollectionId.value || !router) return
+  const prompt = mode === 'summary'
+    ? `请基于已绑定的教材《${document.display_name}》总结知识点。请包含核心概念、公式及适用条件、知识依赖、常见题型、易错点，并引用实际检索到的[资料N]。`
+    : `请基于已绑定的教材《${document.display_name}》生成一道有代表性的数学例题，并按已知条件与目标、所用知识点、分步推导、最终答案、结果检查完整讲解；引用实际检索到的[资料N]。`
+  void router.push({
+    name: 'SmartTutor',
+    query: { knowledge_collection: String(activeCollectionId.value), prompt },
+  })
+}
+
+function summarizeDocument(id: number) { launchDocumentLearning(id, 'summary') }
+function workedExampleDocument(id: number) { launchDocumentLearning(id, 'worked-example') }
 
 async function rebuildDocument(id: number) {
   try {

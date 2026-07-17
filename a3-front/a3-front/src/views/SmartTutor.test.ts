@@ -271,6 +271,19 @@ describe('SmartTutor failure recovery', () => {
     expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('复习一次函数斜率')
   })
 
+  it('hydrates a bounded prompt and binds the routed knowledge collection without auto-sending', async () => {
+    backendStore.saveSessionKnowledgeCollections.mockResolvedValue(undefined)
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/tutor', component: SmartTutor }] })
+    await router.push({ path: '/tutor', query: { knowledge_collection: '3', prompt: '总结教材中的极限知识点' } })
+    await router.isReady()
+    const wrapper = mount(SmartTutor, { global: { plugins: [router], stubs } })
+    await flushPromises()
+
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('总结教材中的极限知识点')
+    expect(backendStore.saveSessionKnowledgeCollections).toHaveBeenCalledWith([3], 'allow_model_context')
+    expect(apiMock.streamChat).not.toHaveBeenCalled()
+  })
+
   it('saves local-only knowledge binding after showing the privacy notice', async () => {
     backendStore.refreshKnowledge.mockResolvedValue(undefined)
     backendStore.saveSessionKnowledgeCollections.mockResolvedValue(undefined)

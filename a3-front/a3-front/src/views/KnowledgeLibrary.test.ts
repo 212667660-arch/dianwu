@@ -76,6 +76,29 @@ it('shows and opens the authorized textbook catalog', async () => {
   )
 })
 
+it('launches SmartTutor with the selected collection and a textbook summary prompt', async () => {
+  setDesktopBridge({ knowledgeChooseFiles: vi.fn() })
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/knowledge', name: 'KnowledgeLibrary', component: KnowledgeLibrary },
+      { path: '/tutor', name: 'SmartTutor', component: { template: '<div>tutor</div>' } },
+    ],
+  })
+  await router.push('/knowledge')
+  await router.isReady()
+  const wrapper = mount(KnowledgeLibrary, { global: { plugins: [router], stubs: { ElDrawer: { template: '<div><slot /></div>' } } } })
+  await flushPromises()
+
+  await wrapper.findAll('[aria-label="总结知识点 极限讲义.pdf"]')[0].trigger('click')
+  await flushPromises()
+
+  expect(router.currentRoute.value.name).toBe('SmartTutor')
+  expect(router.currentRoute.value.query.knowledge_collection).toBe('3')
+  expect(String(router.currentRoute.value.query.prompt)).toContain('总结')
+  expect(String(router.currentRoute.value.query.prompt)).toContain('极限讲义.pdf')
+})
+
 it('shows three safe knowledge panes and selects a document', async () => {
   const wrapper = mount(KnowledgeLibrary, { global: { stubs: { ElButton: { template: '<button><slot /></button>' }, ElDrawer: { template: '<div><slot /></div>' }, ElIcon: true } } })
   await flushPromises()
