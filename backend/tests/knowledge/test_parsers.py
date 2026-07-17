@@ -65,6 +65,34 @@ def test_markdown_preserves_heading_path(fixtures: Path) -> None:
     assert formula.heading_path == ("第一章", "公式")
 
 
+@pytest.mark.parametrize(
+    ("extension", "content"),
+    [
+        (".txt", "第一段\n\n第二段"),
+        (".md", "# 标题\n\n教材内容"),
+        (".csv", "知识点,说明\n一次函数,斜率"),
+    ],
+)
+def test_large_text_formats_do_not_use_whole_file_read_bytes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    extension: str,
+    content: str,
+) -> None:
+    path = tmp_path / f"streaming{extension}"
+    path.write_text(content, encoding="utf-8")
+
+    def reject_whole_file_read(_path: Path) -> bytes:
+        raise AssertionError("text parsers must not read the whole file into bytes")
+
+    monkeypatch.setattr(Path, "read_bytes", reject_whole_file_read)
+
+    result = parse_document(path, ParserLimits())
+
+    assert result.blocks
+    assert result.text_characters > 0
+
+
 def test_blank_pdf_is_marked_for_ocr(tmp_path: Path) -> None:
     path = tmp_path / "blank.pdf"
     pdf = fitz.open()

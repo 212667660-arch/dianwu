@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import codecs
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 import re
@@ -304,78 +305,95 @@ def _parse_xlsx(path: Path, limits: ParserLimits) -> ParsedDocument:
             workbook.close()
 
 
-def _decode_text(path: Path, limits: ParserLimits) -> str:
-    raw = path.read_bytes()
-    if b"\0" in raw:
-        raise KnowledgeParseError("KNOWLEDGE_PARSE_FAILED")
+def _detect_text_encoding(path: Path, limits: ParserLimits) -> str:
     for encoding in ("utf-8-sig", "gb18030"):
+        decoder = codecs.getincrementaldecoder(encoding)(errors="strict")
+        characters = 0
         try:
-            value = raw.decode(encoding, errors="strict")
-            break
+            with path.open("rb") as stream:
+                while chunk := stream.read(1024 * 1024):
+                    if b"\0" in chunk:
+                        raise KnowledgeParseError("KNOWLEDGE_PARSE_FAILED")
+                    characters += len(decoder.decode(chunk, final=False))
+                    if characters > limits.max_text_characters:
+                        raise KnowledgeParseError("KNOWLEDGE_PARSE_LIMIT_EXCEEDED")
+                characters += len(decoder.decode(b"", final=True))
+                if characters > limits.max_text_characters:
+                    raise KnowledgeParseError("KNOWLEDGE_PARSE_LIMIT_EXCEEDED")
+            return encoding
         except UnicodeDecodeError:
             continue
-    else:
-        raise KnowledgeParseError("KNOWLEDGE_PARSE_FAILED")
-    if len(value) > limits.max_text_characters:
-        raise KnowledgeParseError("KNOWLEDGE_PARSE_LIMIT_EXCEEDED")
-    return value
+    raise KnowledgeParseError("KNOWLEDGE_PARSE_FAILED")
 
 
 def _parse_csv(path: Path, limits: ParserLimits) -> ParsedDocument:
     collector = _BlockCollector(limits)
-    content = _decode_text(path, limits)
-    reader = csv.reader(content.splitlines())
+    encoding = _detect_text_encoding(path, limits)
     try:
-        for row_index, row in enumerate(reader, 1):
-            if row_index > limits.max_csv_rows:
-                raise KnowledgeParseError("KNOWLEDGE_PARSE_LIMIT_EXCEEDED")
-            if len(row) > limits.max_csv_columns:
-                raise KnowledgeParseError("KNOWLEDGE_PARSE_LIMIT_EXCEEDED")
-            values = [value.strip() for value in row]
-            if not any(values):
-                continue
-            collector.add(
-                StructuredBlock(
-                    text=" | ".join(values),
-                    heading_path=(path.stem,),
-                    locator_type="sheet_rows",
-                    locator_start=row_index,
-                    locator_end=row_index,
-                    sheet_name=path.stem[:128],
+        with path.open("r", encoding=encoding, errors="strict", newline="") as stream:
+            for row_index, row in enumerate(csv.reader(stream), 1):
+                if row_index > limits.max_csv_rows:
+                    raise KnowledgeParseError("KNOWLEDGE_PARSE_LIMIT_EXCEEDED")
+                if len(row) > limits.max_csv_columns:
+                    raise KnowledgeParseError("KNOWLEDGE_PARSE_LIMIT_EXCEEDED")
+                values = [value.strip() for value in row]
+                if not any(values):
+                    continue
+                collector.add(
+                    StructuredBlock(
+                        text=" | ".join(values),
+                        heading_path=(path.stem,),
+                        locator_type="sheet_rows",
+                        locator_start=row_index,
+                        locator_end=row_index,
+                        sheet_name=path.stem[:128],
+                    )
                 )
-            )
-    except csv.Error as exc:
+    except (csv.Error, UnicodeDecodeError) as exc:
         raise KnowledgeParseError("KNOWLEDGE_PARSE_FAILED") from exc
     return collector.result(sheet_count=1)
 
 
-def _text_paragraphs(value: str) -> list[str]:
-    return [
-        paragraph.strip()
-        for paragraph in re.split(r"(?:\r?\n){2,}", value)
-        if paragraph.strip()
-    ]
-
-
 def _parse_text(path: Path, limits: ParserLimits) -> ParsedDocument:
     collector = _BlockCollector(limits)
-    content = _decode_text(path, limits)
-    for index, paragraph in enumerate(_text_paragraphs(content), 1):
+    encoding = _detect_text_encoding(path, limits)
+    paragraph_lines: list[str] = []
+    paragraph_index = 0
+
+    def flush() -> None:
+        nonlocal paragraph_index
+        text = "\n".join(paragraph_lines).strip()
+        paragraph_lines.clear()
+        if not text:
+            return
+        paragraph_index += 1
         collector.add(
             StructuredBlock(
-                text=paragraph,
+                text=text,
                 heading_path=(),
                 locator_type="paragraph",
-                locator_start=index,
-                locator_end=index,
+                locator_start=paragraph_index,
+                locator_end=paragraph_index,
             )
         )
+
+    try:
+        with path.open("r", encoding=encoding, errors="strict", newline="") as stream:
+            for raw_line in stream:
+                line = raw_line.rstrip("\r\n")
+                if line.strip():
+                    paragraph_lines.append(line)
+                else:
+                    flush()
+    except UnicodeDecodeError as exc:
+        raise KnowledgeParseError("KNOWLEDGE_PARSE_FAILED") from exc
+    flush()
     return collector.result()
 
 
 def _parse_markdown(path: Path, limits: ParserLimits) -> ParsedDocument:
     collector = _BlockCollector(limits)
-    content = _decode_text(path, limits)
+    encoding = _detect_text_encoding(path, limits)
     headings: list[str] = []
     paragraph_lines: list[str] = []
     paragraph_index = 0
@@ -397,17 +415,22 @@ def _parse_markdown(path: Path, limits: ParserLimits) -> ParsedDocument:
             )
         )
 
-    for line in content.splitlines():
-        matched = re.match(r"^(#{1,6})\s+(.+?)\s*$", line)
-        if matched:
-            flush()
-            level = len(matched.group(1))
-            headings = headings[: level - 1]
-            headings.append(matched.group(2).strip())
-        elif line.strip():
-            paragraph_lines.append(line)
-        else:
-            flush()
+    try:
+        with path.open("r", encoding=encoding, errors="strict", newline="") as stream:
+            for raw_line in stream:
+                line = raw_line.rstrip("\r\n")
+                matched = re.match(r"^(#{1,6})\s+(.+?)\s*$", line)
+                if matched:
+                    flush()
+                    level = len(matched.group(1))
+                    headings = headings[: level - 1]
+                    headings.append(matched.group(2).strip())
+                elif line.strip():
+                    paragraph_lines.append(line)
+                else:
+                    flush()
+    except UnicodeDecodeError as exc:
+        raise KnowledgeParseError("KNOWLEDGE_PARSE_FAILED") from exc
     flush()
     return collector.result()
 
