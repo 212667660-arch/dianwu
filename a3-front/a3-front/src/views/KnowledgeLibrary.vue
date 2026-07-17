@@ -173,7 +173,15 @@ async function openOfficialTextbook(item: TextbookCatalogItem) {
 
 function launchDocumentLearning(id: number, mode: 'summary' | 'worked-example') {
   const document = backend.knowledgeDocuments.find(item => item.id === id)
-  if (!document || !activeCollectionId.value || !router) return
+  if (!document) return
+  if (!activeCollectionId.value) {
+    ElMessage.warning('请先选择包含这份资料的知识库集合，再开始总结或例题讲解。')
+    return
+  }
+  if (!router) {
+    ElMessage.error('学习助手路由尚未就绪，请稍后重试。')
+    return
+  }
   const prompt = mode === 'summary'
     ? `请基于已绑定的教材《${document.display_name}》总结知识点。请包含核心概念、公式及适用条件、知识依赖、常见题型、易错点，并引用实际检索到的[资料N]。`
     : `请基于已绑定的教材《${document.display_name}》生成一道有代表性的数学例题，并按已知条件与目标、所用知识点、分步推导、最终答案、结果检查完整讲解；引用实际检索到的[资料N]。`

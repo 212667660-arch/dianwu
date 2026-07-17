@@ -12,7 +12,7 @@ const apiMock = vi.hoisted(() => ({
   textbookCatalog: vi.fn(),
   openOfficialTextbook: vi.fn(),
 }))
-const messageMock = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }))
+const messageMock = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), warning: vi.fn() }))
 const confirmMock = vi.hoisted(() => vi.fn())
 
 const store = vi.hoisted(() => ({
@@ -94,6 +94,16 @@ it('launches SmartTutor with the selected collection and a textbook summary prom
   expect(router.currentRoute.value.query.knowledge_collection).toBe('3')
   expect(String(router.currentRoute.value.query.prompt)).toContain('总结')
   expect(String(router.currentRoute.value.query.prompt)).toContain('极限讲义.pdf')
+})
+
+it('explains why document learning is unavailable without an active collection', async () => {
+  store.knowledgeCollections = []
+  const wrapper = mount(KnowledgeLibrary, { global: { stubs: { ElDrawer: { template: '<div><slot /></div>' } } } })
+  await flushPromises()
+
+  await wrapper.findAll('[aria-label="总结知识点 极限讲义.pdf"]')[0].trigger('click')
+
+  expect(messageMock.warning).toHaveBeenCalledWith('请先选择包含这份资料的知识库集合，再开始总结或例题讲解。')
 })
 
 it('shows three safe knowledge panes and selects a document', async () => {
