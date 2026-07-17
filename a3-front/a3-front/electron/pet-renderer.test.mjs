@@ -10,6 +10,7 @@ import {
   frameDuration,
   resolveDisplayState,
   resourceMode,
+  renderPetFrame,
 } from './pet/pet-renderer.js'
 
 test('repeated interactions retain only one expiry timer', () => {
@@ -51,6 +52,27 @@ test('canvas backing size depends only on logical dimensions and clamped dpr', (
     height: 624,
     dpr: 3,
   })
+})
+
+test('one hundred real frame renders preserve canvas and client dimensions', () => {
+  const canvas = { width: 0, height: 0, clientWidth: 192, clientHeight: 208 }
+  const calls = []
+  const context = {
+    resetTransform: () => calls.push('reset'),
+    clearRect: (...args) => calls.push(['clear', ...args]),
+    setTransform: (...args) => calls.push(['transform', ...args]),
+    drawImage: (...args) => calls.push(['draw', ...args]),
+    imageSmoothingEnabled: false,
+  }
+  const cell = { width: 192, height: 208 }
+  for (let index = 0; index < 100; index += 1) {
+    renderPetFrame({ canvas, context, atlas: {}, cell, animation: { row: 0 }, frame: index % 4, dpr: 2 })
+    assert.deepEqual(
+      { width: canvas.width, height: canvas.height, clientWidth: canvas.clientWidth, clientHeight: canvas.clientHeight },
+      { width: 384, height: 416, clientWidth: 192, clientHeight: 208 },
+    )
+  }
+  assert.equal(calls.filter(call => Array.isArray(call) && call[0] === 'draw').length, 100)
 })
 
 test('animation timing applies speed and advances across multiple frames', () => {

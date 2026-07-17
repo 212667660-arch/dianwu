@@ -82,6 +82,30 @@ export function canvasBackingSize(cell, value) {
   }
 }
 
+export function renderPetFrame({ canvas, context, atlas, cell, animation, frame, dpr }) {
+  const target = canvasBackingSize(cell, dpr)
+  if (canvas.width !== target.width || canvas.height !== target.height) {
+    canvas.width = target.width
+    canvas.height = target.height
+  }
+  if (typeof context.resetTransform === 'function') context.resetTransform()
+  else context.setTransform(1, 0, 0, 1, 0, 0)
+  context.clearRect(0, 0, canvas.width, canvas.height)
+  context.setTransform(target.dpr, 0, 0, target.dpr, 0, 0)
+  context.imageSmoothingEnabled = true
+  context.drawImage(
+    atlas,
+    frame * cell.width,
+    animation.row * cell.height,
+    cell.width,
+    cell.height,
+    0,
+    0,
+    cell.width,
+    cell.height,
+  )
+}
+
 export function createInteractionController({
   onState,
   durationFor,
@@ -173,29 +197,15 @@ async function startPetRenderer() {
   }
 
   function drawFrame() {
-    const width = payload.pet.cell.width
-    const height = payload.pet.cell.height
-    const target = canvasBackingSize(payload.pet.cell, window.devicePixelRatio)
-    if (canvas.width !== target.width || canvas.height !== target.height) {
-      canvas.width = target.width
-      canvas.height = target.height
-    }
-    if (typeof context.resetTransform === 'function') context.resetTransform()
-    else context.setTransform(1, 0, 0, 1, 0, 0)
-    context.clearRect(0, 0, canvas.width, canvas.height)
-    context.setTransform(target.dpr, 0, 0, target.dpr, 0, 0)
-    context.imageSmoothingEnabled = true
-    context.drawImage(
+    renderPetFrame({
+      canvas,
+      context,
       atlas,
-      frame * width,
-      animation().row * height,
-      width,
-      height,
-      0,
-      0,
-      width,
-      height,
-    )
+      cell: payload.pet.cell,
+      animation: animation(),
+      frame,
+      dpr: window.devicePixelRatio,
+    })
   }
 
   function cancelScheduledFrame() {
