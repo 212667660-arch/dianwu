@@ -46,8 +46,17 @@ def sanitize_citation_allowlist(body: str, allowlist: list[str]) -> str:
 
 
 # Type-specific quality gates
-_COURSE_SECTIONS = ["学习目标", "核心概念", "逐步讲解", "常见误区", "个性化建议"]
+_COURSE_SECTIONS = [
+    "学习目标",
+    "核心概念与定义",
+    "公式与适用条件",
+    "知识依赖",
+    "逐步讲解",
+    "常见题型与易错点",
+    "个性化建议",
+]
 _QB_LEVELS = ["基础", "提高", "挑战"]
+_QB_SOLUTION_STEPS = ["已知条件与目标", "所用知识点", "分步推导", "最终答案", "结果检查"]
 _ADAPTIVE_SECTIONS = ["目标", "步骤", "验收标准", "参考方法"]
 
 _MERMAID_SAFE_PREFIX = re.compile(r"^(flowchart|graph)\s", re.IGNORECASE)
@@ -81,6 +90,9 @@ def validate_type_specific_gates(artifact_type: ArtifactType, body: str) -> Safe
                 issues.append(f"MISSING_LEVEL:{level}")
         if "答案" not in body or "解析" not in body:
             issues.append("MISSING_ANSWER_OR_EXPLANATION")
+        for step in _QB_SOLUTION_STEPS:
+            if f"{step}：" not in body and f"{step}:" not in body:
+                issues.append(f"MISSING_SOLUTION_STEP:{step}")
 
     elif artifact_type == ArtifactType.EXTENDED_READING:
         # No hard requirements; source validation done via sanitize_citation_allowlist

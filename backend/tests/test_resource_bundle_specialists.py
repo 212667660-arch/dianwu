@@ -44,12 +44,28 @@ class TestCourseExplanationSpecialist:
         spec = CourseExplanationSpecialist()
         messages = spec.build_prompt(BRIEF, "画像", "", "")
         combined = " ".join(m["content"] for m in messages)
-        for section in ["学习目标", "核心概念", "逐步讲解", "常见误区", "个性化建议"]:
+        for section in ["学习目标", "核心概念与定义", "公式与适用条件", "知识依赖", "逐步讲解", "常见题型与易错点", "个性化建议"]:
             assert section in combined
+
+    def test_prompt_requires_textbook_summary_evidence_and_structure(self):
+        messages = CourseExplanationSpecialist().build_prompt(
+            BRIEF,
+            "画像",
+            "",
+            "<knowledge_data untrusted=\"true\">[资料1] 教材片段</knowledge_data>",
+        )
+        combined = " ".join(message["content"] for message in messages)
+        for requirement in ["核心概念与定义", "公式与适用条件", "知识依赖", "常见题型与易错点", "[资料N]", "证据不足"]:
+            assert requirement in combined
+
+    def test_parse_rejects_summary_without_formula_and_dependency_sections(self):
+        raw = """## 学习目标\n目标\n## 核心概念\n概念\n## 逐步讲解\n讲解\n## 常见误区\n误区\n## 个性化建议\n建议"""
+        result = CourseExplanationSpecialist().parse(raw, "a-old-summary")
+        assert result.artifact.status.value == "FAILED"
 
     def test_parse_valid_output(self):
         spec = CourseExplanationSpecialist()
-        raw = """## 学习目标\n目标\n## 核心概念\n概念\n## 逐步讲解\n讲解\n## 常见误区\n误区\n## 个性化建议\n建议"""
+        raw = """## 学习目标\n目标\n## 核心概念与定义\n概念\n## 公式与适用条件\n公式\n## 知识依赖\n依赖\n## 逐步讲解\n讲解\n## 常见题型与易错点\n误区\n## 个性化建议\n建议"""
         result = spec.parse(raw, "a1")
         assert result.artifact.status.value == "SUCCEEDED"
         assert "学习目标" in result.artifact.body
@@ -124,20 +140,57 @@ class TestQuestionBankSpecialist:
         for level in ["基础", "提高", "挑战"]:
             assert level in combined
 
+    def test_prompt_requires_worked_solution_steps_and_result_check(self):
+        messages = QuestionBankSpecialist().build_prompt(BRIEF, "画像", "", "[资料1] 教材片段")
+        combined = " ".join(message["content"] for message in messages)
+        for requirement in ["已知条件与目标", "所用知识点", "分步推导", "最终答案", "结果检查", "[资料N]"]:
+            assert requirement in combined
+
+    def test_parse_rejects_generic_explanations_without_worked_steps(self):
+        raw = """## 基础
+题目1：测试
+答案1：答案
+解析1：解析
+## 提高
+题目2：测试
+答案2：答案
+解析2：解析
+## 挑战
+题目3：测试
+答案3：答案
+解析3：解析"""
+        result = QuestionBankSpecialist().parse(raw, "a-generic")
+        assert result.artifact.status.value == "FAILED"
+
     def test_parse_three_levels(self):
         spec = QuestionBankSpecialist()
         raw = """## 基础
 题目1：y=2x+1的截距
 答案1：1
-解析1：令x=0
+解析1：
+- 已知条件与目标：已知函数，求截距
+- 所用知识点：截距定义
+- 分步推导：令x=0
+- 最终答案：1
+- 结果检查：代回函数成立
 ## 提高
 题目2：求斜率
 答案2：2
-解析2：系数
+解析2：
+- 已知条件与目标：已知函数，求斜率
+- 所用知识点：一次函数系数
+- 分步推导：读取x的系数
+- 最终答案：2
+- 结果检查：图像递增
 ## 挑战
 题目3：综合
 答案3：略
-解析3：略"""
+解析3：
+- 已知条件与目标：综合条件
+- 所用知识点：一次函数
+- 分步推导：逐项计算
+- 最终答案：略
+- 结果检查：代回检查"""
         result = spec.parse(raw, "a3")
         assert result.artifact.status.value == "SUCCEEDED"
         assert result.artifact.type_specific_data["basic_count"] >= 1

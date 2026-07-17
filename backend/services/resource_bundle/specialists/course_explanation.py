@@ -3,7 +3,15 @@
 from backend.protocols.v2.models import ArtifactType, ArtifactStatus, ResourceArtifact, ResourceBrief
 from backend.services.resource_bundle.specialists.base import Specialist, SpecialistResult, build_specialist_prompt
 
-_COURSE_SECTIONS = ["学习目标", "核心概念", "逐步讲解", "常见误区", "个性化建议"]
+_COURSE_SECTIONS = [
+    "学习目标",
+    "核心概念与定义",
+    "公式与适用条件",
+    "知识依赖",
+    "逐步讲解",
+    "常见题型与易错点",
+    "个性化建议",
+]
 
 
 class CourseExplanationSpecialist(Specialist):
@@ -18,7 +26,12 @@ class CourseExplanationSpecialist(Specialist):
         section_instruction = "\n".join(f"## {s}\n（在此填写{s}内容）" for s in _COURSE_SECTIONS)
         return build_specialist_prompt(
             artifact_type=self.artifact_type,
-            static_instruction=f"请严格按照以下五个部分输出：\n{section_instruction}",
+            static_instruction=(
+                "请严格按照以下七个部分输出。逐步讲解需要说明每一步的依据；"
+                "只有服务器提供的[资料N]可以作为教材引用。检索证据不足时必须明确说明证据不足，"
+                "不得伪造教材原文、页码或引用：\n"
+                f"{section_instruction}"
+            ),
             brief=brief,
             profile_text=profile_text,
             learning_context=learning_context,
