@@ -50,6 +50,8 @@ class KnowledgeDocument(Base):
     text_characters = Column(Integer, nullable=False, default=0)
     chunk_count = Column(Integer, nullable=False, default=0)
     safe_error_code = Column(String(64), nullable=True)
+    favorite = Column(Boolean, nullable=False, default=False)
+    deleted_at = Column(DateTime, nullable=True)
     deleted_pending = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -73,6 +75,12 @@ class KnowledgeDocument(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
         order_by="KnowledgeImportJob.id",
+    )
+    tag_links = relationship(
+        "KnowledgeDocumentTag",
+        back_populates="document",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
 
@@ -123,6 +131,46 @@ class KnowledgeCollectionDocument(Base):
 
     collection = relationship("KnowledgeCollection", back_populates="document_links")
     document = relationship("KnowledgeDocument", back_populates="collection_links")
+
+
+class KnowledgeTag(Base):
+    __tablename__ = "knowledge_tags"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(40), unique=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    document_links = relationship(
+        "KnowledgeDocumentTag",
+        back_populates="tag",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class KnowledgeDocumentTag(Base):
+    __tablename__ = "knowledge_document_tags"
+    __table_args__ = (
+        UniqueConstraint("document_id", "tag_id", name="uq_knowledge_document_tag"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    document_id = Column(
+        Integer,
+        ForeignKey("knowledge_documents.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    tag_id = Column(
+        Integer,
+        ForeignKey("knowledge_tags.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    document = relationship("KnowledgeDocument", back_populates="tag_links")
+    tag = relationship("KnowledgeTag", back_populates="document_links")
 
 
 class SessionKnowledgeCollection(Base):

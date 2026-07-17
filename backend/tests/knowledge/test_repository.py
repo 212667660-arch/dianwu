@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from datetime import datetime, timedelta
 
 import pytest
 from sqlalchemy import create_engine, event
@@ -162,3 +163,82 @@ def test_ocr_progress_and_retry_state_preserve_failed_pages(repository) -> None:
     assert retry.cancel_requested is False
     assert retry.failed_pages_json == "[2]"
     assert repo.retry_page_numbers(job.id) == [2]
+
+
+def test_document_tags_favorites_soft_delete_and_restore(repository) -> None:
+    repo, _db = repository
+    first = repo.create_collection("数学", "", "#c98f65")
+    second = repo.create_collection("收藏夹", "", "#8f9d7a")
+    document = create_document(repo)
+    repo.link_document(first.id, document.id)
+    repo.link_document(second.id, document.id)
+
+    repo.set_documents_favorite([document.id], True)
+    repo.set_document_tags([document.id], ["函数", "重点"])
+
+    active = repo.list_documents(favorite=True, tag="函数")
+    assert [item.id for item in active] == [document.id]
+    assert repo.document_collection_ids(document.id) == [first.id, second.id]
+    assert repo.document_tag_names(document.id) == ["函数", "重点"]
+
+    repo.soft_delete_documents([document.id])
+    assert repo.list_documents() == []
+    assert [item.id for item in repo.list_documents(only_deleted=True)] == [document.id]
+
+    repo.restore_documents([document.id])
+    restored = repo.require_document(document.id)
+    assert restored.deleted_at is None
+    assert restored.favorite is True
+    assert repo.document_tag_names(document.id) == ["函数", "重点"]
+
+
+def test_list_documents_supports_query_status_and_sort(repository) -> None:
+    repo, _db = repository
+    newer = repo.upsert_document(
+        sha256="b" * 64,
+        display_name="B-代数.pdf",
+        extension=".pdf",
+        mime_type="application/pdf",
+        byte_size=20,
+        object_relpath="objects/" + "b" * 64,
+    )
+    older = repo.upsert_document(
+        sha256="c" * 64,
+        display_name="A-几何.pdf",
+        extension=".pdf",
+        mime_type="application/pdf",
+        byte_size=10,
+        object_relpath="objects/" + "c" * 64,
+    )
+    newer.status = ImportJobStatus.COMPLETED.value
+    older.status = ImportJobStatus.FAILED.value
+    repo.db.commit()
+
+    assert [item.display_name for item in repo.list_documents(sort="name", descending=False)] == [
+        "A-几何.pdf",
+        "B-代数.pdf",
+    ]
+    assert [item.id for item in repo.list_documents(query="代数")] == [newer.id]
+    assert [item.id for item in repo.list_documents(status=ImportJobStatus.FAILED.value)] == [older.id]
+
+
+def test_recycle_bin_marks_only_documents_older_than_30_days_as_purge_eligible(repository) -> None:
+    repo, db = repository
+    expired = create_document(repo, digest="d" * 64)
+    recent = create_document(repo, digest="e" * 64)
+    now = datetime(2026, 7, 18, 12, 0, 0)
+    expired.deleted_at = now - timedelta(days=31)
+    recent.deleted_at = now - timedelta(days=29)
+    db.commit()
+
+    assert repo.purge_eligible_document_ids(now=now) == [expired.id]
+
+
+def test_tags_are_case_insensitive_and_keep_the_first_display_spelling(repository) -> None:
+    repo, _db = repository
+    document = create_document(repo)
+    repo.set_document_tags([document.id], ["Math"])
+    repo.set_document_tags([document.id], ["math"])
+
+    assert repo.document_tag_names(document.id) == ["Math"]
+    assert [item.id for item in repo.list_documents(tag="MATH")] == [document.id]

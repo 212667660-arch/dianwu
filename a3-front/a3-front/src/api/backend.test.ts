@@ -268,6 +268,37 @@ describe('multi-profile model API', () => {
 })
 
 describe('knowledge API', () => {
+  it('sends bounded document filters and bulk commands through fixed routes', async () => {
+    const request = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, data: [] })
+      .mockResolvedValueOnce({ ok: true, status: 200, data: { items: [{ document_id: 2, ok: true, code: null }] } })
+    window.a3Desktop = {
+      request, modelConfigTest: vi.fn(), modelConfigSave: vi.fn(),
+      startStream: vi.fn(), cancelStream: vi.fn(),
+      onStreamEvent: vi.fn(() => () => {}), onBackendExit: vi.fn(() => () => {}),
+    }
+
+    await backendApi.knowledgeDocuments({
+      collectionId: 3, trash: true, favorite: true, tag: '函数', query: '极限',
+      status: 'COMPLETED', sort: 'name', direction: 'asc',
+    })
+    await backendApi.bulkKnowledgeDocuments({
+      action: 'add_to_collections', document_ids: [1, 2], collection_ids: [3], tags: [],
+    })
+
+    expect(request).toHaveBeenNthCalledWith(1, {
+      method: 'GET', path: '/api/knowledge/documents',
+      query: {
+        collection_id: 3, trash: true, favorite: true, tag: '函数', query: '极限',
+        status: 'COMPLETED', sort: 'name', direction: 'asc',
+      },
+    })
+    expect(request).toHaveBeenNthCalledWith(2, {
+      method: 'POST', path: '/api/knowledge/documents/bulk',
+      body: { action: 'add_to_collections', document_ids: [1, 2], collection_ids: [3], tags: [] },
+    })
+  })
+
   it('loads the textbook catalog and opens official entries through a fixed desktop bridge', async () => {
     const request = vi.fn().mockResolvedValue({
       ok: true,

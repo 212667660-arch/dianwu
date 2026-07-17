@@ -13,6 +13,8 @@ from backend.knowledge.repository import KnowledgeRepository
 from backend.knowledge.schemas import (
     ImportBatchRequest,
     ImportBatchResponse,
+    KnowledgeBulkRequest,
+    KnowledgeBulkResponse,
     KnowledgeCollectionCreate,
     KnowledgeCollectionResponse,
     KnowledgeCollectionUpdate,
@@ -106,6 +108,13 @@ def delete_collection(
 @router.get("/documents", response_model=list[KnowledgeDocumentResponse])
 def list_documents(
     collection_id: int | None = Query(default=None, ge=1),
+    trash: bool = Query(default=False),
+    favorite: bool | None = Query(default=None),
+    tag: str | None = Query(default=None, min_length=1, max_length=40),
+    query: str | None = Query(default=None, min_length=1, max_length=255),
+    status: str | None = Query(default=None, min_length=1, max_length=32),
+    sort: Literal["created", "updated", "name", "size"] = Query(default="created"),
+    direction: Literal["asc", "desc"] = Query(default="desc"),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=200),
     service: KnowledgeService = Depends(get_knowledge_service),
@@ -114,7 +123,22 @@ def list_documents(
         collection_id=collection_id,
         offset=offset,
         limit=limit,
+        only_deleted=trash,
+        favorite=favorite,
+        tag=tag,
+        query=query,
+        status=status,
+        sort=sort,
+        descending=direction == "desc",
     )
+
+
+@router.post("/documents/bulk", response_model=KnowledgeBulkResponse)
+async def bulk_documents(
+    value: KnowledgeBulkRequest,
+    service: KnowledgeService = Depends(get_knowledge_service),
+):
+    return await service.bulk_documents(value)
 
 
 @router.get("/documents/{document_id}", response_model=KnowledgeDocumentResponse)

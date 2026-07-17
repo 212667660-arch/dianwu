@@ -5,6 +5,7 @@ import type { KnowledgeDocument, KnowledgeImportJob } from '@/api'
 
 const apiMock = vi.hoisted(() => ({
   knowledgeDocuments: vi.fn(),
+  bulkKnowledgeDocuments: vi.fn(),
   createKnowledgeCollection: vi.fn(),
   updateKnowledgeCollection: vi.fn(),
   deleteKnowledgeCollection: vi.fn(),
@@ -20,7 +21,7 @@ const store = vi.hoisted(() => ({
   knowledgeDocuments: [{ id: 9, sha256: 'a'.repeat(64), display_name: '极限讲义.pdf', extension: '.pdf', mime_type: 'application/pdf', byte_size: 1024, status: 'COMPLETED', page_count: 3, slide_count: null, sheet_count: null, text_characters: 1200, chunk_count: 4, parser_version: 'chunk-v1', safe_error_code: null, created_at: '', updated_at: '' }] as KnowledgeDocument[],
   knowledgeJobs: [] as KnowledgeImportJob[], knowledgeStatus: { fts: { available: true, mode: 'keyword' }, worker: { available: true, mode: 'isolated' }, ocr_pack: { available: false, mode: 'optional' }, semantic_pack: { available: false, mode: 'optional' } },
   knowledgeLoading: false, knowledgeError: '', refreshKnowledge: vi.fn().mockResolvedValue(undefined),
-  chooseKnowledgeFiles: vi.fn(), importDroppedKnowledgeFiles: vi.fn(), cancelKnowledgeJob: vi.fn(), deleteKnowledgeDocument: vi.fn(), rebuildKnowledgeDocument: vi.fn(),
+  chooseKnowledgeFiles: vi.fn(), importDroppedKnowledgeFiles: vi.fn(), cancelKnowledgeJob: vi.fn(), deleteKnowledgeDocument: vi.fn(), rebuildKnowledgeDocument: vi.fn(), bulkKnowledgeDocuments: vi.fn(),
 }))
 vi.mock('@/stores/backend', async () => {
   const { reactive } = await import('vue')
@@ -57,7 +58,54 @@ beforeEach(() => {
     }],
   })
   apiMock.openOfficialTextbook.mockResolvedValue({ sourceId: 'pep-high-math' })
+  apiMock.bulkKnowledgeDocuments.mockResolvedValue({ items: [] })
+  store.chooseKnowledgeFiles.mockResolvedValue({ jobs: [], duplicates: [] })
+  store.importDroppedKnowledgeFiles.mockResolvedValue({ jobs: [], duplicates: [] })
+  store.bulkKnowledgeDocuments.mockResolvedValue({ items: [] })
   confirmMock.mockResolvedValue(undefined)
+})
+
+it('offers advanced filters, select all and recycle-bin bulk actions', async () => {
+  store.knowledgeDocuments = [
+    { ...store.knowledgeDocuments[0], favorite: true, deleted_at: null, collection_ids: [3], tags: ['函数'] },
+    { ...store.knowledgeDocuments[0], id: 10, display_name: '导数.pdf', favorite: false, deleted_at: null, collection_ids: [3], tags: [] },
+  ]
+  apiMock.knowledgeDocuments.mockResolvedValue(store.knowledgeDocuments)
+  const wrapper = mount(KnowledgeLibrary, { global: { stubs: { ElDrawer: { template: '<div><slot /></div>' } } } })
+  await flushPromises()
+
+  await wrapper.get('[data-testid="select-all-documents"]').trigger('click')
+  expect(wrapper.get('[data-testid="bulk-selection-count"]').text()).toContain('2')
+  await wrapper.get('[data-testid="bulk-trash"]').trigger('click')
+  await flushPromises()
+  expect(store.bulkKnowledgeDocuments).toHaveBeenCalledWith({
+    action: 'move_to_trash', document_ids: [9, 10], collection_ids: [], tags: [],
+  })
+
+  await wrapper.get('[data-testid="trash-filter"]').setValue(true)
+  await wrapper.get('[data-testid="sort-filter"]').setValue('name')
+  await flushPromises()
+  expect(apiMock.knowledgeDocuments).toHaveBeenLastCalledWith(expect.objectContaining({
+    collectionId: 3, trash: true, sort: 'name',
+  }))
+  expect(wrapper.find('[data-testid="bulk-restore"]').exists()).toBe(true)
+  expect(wrapper.find('[data-testid="bulk-purge"]').exists()).toBe(true)
+})
+
+it('explains duplicate imports instead of silently deduplicating them', async () => {
+  setDesktopBridge({ knowledgeChooseFiles: vi.fn() })
+  store.chooseKnowledgeFiles.mockResolvedValueOnce({
+    jobs: [],
+    duplicates: [{ document_id: 9, display_name: '极限讲义.pdf', collection_ids: [3], action: 'already_present' }],
+  })
+  const wrapper = mount(KnowledgeLibrary, { global: { stubs: { ElDrawer: { template: '<div><slot /></div>' } } } })
+  await flushPromises()
+
+  await wrapper.get('[data-testid="import-knowledge-files"]').trigger('click')
+  await flushPromises()
+
+  expect(messageMock.warning).toHaveBeenCalledWith(expect.stringContaining('极限讲义.pdf'))
+  expect(messageMock.warning).toHaveBeenCalledWith(expect.stringContaining('已存在'))
 })
 
 it('shows and opens the authorized textbook catalog', async () => {

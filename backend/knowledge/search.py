@@ -209,6 +209,7 @@ class KnowledgeSearchRepository:
                 JOIN knowledge_documents AS document
                     ON document.id = chunk.document_id
                 WHERE knowledge_chunks_fts MATCH :match
+                  AND document.deleted_at IS NULL
                   AND EXISTS (
                     SELECT 1
                     FROM knowledge_collection_documents AS link
@@ -278,6 +279,7 @@ class KnowledgeSearchRepository:
                 WHERE chunk.id IN ("""
                 + chunk_placeholders
                 + """)
+                  AND document.deleted_at IS NULL
                   AND EXISTS (
                     SELECT 1
                     FROM knowledge_collection_documents AS link

@@ -182,6 +182,10 @@ class KnowledgeDocumentResponse(StrictKnowledgeModel):
     chunk_count: int
     parser_version: str | None
     safe_error_code: str | None
+    favorite: bool
+    deleted_at: str | None
+    collection_ids: list[int]
+    tags: list[str]
     created_at: str
     updated_at: str
 
@@ -204,8 +208,80 @@ class KnowledgeImportJobResponse(StrictKnowledgeModel):
     updated_at: str
 
 
+class DuplicateImportResult(StrictKnowledgeModel):
+    document_id: int
+    display_name: str
+    collection_ids: list[int]
+    action: Literal["linked_existing", "already_present"]
+
+
 class ImportBatchResponse(StrictKnowledgeModel):
     jobs: list[KnowledgeImportJobResponse]
+    duplicates: list[DuplicateImportResult] = Field(default_factory=list)
+
+
+class KnowledgeBulkRequest(StrictKnowledgeModel):
+    action: Literal[
+        "move_to_trash",
+        "restore",
+        "purge",
+        "add_to_collections",
+        "remove_from_collections",
+        "favorite",
+        "set_tags",
+    ]
+    document_ids: list[int] = Field(min_length=1, max_length=200)
+    collection_ids: list[int] = Field(default_factory=list, max_length=50)
+    tags: list[str] = Field(default_factory=list, max_length=20)
+    favorite: bool | None = None
+
+    @field_validator("document_ids", "collection_ids")
+    @classmethod
+    def validate_ids(cls, value: list[int]) -> list[int]:
+        if any(not isinstance(item, int) or item < 1 for item in value):
+            raise ValueError("knowledge IDs must be positive integers")
+        if value != sorted(set(value)):
+            raise ValueError("knowledge IDs must be sorted and unique")
+        return value
+
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, value: list[str]) -> list[str]:
+        normalized = [item.strip() for item in value if item.strip()]
+        normalized_keys = [item.casefold() for item in normalized]
+        if (
+            len(normalized) != len(value)
+            or len(set(normalized_keys)) != len(normalized_keys)
+            or any(len(item) > 40 for item in normalized)
+        ):
+            raise ValueError("knowledge tags are invalid")
+        return sorted(normalized, key=str.casefold)
+
+    @model_validator(mode="after")
+    def validate_action_fields(self) -> "KnowledgeBulkRequest":
+        if self.action in {"add_to_collections", "remove_from_collections"}:
+            if not self.collection_ids:
+                raise ValueError("collection_ids are required for this action")
+        elif self.collection_ids:
+            raise ValueError("collection_ids are not accepted for this action")
+        if self.action == "favorite":
+            if self.favorite is None:
+                raise ValueError("favorite is required for this action")
+        elif self.favorite is not None:
+            raise ValueError("favorite is not accepted for this action")
+        if self.action != "set_tags" and self.tags:
+            raise ValueError("tags are only accepted for set_tags")
+        return self
+
+
+class KnowledgeBulkItem(StrictKnowledgeModel):
+    document_id: int
+    ok: bool
+    code: str | None = None
+
+
+class KnowledgeBulkResponse(StrictKnowledgeModel):
+    items: list[KnowledgeBulkItem]
 
 
 class KnowledgeSearchRequest(StrictKnowledgeModel):

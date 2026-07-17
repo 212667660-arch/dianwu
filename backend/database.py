@@ -110,6 +110,35 @@ def _sqlite_migrate() -> None:
         "eta_seconds": "INTEGER",
         "failed_pages_json": "TEXT NOT NULL DEFAULT '[]'",
     })
+    _add_missing_columns("knowledge_documents", {
+        "favorite": "BOOLEAN NOT NULL DEFAULT 0",
+        "deleted_at": "DATETIME",
+    })
+    with engine.begin() as connection:
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS knowledge_tags (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name VARCHAR(40) NOT NULL UNIQUE,
+                created_at DATETIME NOT NULL
+            )
+        """))
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS knowledge_document_tags (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                document_id INTEGER NOT NULL REFERENCES knowledge_documents(id) ON DELETE CASCADE,
+                tag_id INTEGER NOT NULL REFERENCES knowledge_tags(id) ON DELETE CASCADE,
+                created_at DATETIME NOT NULL,
+                CONSTRAINT uq_knowledge_document_tag UNIQUE(document_id, tag_id)
+            )
+        """))
+        connection.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_knowledge_document_tags_document_id "
+            "ON knowledge_document_tags(document_id)"
+        ))
+        connection.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_knowledge_document_tags_tag_id "
+            "ON knowledge_document_tags(tag_id)"
+        ))
 
 
 def init_db() -> None:

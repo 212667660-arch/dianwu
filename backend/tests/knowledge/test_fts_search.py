@@ -125,3 +125,20 @@ def test_collection_scope_prevents_cross_collection_leak(search_fixture) -> None
     results = search.search("唯一短语", collection_ids=[first_id])
 
     assert [item.document_name for item in results] == ["可见.txt"]
+
+
+def test_trashed_document_is_excluded_from_keyword_search(search_fixture) -> None:
+    repository, search, first_id, _second_id = search_fixture
+    index_document(
+        repository,
+        search,
+        collection_id=first_id,
+        digest="e" * 64,
+        display_name="已删除.txt",
+        text="回收站隔离短语",
+    )
+    document = repository.find_document_by_sha("e" * 64)
+    assert document is not None
+    repository.soft_delete_documents([document.id])
+
+    assert search.search("回收站隔离", collection_ids=[first_id]) == []

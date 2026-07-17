@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 from pathlib import Path
 
@@ -15,7 +15,9 @@ from backend.knowledge.models import (
     KnowledgeCollection,
     KnowledgeCollectionDocument,
     KnowledgeDocument,
+    KnowledgeDocumentTag,
     KnowledgeImportJob,
+    KnowledgeTag,
     KnowledgeWorkerBlock,
     SessionKnowledgeCollection,
 )
@@ -168,6 +170,8 @@ class KnowledgeRepository:
                     document = KnowledgeDocument(**dict(manifest))
                     self.db.add(document)
                     self.db.flush()
+                elif document.deleted_at is not None:
+                    document.deleted_at = None
                 link = self.db.scalar(
                     select(KnowledgeCollectionDocument).where(
                         KnowledgeCollectionDocument.collection_id == collection_id,
@@ -181,9 +185,10 @@ class KnowledgeRepository:
                             document_id=document.id,
                         )
                     )
-                job = KnowledgeImportJob(document_id=document.id)
-                self.db.add(job)
-                jobs.append(job)
+                if document.status != ImportJobStatus.COMPLETED.value:
+                    job = KnowledgeImportJob(document_id=document.id)
+                    self.db.add(job)
+                    jobs.append(job)
             self.db.commit()
         except Exception:
             self.db.rollback()
@@ -198,28 +203,214 @@ class KnowledgeRepository:
             raise KnowledgeRecordNotFound(f"knowledge document {document_id} was not found")
         return document
 
+    def find_document_by_sha(self, digest: str) -> KnowledgeDocument | None:
+        return self.db.scalar(
+            select(KnowledgeDocument).where(KnowledgeDocument.sha256 == digest)
+        )
+
     def list_documents(
         self,
         *,
         collection_id: int | None = None,
         offset: int = 0,
         limit: int = 100,
+        only_deleted: bool = False,
+        favorite: bool | None = None,
+        tag: str | None = None,
+        query: str | None = None,
+        status: str | None = None,
+        sort: str = "created",
+        descending: bool = True,
     ) -> list[KnowledgeDocument]:
+        self.db.expire_all()
         statement = select(KnowledgeDocument).where(
-            KnowledgeDocument.deleted_pending.is_(False)
+            KnowledgeDocument.deleted_pending.is_(False),
+            (
+                KnowledgeDocument.deleted_at.is_not(None)
+                if only_deleted
+                else KnowledgeDocument.deleted_at.is_(None)
+            ),
         )
         if collection_id is not None:
             statement = statement.join(KnowledgeCollectionDocument).where(
                 KnowledgeCollectionDocument.collection_id == collection_id
             )
+        if favorite is not None:
+            statement = statement.where(KnowledgeDocument.favorite.is_(favorite))
+        if status:
+            statement = statement.where(KnowledgeDocument.status == status)
+        if query:
+            statement = statement.where(
+                KnowledgeDocument.display_name.ilike(f"%{query.strip()}%")
+            )
+        if tag:
+            statement = (
+                statement.join(KnowledgeDocumentTag)
+                .join(KnowledgeTag)
+                .where(func.lower(KnowledgeTag.name) == tag.strip().casefold())
+            )
+        order_column = {
+            "name": KnowledgeDocument.display_name,
+            "size": KnowledgeDocument.byte_size,
+            "updated": KnowledgeDocument.updated_at,
+            "created": KnowledgeDocument.created_at,
+        }.get(sort, KnowledgeDocument.created_at)
+        order = order_column.desc() if descending else order_column.asc()
         return list(
             self.db.scalars(
-                statement.order_by(
-                    KnowledgeDocument.created_at.desc(),
-                    KnowledgeDocument.id.desc(),
-                ).offset(offset).limit(limit)
+                statement.distinct()
+                .order_by(order, KnowledgeDocument.id.desc() if descending else KnowledgeDocument.id.asc())
+                .offset(offset)
+                .limit(limit)
+            ).unique()
+        )
+
+    def document_collection_ids(self, document_id: int) -> list[int]:
+        self.require_document(document_id)
+        return list(
+            self.db.scalars(
+                select(KnowledgeCollectionDocument.collection_id)
+                .where(KnowledgeCollectionDocument.document_id == document_id)
+                .order_by(KnowledgeCollectionDocument.collection_id)
             )
         )
+
+    def document_tag_names(self, document_id: int) -> list[str]:
+        self.require_document(document_id)
+        return list(
+            self.db.scalars(
+                select(KnowledgeTag.name)
+                .join(KnowledgeDocumentTag)
+                .where(KnowledgeDocumentTag.document_id == document_id)
+                .order_by(KnowledgeTag.name)
+            )
+        )
+
+    def set_documents_favorite(
+        self,
+        document_ids: Sequence[int],
+        favorite: bool,
+    ) -> None:
+        for document_id in sorted(set(document_ids)):
+            document = self.require_document(document_id)
+            document.favorite = bool(favorite)
+            document.updated_at = datetime.utcnow()
+        self.db.commit()
+
+    def set_document_tags(
+        self,
+        document_ids: Sequence[int],
+        tags: Sequence[str],
+    ) -> None:
+        normalized_by_key: dict[str, str] = {}
+        for item in tags:
+            display_name = item.strip()
+            if display_name:
+                normalized_by_key.setdefault(display_name.casefold(), display_name)
+        normalized = sorted(normalized_by_key.values(), key=str.casefold)
+        if any(len(item) > 40 for item in normalized):
+            raise KnowledgeRecordConflict("knowledge tag is too long")
+        documents = [self.require_document(item) for item in sorted(set(document_ids))]
+        tag_rows: list[KnowledgeTag] = []
+        for name in normalized:
+            row = self.db.scalar(
+                select(KnowledgeTag).where(func.lower(KnowledgeTag.name) == name.casefold())
+            )
+            if row is None:
+                row = KnowledgeTag(name=name)
+                self.db.add(row)
+                self.db.flush()
+            tag_rows.append(row)
+        for document in documents:
+            self.db.execute(
+                delete(KnowledgeDocumentTag).where(
+                    KnowledgeDocumentTag.document_id == document.id
+                )
+            )
+            self.db.add_all(
+                KnowledgeDocumentTag(document_id=document.id, tag_id=tag.id)
+                for tag in tag_rows
+            )
+            document.updated_at = datetime.utcnow()
+        self.db.commit()
+
+    def soft_delete_documents(self, document_ids: Sequence[int]) -> None:
+        now = datetime.utcnow()
+        for document_id in sorted(set(document_ids)):
+            document = self.require_document(document_id)
+            document.deleted_at = now
+            document.updated_at = now
+        self.db.commit()
+
+    def restore_documents(self, document_ids: Sequence[int]) -> None:
+        now = datetime.utcnow()
+        for document_id in sorted(set(document_ids)):
+            document = self.require_document(document_id)
+            document.deleted_at = None
+            document.updated_at = now
+        self.db.commit()
+
+    def purge_eligible_document_ids(
+        self,
+        *,
+        retention_days: int = 30,
+        now: datetime | None = None,
+    ) -> list[int]:
+        if retention_days < 1:
+            raise ValueError("retention_days must be positive")
+        cutoff = (now or datetime.utcnow()) - timedelta(days=retention_days)
+        return list(
+            self.db.scalars(
+                select(KnowledgeDocument.id)
+                .where(
+                    KnowledgeDocument.deleted_at.is_not(None),
+                    KnowledgeDocument.deleted_at <= cutoff,
+                )
+                .order_by(KnowledgeDocument.id.asc())
+            )
+        )
+
+    def add_documents_to_collections(
+        self,
+        document_ids: Sequence[int],
+        collection_ids: Sequence[int],
+    ) -> None:
+        for collection_id in sorted(set(collection_ids)):
+            self.require_collection(collection_id)
+        for document_id in sorted(set(document_ids)):
+            self.require_document(document_id)
+            for collection_id in sorted(set(collection_ids)):
+                existing = self.db.scalar(
+                    select(KnowledgeCollectionDocument).where(
+                        KnowledgeCollectionDocument.collection_id == collection_id,
+                        KnowledgeCollectionDocument.document_id == document_id,
+                    )
+                )
+                if existing is None:
+                    self.db.add(
+                        KnowledgeCollectionDocument(
+                            collection_id=collection_id,
+                            document_id=document_id,
+                        )
+                    )
+        self.db.commit()
+
+    def remove_documents_from_collections(
+        self,
+        document_ids: Sequence[int],
+        collection_ids: Sequence[int],
+    ) -> None:
+        for collection_id in sorted(set(collection_ids)):
+            self.require_collection(collection_id)
+        for document_id in sorted(set(document_ids)):
+            self.require_document(document_id)
+        self.db.execute(
+            delete(KnowledgeCollectionDocument).where(
+                KnowledgeCollectionDocument.document_id.in_(sorted(set(document_ids))),
+                KnowledgeCollectionDocument.collection_id.in_(sorted(set(collection_ids))),
+            )
+        )
+        self.db.commit()
 
     def delete_document_record(self, document_id: int, *, commit: bool = True) -> bool:
         document = self.db.get(KnowledgeDocument, document_id)

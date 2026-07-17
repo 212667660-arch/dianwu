@@ -88,6 +88,37 @@ test('knowledge OCR retry route permits only an empty POST body', () => {
   )
 })
 
+test('knowledge bulk route accepts only bounded fixed actions and fields', () => {
+  const accepted = expectAccepted({
+    method: 'POST',
+    path: '/api/knowledge/documents/bulk',
+    body: {
+      action: 'add_to_collections',
+      document_ids: [1, 2],
+      collection_ids: [3],
+      tags: [],
+    },
+  })
+  assert.deepEqual(accepted.body, {
+    action: 'add_to_collections',
+    document_ids: [1, 2],
+    collection_ids: [3],
+    tags: [],
+  })
+  for (const body of [
+    { action: 'unknown', document_ids: [1] },
+    { action: 'move_to_trash', document_ids: Array.from({ length: 201 }, (_, index) => index + 1) },
+    { action: 'favorite', document_ids: [1], favorite: true, token: 'secret' },
+    { action: 'set_tags', document_ids: [1], tags: ['Math', 'math'] },
+  ]) {
+    expectRejected(
+      { method: 'POST', path: '/api/knowledge/documents/bulk', body },
+      undefined,
+      'DESKTOP_REQUEST_DENIED',
+    )
+  }
+})
+
 test('chat body permits only fixed resource selection fields', () => {
   const bundle = expectAccepted({
     method: 'POST',

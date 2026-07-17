@@ -338,6 +338,102 @@ def test_retry_ocr_job_preserves_failed_pages_and_requeues_same_job(api) -> None
     assert coordinator.enqueued == [job.id]
 
 
+def test_bulk_document_management_supports_collections_tags_favorite_and_trash(api) -> None:
+    client, service, _coordinator, _root = api
+    first = create_collection(client, "数学")
+    second = create_collection(client, "重点")
+    document = service.repository.upsert_document(
+        sha256="8" * 64,
+        display_name="函数讲义.pdf",
+        extension=".pdf",
+        mime_type="application/pdf",
+        byte_size=32,
+        object_relpath="objects/" + "8" * 64,
+    )
+    service.repository.link_document(first["id"], document.id)
+
+    tagged = client.post(
+        "/api/knowledge/documents/bulk",
+        json={
+            "action": "set_tags",
+            "document_ids": [document.id],
+            "tags": ["函数", "重点"],
+        },
+    )
+    favorited = client.post(
+        "/api/knowledge/documents/bulk",
+        json={
+            "action": "favorite",
+            "document_ids": [document.id],
+            "favorite": True,
+        },
+    )
+    moved = client.post(
+        "/api/knowledge/documents/bulk",
+        json={
+            "action": "add_to_collections",
+            "document_ids": [document.id],
+            "collection_ids": [second["id"]],
+        },
+    )
+    trashed = client.post(
+        "/api/knowledge/documents/bulk",
+        json={"action": "move_to_trash", "document_ids": [document.id]},
+    )
+
+    assert tagged.status_code == favorited.status_code == moved.status_code == trashed.status_code == 200
+    trash = client.get("/api/knowledge/documents", params={"trash": True})
+    assert trash.status_code == 200
+    assert trash.json()[0]["favorite"] is True
+    assert trash.json()[0]["tags"] == ["函数", "重点"]
+    assert trash.json()[0]["collection_ids"] == [first["id"], second["id"]]
+
+    restored = client.post(
+        "/api/knowledge/documents/bulk",
+        json={"action": "restore", "document_ids": [document.id]},
+    )
+    assert restored.status_code == 200
+    listed = client.get(
+        "/api/knowledge/documents",
+        params={"favorite": True, "tag": "函数", "sort": "name", "direction": "asc"},
+    )
+    assert [item["id"] for item in listed.json()] == [document.id]
+
+
+def test_duplicate_import_reports_existing_document_without_reparsing(api) -> None:
+    client, service, coordinator, root = api
+    first = create_collection(client, "第一集合")
+    second = create_collection(client, "第二集合")
+    manifest = write_object(root, "重复文件")
+    initial = client.post(
+        "/api/knowledge/imports",
+        json={"collection_id": first["id"], "files": [manifest]},
+    )
+    assert initial.status_code == 202
+    first_job = initial.json()["jobs"][0]
+    document = service.repository.require_document(first_job["document_id"])
+    document.status = ImportJobStatus.COMPLETED.value
+    service.repository.db.commit()
+    coordinator.enqueued.clear()
+
+    duplicate = client.post(
+        "/api/knowledge/imports",
+        json={"collection_id": second["id"], "files": [manifest]},
+    )
+
+    assert duplicate.status_code == 202
+    assert duplicate.json()["jobs"] == []
+    assert duplicate.json()["duplicates"] == [
+        {
+            "document_id": document.id,
+            "display_name": manifest["display_name"],
+            "collection_ids": [first["id"], second["id"]],
+            "action": "linked_existing",
+        }
+    ]
+    assert coordinator.enqueued == []
+
+
 def test_import_rehashes_object_and_rejects_tampering(api) -> None:
     client, _service, coordinator, root = api
     collection = create_collection(client)
@@ -420,7 +516,7 @@ def test_delete_document_cancels_active_import_before_removing_metadata(api) -> 
     assert service.repository.list_documents() == []
 
 
-def test_delete_document_removes_fts_rows(api) -> None:
+def test_soft_delete_keeps_fts_until_permanent_purge(api) -> None:
     client, service, _coordinator, _root = api
     collection = service.repository.create_collection("待删除索引")
     document = service.repository.upsert_document(
@@ -448,13 +544,50 @@ def test_delete_document_removes_fts_rows(api) -> None:
     service.search_repository.replace_document_index(document.id)
 
     response = client.delete(f"/api/knowledge/documents/{document.id}")
-    remaining = service.search_repository.db.execute(
+    remaining_after_trash = service.search_repository.db.execute(
+        text("SELECT count(*) FROM knowledge_chunks_fts WHERE document_id = :document_id"),
+        {"document_id": document.id},
+    ).scalar_one()
+
+    purged = client.post(
+        "/api/knowledge/documents/bulk",
+        json={"action": "purge", "document_ids": [document.id]},
+    )
+    remaining_after_purge = service.search_repository.db.execute(
         text("SELECT count(*) FROM knowledge_chunks_fts WHERE document_id = :document_id"),
         {"document_id": document.id},
     ).scalar_one()
 
     assert response.status_code == 204
-    assert remaining == 0
+    assert remaining_after_trash == 1
+    assert purged.status_code == 200
+    assert purged.json()["items"] == [
+        {"document_id": document.id, "ok": True, "code": None}
+    ]
+    assert remaining_after_purge == 0
+
+
+def test_permanent_purge_rejects_an_active_document(api) -> None:
+    client, service, _coordinator, _root = api
+    document = service.repository.upsert_document(
+        sha256="6" * 64,
+        display_name="active.txt",
+        extension=".txt",
+        mime_type="text/plain",
+        byte_size=16,
+        object_relpath="objects/" + "6" * 64,
+    )
+
+    response = client.post(
+        "/api/knowledge/documents/bulk",
+        json={"action": "purge", "document_ids": [document.id]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["items"] == [
+        {"document_id": document.id, "ok": False, "code": "KNOWLEDGE_BULK_CONFLICT"}
+    ]
+    assert service.repository.require_document(document.id).deleted_at is None
 
 
 def test_delete_document_still_succeeds_when_fts_is_unavailable(

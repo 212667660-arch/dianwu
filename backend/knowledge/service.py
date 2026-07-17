@@ -24,6 +24,7 @@ from backend.knowledge.repository import (
 )
 from backend.knowledge.schemas import (
     ImportBatchRequest,
+    KnowledgeBulkRequest,
     KnowledgeCollectionCreate,
     KnowledgeCollectionUpdate,
     KnowledgeSearchRequest,
@@ -203,6 +204,10 @@ class KnowledgeService:
             "chunk_count": document.chunk_count,
             "parser_version": document.parser_version,
             "safe_error_code": document.safe_error_code,
+            "favorite": bool(document.favorite),
+            "deleted_at": _iso(document.deleted_at) if document.deleted_at else None,
+            "collection_ids": self.repository.document_collection_ids(document.id),
+            "tags": self.repository.document_tag_names(document.id),
             "created_at": _iso(document.created_at),
             "updated_at": _iso(document.updated_at),
         }
@@ -213,6 +218,13 @@ class KnowledgeService:
         collection_id: int | None,
         offset: int,
         limit: int,
+        only_deleted: bool = False,
+        favorite: bool | None = None,
+        tag: str | None = None,
+        query: str | None = None,
+        status: str | None = None,
+        sort: str = "created",
+        descending: bool = True,
     ) -> list[dict[str, object]]:
         return [
             self._document_response(document)
@@ -220,6 +232,13 @@ class KnowledgeService:
                 collection_id=collection_id,
                 offset=offset,
                 limit=limit,
+                only_deleted=only_deleted,
+                favorite=favorite,
+                tag=tag,
+                query=query,
+                status=status,
+                sort=sort,
+                descending=descending,
             )
         ]
 
@@ -258,7 +277,7 @@ class KnowledgeService:
             "updated_at": _iso(job.updated_at),
         }
 
-    def _prepare_import_batch(self, value: ImportBatchRequest) -> list[dict[str, object]]:
+    def _prepare_import_batch(self, value: ImportBatchRequest) -> dict[str, object]:
         manifests = [manifest.model_dump() for manifest in value.files]
         for manifest in value.files:
             try:
@@ -271,15 +290,35 @@ class KnowledgeService:
             ):
                 raise KnowledgeFileSignatureMismatchError()
         try:
-            return self._with_fresh_repository(
-                lambda repository: [
+            def prepare(repository):
+                duplicates = []
+                for manifest in value.files:
+                    existing = repository.find_document_by_sha(manifest.sha256)
+                    if existing is None:
+                        continue
+                    previous = repository.document_collection_ids(existing.id)
+                    duplicates.append(
+                        {
+                            "document_id": existing.id,
+                            "display_name": manifest.display_name,
+                            "collection_ids": sorted(set(previous + [value.collection_id])),
+                            "action": (
+                                "already_present"
+                                if value.collection_id in previous
+                                else "linked_existing"
+                            ),
+                        }
+                    )
+                jobs = [
                     self._job_response(job)
                     for job in repository.create_import_jobs(
                         value.collection_id,
                         manifests,
                     )
                 ]
-            )
+                return {"jobs": jobs, "duplicates": duplicates}
+
+            return self._with_fresh_repository(prepare)
         except KnowledgeRecordNotFound as exc:
             raise ResourceNotFoundError(
                 "KNOWLEDGE_COLLECTION_NOT_FOUND",
@@ -287,10 +326,10 @@ class KnowledgeService:
             ) from exc
 
     async def import_batch(self, value: ImportBatchRequest) -> dict[str, object]:
-        jobs = await asyncio.to_thread(self._prepare_import_batch, value)
-        for job in jobs:
+        result = await asyncio.to_thread(self._prepare_import_batch, value)
+        for job in result["jobs"]:
             self.coordinator.enqueue(int(job["id"]))
-        return {"jobs": jobs}
+        return result
 
     def list_jobs(self) -> list[dict[str, object]]:
         return [self._job_response(job) for job in self.repository.list_jobs()]
@@ -426,6 +465,24 @@ class KnowledgeService:
             pass
 
     async def delete_document(self, document_id: int) -> None:
+        _object_relpath, job_ids = await asyncio.to_thread(
+            self._prepare_document_deletion,
+            document_id,
+        )
+        for job_id in job_ids:
+            await self.coordinator.cancel(job_id)
+        await asyncio.to_thread(
+            self._with_fresh_repository,
+            lambda repository: repository.soft_delete_documents([document_id]),
+        )
+
+    async def purge_document(self, document_id: int) -> None:
+        def require_trashed(repository):
+            document = repository.require_document(document_id)
+            if document.deleted_at is None:
+                raise KnowledgeRecordConflict("active document cannot be purged")
+
+        await asyncio.to_thread(self._with_fresh_repository, require_trashed)
         object_relpath, job_ids = await asyncio.to_thread(
             self._prepare_document_deletion,
             document_id,
@@ -437,6 +494,59 @@ class KnowledgeService:
             document_id,
             object_relpath,
         )
+
+    async def bulk_documents(self, value: KnowledgeBulkRequest) -> dict[str, object]:
+        items: list[dict[str, object]] = []
+        for document_id in value.document_ids:
+            try:
+                if value.action == "move_to_trash":
+                    await self.delete_document(document_id)
+                elif value.action == "purge":
+                    await self.purge_document(document_id)
+                else:
+                    def mutate(repository):
+                        repository.require_document(document_id)
+                        if value.action == "restore":
+                            repository.restore_documents([document_id])
+                        elif value.action == "favorite":
+                            repository.set_documents_favorite(
+                                [document_id],
+                                bool(value.favorite),
+                            )
+                        elif value.action == "set_tags":
+                            repository.set_document_tags([document_id], value.tags)
+                        elif value.action == "add_to_collections":
+                            repository.add_documents_to_collections(
+                                [document_id],
+                                value.collection_ids,
+                            )
+                        elif value.action == "remove_from_collections":
+                            repository.remove_documents_from_collections(
+                                [document_id],
+                                value.collection_ids,
+                            )
+
+                    await asyncio.to_thread(self._with_fresh_repository, mutate)
+                items.append({"document_id": document_id, "ok": True, "code": None})
+            except ResourceNotFoundError as exc:
+                items.append({"document_id": document_id, "ok": False, "code": exc.code})
+            except KnowledgeRecordNotFound:
+                items.append(
+                    {
+                        "document_id": document_id,
+                        "ok": False,
+                        "code": "KNOWLEDGE_DOCUMENT_NOT_FOUND",
+                    }
+                )
+            except KnowledgeRecordConflict:
+                items.append(
+                    {
+                        "document_id": document_id,
+                        "ok": False,
+                        "code": "KNOWLEDGE_BULK_CONFLICT",
+                    }
+                )
+        return {"items": items}
 
     def search(self, value: KnowledgeSearchRequest) -> dict[str, object]:
         collection_ids = self.repository.bound_collection_ids(value.session_id)

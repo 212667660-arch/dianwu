@@ -9,6 +9,9 @@ import type {
   KnowledgeCollection,
   KnowledgeCollectionInput,
   KnowledgeDocument,
+  KnowledgeDocumentFilters,
+  KnowledgeBulkRequest,
+  KnowledgeBulkResponse,
   KnowledgeImportBatch,
   KnowledgeImportJob,
   KnowledgeLocator,
@@ -225,7 +228,27 @@ export const backendApi = {
   async createKnowledgeCollection(input: KnowledgeCollectionInput) { return activeTransport().request<KnowledgeCollection>({ method: 'POST', path: '/api/knowledge/collections', body: input }) },
   async updateKnowledgeCollection(collectionId: number, input: Partial<KnowledgeCollectionInput>) { return activeTransport().request<KnowledgeCollection>({ method: 'PUT', path: `/api/knowledge/collections/${collectionId}`, body: input }) },
   async deleteKnowledgeCollection(collectionId: number) { return activeTransport().request<void>({ method: 'DELETE', path: `/api/knowledge/collections/${collectionId}` }) },
-  async knowledgeDocuments(collectionId?: number) { return activeTransport().request<KnowledgeDocument[]>({ method: 'GET', path: '/api/knowledge/documents', query: collectionId ? { collection_id: collectionId } : undefined }) },
+  async knowledgeDocuments(input?: number | KnowledgeDocumentFilters) {
+    const filters = typeof input === 'number' ? { collectionId: input } : (input || {})
+    const query = {
+      ...(filters.collectionId ? { collection_id: filters.collectionId } : {}),
+      ...(filters.trash !== undefined ? { trash: filters.trash } : {}),
+      ...(filters.favorite !== undefined ? { favorite: filters.favorite } : {}),
+      ...(filters.tag ? { tag: filters.tag } : {}),
+      ...(filters.query ? { query: filters.query } : {}),
+      ...(filters.status ? { status: filters.status } : {}),
+      ...(filters.sort ? { sort: filters.sort } : {}),
+      ...(filters.direction ? { direction: filters.direction } : {}),
+    }
+    return activeTransport().request<KnowledgeDocument[]>({
+      method: 'GET', path: '/api/knowledge/documents', query: Object.keys(query).length ? query : undefined,
+    })
+  },
+  async bulkKnowledgeDocuments(input: KnowledgeBulkRequest) {
+    return activeTransport().request<KnowledgeBulkResponse>({
+      method: 'POST', path: '/api/knowledge/documents/bulk', body: input,
+    })
+  },
   async knowledgeImports() { return activeTransport().request<KnowledgeImportJob[]>({ method: 'GET', path: '/api/knowledge/imports' }) },
   async searchKnowledge(sessionId: string, query: string, limit = 8) { return activeTransport().request<KnowledgeSearchResult>({ method: 'POST', path: '/api/knowledge/search', body: { session_id: sessionId, query, limit } }) },
   async sessionKnowledgeCollections(sessionId: string) { return activeTransport().request<KnowledgeBinding>({ method: 'GET', path: `/api/sessions/${encodeURIComponent(sessionId)}/knowledge-collections` }) },

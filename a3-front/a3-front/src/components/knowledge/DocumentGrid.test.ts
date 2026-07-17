@@ -51,3 +51,24 @@ it('shows OCR page progress, ETA and retries only failed pages', async () => {
   await wrapper.get('[aria-label="重试 极限讲义.pdf 的失败 OCR 页面"]').trigger('click')
   expect(retry).toHaveBeenCalledWith(7)
 })
+
+it('supports document selection and exposes favorite, tags, ETA and safe failure reason', async () => {
+  const wrapper = mount(DocumentGrid, {
+    props: {
+      documents: [{ ...document, favorite: true, deleted_at: null, collection_ids: [3], tags: ['函数', '重点'] }],
+      jobs: [{ ...job, current_page: 2, page_count: 8, eta_seconds: 12, safe_error_code: 'KNOWLEDGE_OCR_PAGE_FAILED' }],
+      selectedId: null,
+      selectedIds: [9],
+      cancelJob: vi.fn(),
+    },
+  })
+
+  expect(wrapper.get('[data-testid="document-checkbox-9"]').attributes('aria-checked')).toBe('true')
+  expect(wrapper.text()).toContain('函数')
+  expect(wrapper.text()).toContain('重点')
+  expect(wrapper.text()).toContain('12')
+  await wrapper.get('[data-testid="document-checkbox-9"]').trigger('click')
+  await wrapper.get('[data-testid="favorite-document-9"]').trigger('click')
+  expect(wrapper.emitted('toggle-selection')?.[0]).toEqual([9])
+  expect(wrapper.emitted('toggle-favorite')?.[0]).toEqual([9, false])
+})

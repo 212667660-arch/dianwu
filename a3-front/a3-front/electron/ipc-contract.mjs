@@ -23,6 +23,16 @@ const MODEL_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/
 const REASONING_EFFORTS = new Set(['auto', 'off', 'low', 'medium', 'high', 'xhigh'])
 const REASONING_ADAPTERS = new Set(['none', 'openai_reasoning_effort', 'anthropic_thinking'])
 const KNOWLEDGE_DROPPED_FIELDS = new Set(['collectionId', 'paths'])
+const KNOWLEDGE_BULK_FIELDS = new Set(['action', 'document_ids', 'collection_ids', 'tags', 'favorite'])
+const KNOWLEDGE_BULK_ACTIONS = new Set([
+  'move_to_trash',
+  'restore',
+  'purge',
+  'add_to_collections',
+  'remove_from_collections',
+  'favorite',
+  'set_tags',
+])
 const KNOWLEDGE_LOCATOR_FIELDS = new Set(['type', 'start', 'end', 'sheet_name'])
 const KNOWLEDGE_LOCATOR_TYPES = new Set(['page', 'slide', 'sheet_rows', 'paragraph'])
 const TEXTBOOK_OPEN_FIELDS = new Set(['sourceId'])
@@ -234,6 +244,52 @@ export function validateKnowledgeDroppedPaths(input) {
   return { ok: true, value: { collectionId: collection.value, paths } }
 }
 
+export function validateKnowledgeBulkInput(input) {
+  if (!isPlainObject(input)) return invalid('Knowledge bulk input must be an object.')
+  for (const field of Object.keys(input)) {
+    if (!KNOWLEDGE_BULK_FIELDS.has(field)) {
+      return denied('Knowledge bulk input contains an unsupported field.')
+    }
+  }
+  if (!KNOWLEDGE_BULK_ACTIONS.has(input.action)) {
+    return denied('Knowledge bulk action is not allowed.')
+  }
+
+  const documentIds = validateSortedUniquePositiveIds(input.document_ids, 1, 200)
+  if (documentIds === null) return denied('Knowledge document IDs are invalid.')
+  const collectionIds = input.collection_ids === undefined
+    ? []
+    : validateSortedUniquePositiveIds(input.collection_ids, 0, 50)
+  if (collectionIds === null) return denied('Knowledge collection IDs are invalid.')
+
+  const tags = input.tags === undefined ? [] : validateKnowledgeTags(input.tags)
+  if (tags === null) return denied('Knowledge tags are invalid.')
+
+  const needsCollections = input.action === 'add_to_collections' || input.action === 'remove_from_collections'
+  if ((needsCollections && collectionIds.length === 0) || (!needsCollections && collectionIds.length > 0)) {
+    return denied('Knowledge bulk collections do not match the action.')
+  }
+  if (input.action === 'favorite') {
+    if (typeof input.favorite !== 'boolean') return denied('Knowledge favorite value is required.')
+  } else if (input.favorite !== undefined) {
+    return denied('Knowledge favorite value is not accepted for this action.')
+  }
+  if (input.action !== 'set_tags' && tags.length > 0) {
+    return denied('Knowledge tags are not accepted for this action.')
+  }
+
+  return {
+    ok: true,
+    value: {
+      action: input.action,
+      document_ids: documentIds,
+      collection_ids: collectionIds,
+      tags,
+      ...(input.action === 'favorite' ? { favorite: input.favorite } : {}),
+    },
+  }
+}
+
 export function validateKnowledgeLocator(input) {
   if (!isPlainObject(input)) return invalid('Knowledge locator must be an object.')
   for (const field of Object.keys(input)) {
@@ -364,6 +420,10 @@ export function validateDesktopRequest(input, { stream = false } = {}) {
     normalizedBody = retryBody.value
   } else if (route.kind === 'knowledge-import-retry' && input.body !== undefined) {
     return denied('Knowledge OCR retry does not accept a request body.')
+  } else if (route.kind === 'knowledge-bulk') {
+    const knowledgeBulkBody = validateKnowledgeBulkInput(input.body)
+    if (!knowledgeBulkBody.ok) return knowledgeBulkBody
+    normalizedBody = knowledgeBulkBody.value
   }
 
   if (route.kind === 'generation-cancel') {
@@ -454,6 +514,9 @@ function matchAllowedRoute(method, path, stream) {
     ))
   ) {
     return { ok: true, kind: 'knowledge-static' }
+  }
+  if (method === 'POST' && path === '/api/knowledge/documents/bulk') {
+    return { ok: true, kind: 'knowledge-bulk' }
   }
 
   const knowledgeCollectionMatch = /^\/api\/knowledge\/collections\/([1-9]\d*)$/.exec(path)
@@ -570,6 +633,27 @@ function validateBody(body) {
     return invalid('Request body must be JSON serializable.')
   }
   return invalid('Request JSON body exceeds the size limit.')
+}
+
+function validateSortedUniquePositiveIds(value, minimum, maximum) {
+  if (!Array.isArray(value) || value.length < minimum || value.length > maximum) return null
+  if (value.some(item => !Number.isSafeInteger(item) || item < 1)) return null
+  if (value.some((item, index) => index > 0 && value[index - 1] >= item)) return null
+  return [...value]
+}
+
+function validateKnowledgeTags(value) {
+  if (!Array.isArray(value) || value.length > 20) return null
+  const tags = []
+  for (const item of value) {
+    if (typeof item !== 'string' || item.length < 1 || item.length > 40 || item.trim() !== item) return null
+    tags.push(item)
+  }
+  const keys = tags.map(item => item.toLocaleLowerCase('en-US'))
+  if (new Set(keys).size !== keys.length || keys.some((item, index) => index > 0 && keys[index - 1] >= item)) {
+    return null
+  }
+  return tags
 }
 
 function validateChatBody(body) {

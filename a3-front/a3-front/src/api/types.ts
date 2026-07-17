@@ -15,10 +15,15 @@ export interface CapabilityStatus { available: boolean; mode: string; error_code
 export interface KnowledgeStatus { fts: CapabilityStatus; worker: CapabilityStatus; ocr_pack: CapabilityStatus; semantic_pack: CapabilityStatus }
 export interface KnowledgeCollection { id: number; name: string; description: string; color: string; document_count: number; bound_session_count: number; created_at: string; updated_at: string }
 export interface KnowledgeCollectionInput { name: string; description: string; color: string }
-export interface KnowledgeDocument { id: number; sha256: string; display_name: string; extension: string; mime_type: string; byte_size: number; status: string; page_count: number | null; slide_count: number | null; sheet_count: number | null; text_characters: number; chunk_count: number; parser_version: string | null; safe_error_code: string | null; created_at: string; updated_at: string }
+export interface KnowledgeDocument { id: number; sha256: string; display_name: string; extension: string; mime_type: string; byte_size: number; status: string; page_count: number | null; slide_count: number | null; sheet_count: number | null; text_characters: number; chunk_count: number; parser_version: string | null; safe_error_code: string | null; favorite?: boolean; deleted_at?: string | null; collection_ids?: number[]; tags?: string[]; created_at: string; updated_at: string }
 export interface KnowledgeImportJob { id: number; document_id: number; status: string; progress: number; stage: string; retryable: boolean; safe_error_code: string | null; cancel_requested: boolean; current_page: number | null; page_count: number | null; eta_seconds: number | null; failed_pages: number[]; version: number; created_at: string; updated_at: string }
 export interface KnowledgeBinding { session_id: string; collection_ids: number[]; privacy_mode: 'allow_model_context' | 'local_search_only' }
-export interface KnowledgeImportBatch { jobs: KnowledgeImportJob[] }
+export interface KnowledgeDuplicateImport { document_id: number; display_name: string; collection_ids: number[]; action: 'linked_existing' | 'already_present' }
+export interface KnowledgeImportBatch { jobs: KnowledgeImportJob[]; duplicates?: KnowledgeDuplicateImport[] }
+export type KnowledgeBulkAction = 'move_to_trash' | 'restore' | 'purge' | 'add_to_collections' | 'remove_from_collections' | 'favorite' | 'set_tags'
+export interface KnowledgeBulkRequest { action: KnowledgeBulkAction; document_ids: number[]; collection_ids: number[]; tags: string[]; favorite?: boolean }
+export interface KnowledgeBulkResponse { items: Array<{ document_id: number; ok: boolean; code: string | null }> }
+export interface KnowledgeDocumentFilters { collectionId?: number; trash?: boolean; favorite?: boolean; tag?: string; query?: string; status?: string; sort?: 'created' | 'updated' | 'name' | 'size'; direction?: 'asc' | 'desc' }
 export type TextbookAccessMode = 'OFFICIAL_READER' | 'LICENSED_DOWNLOAD' | 'EXTERNAL_CATALOG'
 export interface TextbookCatalogItem { source_id: string; publisher: string; title: string; stage: '初中' | '高中'; grade: string; semester: string; subject: '数学'; edition: string; official_url: string; access_mode: TextbookAccessMode; license_note: string; verified_at: string; download_url: string | null }
 export interface TextbookCatalog { version: string; items: TextbookCatalogItem[] }
