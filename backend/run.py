@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -23,6 +24,11 @@ def main() -> int:
         from backend.knowledge.worker_main import main as worker_main
 
         return worker_main()
+    if len(sys.argv) > 1 and sys.argv[1] == "--ocr-diagnostics":
+        from backend.knowledge.ocr_engine import rapidocr_diagnostics
+
+        print(json.dumps(rapidocr_diagnostics(), ensure_ascii=True, sort_keys=True))
+        return 0
     _configure_desktop_data_dir()
     import uvicorn
     from backend.main import app

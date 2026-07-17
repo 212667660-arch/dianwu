@@ -104,6 +104,12 @@ def _sqlite_migrate() -> None:
     _add_missing_columns("resource_artifacts", {
         "safety_json": "TEXT",
     })
+    _add_missing_columns("knowledge_import_jobs", {
+        "current_page": "INTEGER",
+        "page_count": "INTEGER",
+        "eta_seconds": "INTEGER",
+        "failed_pages_json": "TEXT NOT NULL DEFAULT '[]'",
+    })
 
 
 def init_db() -> None:

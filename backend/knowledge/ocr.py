@@ -25,7 +25,9 @@ class OcrPageEvent:
     page: int
     page_count: int
     progress: int
-    block: StructuredBlock
+    block: StructuredBlock | None
+    error_code: str | None = None
+    eta_seconds: int | None = None
 
 
 class OcrEngine(Protocol):
@@ -53,6 +55,8 @@ async def ocr_pdf(
     cancel,
     *,
     limits: OcrLimits | None = None,
+    page_numbers: list[int] | tuple[int, ...] | None = None,
+    continue_on_error: bool = False,
 ) -> AsyncIterator[OcrPageEvent]:
     selected_limits = limits or OcrLimits()
     document = None
@@ -63,10 +67,18 @@ async def ocr_pdf(
         page_count = len(document)
         if page_count > selected_limits.max_pages:
             raise KnowledgeParseError("KNOWLEDGE_PARSE_LIMIT_EXCEEDED")
+        if page_numbers is None:
+            selected_pages = list(range(1, page_count + 1))
+        else:
+            selected_pages = sorted(set(int(item) for item in page_numbers))
+            if any(item < 1 or item > page_count for item in selected_pages):
+                raise KnowledgeParseError("KNOWLEDGE_PARSE_LIMIT_EXCEEDED")
         deadline = asyncio.get_running_loop().time() + selected_limits.max_seconds
-        for page_number, page in enumerate(document, 1):
+        started_at = asyncio.get_running_loop().time()
+        for selected_index, page_number in enumerate(selected_pages, 1):
             if cancel.is_set():
                 break
+            page = document[page_number - 1]
             width = max(float(page.rect.width), 1.0)
             height = max(float(page.rect.height), 1.0)
             scale = min(
@@ -93,16 +105,39 @@ async def ocr_pdf(
                         timeout=remaining,
                     )
                 except asyncio.TimeoutError as exc:
-                    raise KnowledgeParseError(
-                        "KNOWLEDGE_OCR_TIMEOUT",
-                        retryable=True,
-                    ) from exc
+                    if not continue_on_error:
+                        raise KnowledgeParseError(
+                            "KNOWLEDGE_OCR_TIMEOUT",
+                            retryable=True,
+                        ) from exc
+                    text = None
+                    error_code = "KNOWLEDGE_OCR_TIMEOUT"
+                except Exception:
+                    if not continue_on_error:
+                        raise
+                    text = None
+                    error_code = "KNOWLEDGE_OCR_PAGE_FAILED"
             finally:
                 del pixmap
+            elapsed = max(asyncio.get_running_loop().time() - started_at, 0.0)
+            average = elapsed / max(selected_index, 1)
+            remaining_pages = max(len(selected_pages) - selected_index, 0)
+            eta_seconds = int(round(average * remaining_pages))
+            progress = int(selected_index * 100 / max(len(selected_pages), 1))
+            if text is None:
+                yield OcrPageEvent(
+                    page=page_number,
+                    page_count=page_count,
+                    progress=progress,
+                    block=None,
+                    error_code=error_code,
+                    eta_seconds=eta_seconds,
+                )
+                continue
             yield OcrPageEvent(
                 page=page_number,
                 page_count=page_count,
-                progress=int(page_number * 100 / max(page_count, 1)),
+                progress=progress,
                 block=StructuredBlock(
                     text=str(text or "").strip(),
                     heading_path=(),
@@ -110,6 +145,7 @@ async def ocr_pdf(
                     locator_start=page_number,
                     locator_end=page_number,
                 ),
+                eta_seconds=eta_seconds,
             )
     finally:
         if document is not None:

@@ -166,6 +166,7 @@ class KnowledgeImportService:
             object_relpath=document.object_relpath,
             extension=document.extension,
             limits=DEFAULT_LIMITS,
+            ocr_page_numbers=self.repository.retry_page_numbers(job_id),
         )
 
     async def _start_worker(self, request: WorkerRequest):
@@ -188,6 +189,10 @@ class KnowledgeImportService:
         stage: str | None = None,
         retryable: bool = False,
         safe_error_code: str | None = None,
+        current_page: int | None = None,
+        page_count: int | None = None,
+        eta_seconds: int | None = None,
+        failed_pages: list[int] | None = None,
     ):
         current = self.repository.require_job(job_id)
         return self.repository.transition_job(
@@ -198,6 +203,10 @@ class KnowledgeImportService:
             stage=stage,
             retryable=retryable,
             safe_error_code=safe_error_code,
+            current_page=current_page,
+            page_count=page_count,
+            eta_seconds=eta_seconds,
+            failed_pages=failed_pages,
         )
 
     def _refresh_job(self, job_id: int):
@@ -211,6 +220,8 @@ class KnowledgeImportService:
         completed: bool = False,
         retryable: bool = False,
         safe_error_code: str | None = None,
+        stage: str | None = None,
+        failed_pages: list[int] | None = None,
     ):
         for _attempt in range(3):
             current = self._refresh_job(job_id)
@@ -235,8 +246,13 @@ class KnowledgeImportService:
                     expected_version=current.version,
                     status=status,
                     progress=progress,
+                    stage=stage,
                     retryable=terminal_retryable,
                     safe_error_code=terminal_code,
+                    current_page=current.current_page,
+                    page_count=current.page_count,
+                    eta_seconds=current.eta_seconds,
+                    failed_pages=failed_pages,
                 )
             except StaleKnowledgeJob:
                 continue
@@ -261,11 +277,20 @@ class KnowledgeImportService:
                 break
             event = parse_worker_line(line.rstrip(b"\r\n"))
             if isinstance(event, ProgressEvent):
+                status = (
+                    ImportJobStatus.OCR_RUNNING
+                    if event.stage == "ocr"
+                    else ImportJobStatus.PARSING
+                )
                 self._transition(
                     job_id,
-                    ImportJobStatus.PARSING,
+                    status,
                     event.progress,
                     stage=event.stage,
+                    current_page=event.current_page,
+                    page_count=event.page_count,
+                    eta_seconds=event.eta_seconds,
+                    failed_pages=event.failed_pages,
                 )
             elif isinstance(event, BlockEvent):
                 self.repository.stage_worker_block(job_id, event)
@@ -317,6 +342,14 @@ class KnowledgeImportService:
                     safe_error_code="KNOWLEDGE_OCR_PACK_REQUIRED",
                 )
             self.repository.finish_worker_output(job_id, done)
+            if done.failed_pages:
+                return self._terminal_transition(
+                    job_id,
+                    retryable=True,
+                    safe_error_code="KNOWLEDGE_OCR_PAGE_FAILED",
+                    stage="ocr_partial",
+                    failed_pages=done.failed_pages,
+                )
             self._transition(job_id, ImportJobStatus.INDEXING, 95)
             blocks = self.repository.worker_block_events(job_id)
             chunks = chunk_blocks(blocks, parser_version="chunk-v1")
@@ -332,7 +365,11 @@ class KnowledgeImportService:
                         "knowledge semantic update skipped: KNOWLEDGE_VECTOR_INDEX_UNAVAILABLE"
                     )
             self.repository.clear_worker_output(job_id)
-            return self._terminal_transition(job_id, completed=True)
+            return self._terminal_transition(
+                job_id,
+                completed=True,
+                failed_pages=[],
+            )
         except asyncio.TimeoutError:
             if process is not None:
                 await self._stop_process(process)

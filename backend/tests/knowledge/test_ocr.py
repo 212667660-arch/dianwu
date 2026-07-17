@@ -120,6 +120,50 @@ def test_ocr_timeout_is_retryable_and_closes_engine(tmp_path: Path) -> None:
     asyncio.run(exercise())
 
 
+def test_ocr_continues_after_one_failed_page_and_reports_eta(tmp_path: Path) -> None:
+    async def exercise() -> None:
+        engine = FakeOcrEngine(fail_page=2)
+        events = [
+            event
+            async for event in ocr_pdf(
+                _pdf(tmp_path / "partial.pdf", 3),
+                engine,
+                asyncio.Event(),
+                continue_on_error=True,
+            )
+        ]
+
+        assert [event.page for event in events] == [1, 2, 3]
+        assert events[1].block is None
+        assert events[1].error_code == "KNOWLEDGE_OCR_PAGE_FAILED"
+        assert events[2].block is not None
+        assert events[2].eta_seconds == 0
+        assert engine.closed is True
+
+    asyncio.run(exercise())
+
+
+def test_ocr_retries_only_selected_pages_with_original_page_locators(tmp_path: Path) -> None:
+    async def exercise() -> None:
+        engine = FakeOcrEngine()
+        events = [
+            event
+            async for event in ocr_pdf(
+                _pdf(tmp_path / "retry.pdf", 5),
+                engine,
+                asyncio.Event(),
+                page_numbers=[2, 5],
+            )
+        ]
+
+        assert [event.page for event in events] == [2, 5]
+        assert [event.block.locator_start for event in events if event.block] == [2, 5]
+        assert events[-1].progress == 100
+        assert [item[0] for item in engine.pages] == [2, 5]
+
+    asyncio.run(exercise())
+
+
 def test_worker_main_scrubs_model_proxy_and_token_environment() -> None:
     environment = {
         "SYSTEMROOT": r"C:\Windows",

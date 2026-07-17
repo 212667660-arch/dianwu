@@ -29,10 +29,22 @@ def test_release_scripts_collect_and_verify_packaged_worker_dependencies() -> No
         "defusedxml",
         "charset_normalizer",
         "numpy",
+        "rapidocr_onnxruntime",
+        "onnxruntime",
+        "cv2",
     ):
         assert f"--collect-all {package}" in build_script
     assert "A3_PACKAGED_API_EXE" in verify_script
     assert "test_packaged_worker.py" in verify_script
+    for runtime_dll in (
+        "msvcp140.dll",
+        "MSVCP140_1.dll",
+        "vcruntime140.dll",
+        "vcruntime140_1.dll",
+        "concrt140.dll",
+    ):
+        assert runtime_dll in build_script
+    assert "System32" in build_script
 
 
 def test_frozen_worker_command_uses_the_packaged_executable_switch(

@@ -79,6 +79,15 @@ function expectRejected(input, options, code) {
   assert.equal(result.error.code, code)
 }
 
+test('knowledge OCR retry route permits only an empty POST body', () => {
+  expectAccepted({ method: 'POST', path: '/api/knowledge/imports/7/retry' })
+  expectRejected(
+    { method: 'POST', path: '/api/knowledge/imports/7/retry', body: { pages: [2] } },
+    undefined,
+    'DESKTOP_REQUEST_DENIED',
+  )
+})
+
 test('chat body permits only fixed resource selection fields', () => {
   const bundle = expectAccepted({
     method: 'POST',

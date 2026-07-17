@@ -195,6 +195,10 @@ class KnowledgeImportJobResponse(StrictKnowledgeModel):
     retryable: bool
     safe_error_code: str | None
     cancel_requested: bool
+    current_page: int | None
+    page_count: int | None
+    eta_seconds: int | None
+    failed_pages: list[int]
     version: int
     created_at: str
     updated_at: str

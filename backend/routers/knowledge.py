@@ -171,6 +171,18 @@ async def cancel_import(
     return await service.cancel_job(job_id)
 
 
+@router.post(
+    "/imports/{job_id}/retry",
+    status_code=202,
+    response_model=KnowledgeImportJobResponse,
+)
+def retry_import(
+    job_id: PositiveId,
+    service: KnowledgeService = Depends(get_knowledge_service),
+):
+    return service.retry_job(job_id)
+
+
 @router.post("/search", response_model=KnowledgeSearchResponse)
 def search(
     value: KnowledgeSearchRequest,

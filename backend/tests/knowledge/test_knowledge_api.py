@@ -14,6 +14,7 @@ from sqlalchemy.pool import StaticPool
 from backend.database import Base
 from backend.knowledge.chunking import chunk_blocks
 from backend.knowledge.import_service import KnowledgeImportCoordinator
+from backend.knowledge.models import ImportJobStatus
 from backend.knowledge.object_store import KnowledgeObjectStore
 from backend.knowledge.optional_packs import APP_VERSION
 from backend.knowledge.parsers import StructuredBlock
@@ -136,6 +137,8 @@ def test_collection_crud_and_status(api) -> None:
     assert updated.json()["name"] == "高等数学"
     assert status.status_code == 200
     assert status.json()["fts"]["available"] is True
+    assert status.json()["ocr_pack"]["available"] is True
+    assert status.json()["ocr_pack"]["mode"] == "builtin"
     assert deleted.status_code == 204
 
 
@@ -297,6 +300,42 @@ def test_rebuild_route_schedules_real_coordinator_on_app_event_loop(
     assert response.status_code == 202
     assert started_event.wait(timeout=1)
     assert started == [response.json()["id"]]
+
+
+def test_retry_ocr_job_preserves_failed_pages_and_requeues_same_job(api) -> None:
+    client, service, coordinator, _root = api
+    document = service.repository.upsert_document(
+        sha256="d" * 64,
+        display_name="扫描教材.pdf",
+        extension=".pdf",
+        mime_type="application/pdf",
+        byte_size=32,
+        object_relpath="objects/" + "d" * 64,
+    )
+    job = service.repository.create_job(document.id)
+    failed = service.repository.transition_job(
+        job.id,
+        expected_version=job.version,
+        status=ImportJobStatus.FAILED,
+        progress=60,
+        stage="ocr_partial",
+        retryable=True,
+        safe_error_code="KNOWLEDGE_OCR_PAGE_FAILED",
+        current_page=2,
+        page_count=5,
+        eta_seconds=8,
+        failed_pages=[2, 5],
+    )
+
+    response = client.post(f"/api/knowledge/imports/{job.id}/retry")
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["id"] == job.id
+    assert payload["status"] == "QUEUED"
+    assert payload["failed_pages"] == [2, 5]
+    assert payload["page_count"] == 5
+    assert coordinator.enqueued == [job.id]
 
 
 def test_import_rehashes_object_and_rejects_tampering(api) -> None:

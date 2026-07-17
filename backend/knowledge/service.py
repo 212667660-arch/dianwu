@@ -3,16 +3,19 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime
 from hashlib import sha256
+import json
 from typing import Callable
 
 from backend.errors import (
     KnowledgeCollectionConflictError,
     KnowledgeFileSignatureMismatchError,
+    KnowledgeImportNotRetryableError,
     KnowledgeIndexUnavailableError,
     KnowledgeObjectMissingError,
     ResourceNotFoundError,
 )
 from backend.knowledge.models import ImportJobStatus
+from backend.knowledge.ocr_engine import rapidocr_available, rapidocr_version
 from backend.knowledge.optional_packs import CapabilityRegistry
 from backend.knowledge.repository import (
     KnowledgeRecordConflict,
@@ -85,6 +88,13 @@ class KnowledgeService:
                 pack_root = packs_root / kind
                 if pack_root.is_dir():
                     capabilities.load_pack(pack_root)
+        if not capabilities.ocr.available and rapidocr_available():
+            capabilities.ocr = type(capabilities.ocr)(
+                True,
+                "builtin",
+                None,
+                rapidocr_version(),
+            )
 
         def capability_payload(state) -> dict[str, object]:
             return {
@@ -224,6 +234,12 @@ class KnowledgeService:
         return self._document_response(document)
 
     def _job_response(self, job) -> dict[str, object]:
+        try:
+            failed_pages = json.loads(job.failed_pages_json or "[]")
+        except (TypeError, json.JSONDecodeError):
+            failed_pages = []
+        if not isinstance(failed_pages, list):
+            failed_pages = []
         return {
             "id": job.id,
             "document_id": job.document_id,
@@ -233,6 +249,10 @@ class KnowledgeService:
             "retryable": job.retryable,
             "safe_error_code": job.safe_error_code,
             "cancel_requested": job.cancel_requested,
+            "current_page": job.current_page,
+            "page_count": job.page_count,
+            "eta_seconds": job.eta_seconds,
+            "failed_pages": failed_pages,
             "version": job.version,
             "created_at": _iso(job.created_at),
             "updated_at": _iso(job.updated_at),
@@ -283,6 +303,22 @@ class KnowledgeService:
                 "KNOWLEDGE_IMPORT_NOT_FOUND",
                 "知识库导入任务不存在。",
             ) from exc
+
+    def retry_job(self, job_id: int) -> dict[str, object]:
+        def retry(repository):
+            return self._job_response(repository.reset_job_for_retry(job_id))
+
+        try:
+            job = self._with_fresh_repository(retry)
+        except KnowledgeRecordNotFound as exc:
+            raise ResourceNotFoundError(
+                "KNOWLEDGE_IMPORT_NOT_FOUND",
+                "知识库导入任务不存在。",
+            ) from exc
+        except KnowledgeRecordConflict as exc:
+            raise KnowledgeImportNotRetryableError() from exc
+        self.coordinator.enqueue(int(job["id"]))
+        return job
 
     def _request_cancel(self, job_id: int) -> dict[str, object]:
         try:

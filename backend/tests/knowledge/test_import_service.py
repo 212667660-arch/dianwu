@@ -20,7 +20,7 @@ from backend.knowledge.import_service import (
 from backend.knowledge.models import ImportJobStatus
 from backend.knowledge.repository import KnowledgeRepository
 from backend.knowledge.search import KnowledgeSearchRepository
-from backend.knowledge.worker_protocol import DoneEvent
+from backend.knowledge.worker_protocol import BlockEvent, DoneEvent, ProgressEvent
 
 
 def test_parse_timeout_scales_for_large_files_with_a_hard_cap() -> None:
@@ -42,6 +42,10 @@ class FakeJob:
     safe_error_code: str | None = None
     cancel_requested: bool = False
     version: int = 0
+    current_page: int | None = None
+    page_count: int | None = None
+    eta_seconds: int | None = None
+    failed_pages_json: str = "[]"
 
 
 class FakeRepository:
@@ -65,6 +69,11 @@ class FakeRepository:
     def require_document(self, document_id: int):
         return self.documents[document_id]
 
+    def retry_page_numbers(self, job_id: int) -> list[int]:
+        import json
+
+        return json.loads(self.jobs[job_id].failed_pages_json)
+
     def transition_job(
         self,
         job_id: int,
@@ -75,6 +84,10 @@ class FakeRepository:
         stage: str | None = None,
         retryable: bool = False,
         safe_error_code: str | None = None,
+        current_page: int | None = None,
+        page_count: int | None = None,
+        eta_seconds: int | None = None,
+        failed_pages: list[int] | None = None,
     ) -> FakeJob:
         job = self.jobs[job_id]
         assert job.version == expected_version
@@ -85,6 +98,14 @@ class FakeRepository:
             stage=stage or status.value.lower(),
             retryable=retryable,
             safe_error_code=safe_error_code,
+            current_page=current_page,
+            page_count=page_count,
+            eta_seconds=eta_seconds,
+            failed_pages_json=(
+                __import__("json").dumps(failed_pages)
+                if failed_pages is not None
+                else job.failed_pages_json
+            ),
             version=job.version + 1,
         )
         self.jobs[job_id] = job
@@ -487,6 +508,69 @@ def test_scan_pdf_stops_at_ocr_required_without_replacing_fts() -> None:
         assert result.safe_error_code == "KNOWLEDGE_OCR_PACK_REQUIRED"
 
     asyncio.run(exercise())
+
+
+def test_partial_ocr_failure_preserves_successful_page_blocks_for_retry() -> None:
+    async def exercise() -> None:
+        repository = FakeRepository()
+        block = BlockEvent(
+            ordinal=0,
+            text="page one",
+            heading_path=[],
+            locator_type="page",
+            locator_start=1,
+            locator_end=1,
+        )
+        progress = ProgressEvent(
+            progress=60,
+            stage="ocr",
+            current_page=2,
+            page_count=3,
+            eta_seconds=4,
+            failed_pages=[2],
+        )
+        done = DoneEvent(
+            page_count=3,
+            text_characters=8,
+            ocr_performed=True,
+            failed_pages=[2],
+        )
+        lines = [
+            (event.model_dump_json() + "\n").encode("utf-8")
+            for event in (block, progress, done)
+        ]
+        process = FakeProcess(lines)
+        process.finish(0)
+        service = KnowledgeImportService(
+            repository,
+            spawn_worker=lambda _request: process,
+        )
+
+        result = await service.run_job(7)
+
+        assert result.status == ImportJobStatus.FAILED.value
+        assert result.stage == "ocr_partial"
+        assert result.retryable is True
+        assert result.safe_error_code == "KNOWLEDGE_OCR_PAGE_FAILED"
+        assert result.current_page == 2
+        assert result.page_count == 3
+        assert result.eta_seconds == 4
+        assert result.failed_pages_json == "[2]"
+        assert [item.locator_start for item in repository.blocks] == [1]
+
+    asyncio.run(exercise())
+
+
+def test_retry_request_contains_only_failed_ocr_pages() -> None:
+    repository = FakeRepository()
+    repository.jobs[7] = replace(
+        repository.jobs[7],
+        status=ImportJobStatus.FAILED.value,
+        failed_pages_json="[2,5]",
+    )
+    repository.documents[3].extension = ".pdf"
+    request = KnowledgeImportService(repository)._request_for(7)
+    assert request.ocr_page_numbers == [2, 5]
 
 
 def test_semantic_update_scheduler_failure_never_fails_keyword_import(

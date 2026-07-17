@@ -121,3 +121,44 @@ def test_cancel_request_is_idempotent(repository) -> None:
     assert first.cancel_requested is True
     assert second.cancel_requested is True
     assert first.version == second.version
+
+
+def test_ocr_progress_and_retry_state_preserve_failed_pages(repository) -> None:
+    repo, _db = repository
+    document = create_document(repo)
+    job = repo.create_job(document_id=document.id)
+
+    running = repo.transition_job(
+        job.id,
+        expected_version=job.version,
+        status=ImportJobStatus.OCR_RUNNING,
+        progress=55,
+        stage="ocr",
+        current_page=5,
+        page_count=10,
+        eta_seconds=12,
+        failed_pages=[2],
+    )
+
+    assert running.current_page == 5
+    assert running.page_count == 10
+    assert running.eta_seconds == 12
+    assert running.failed_pages_json == "[2]"
+
+    failed = repo.transition_job(
+        job.id,
+        expected_version=running.version,
+        status=ImportJobStatus.FAILED,
+        progress=55,
+        stage="ocr_partial",
+        retryable=True,
+        safe_error_code="KNOWLEDGE_OCR_PAGE_FAILED",
+        failed_pages=[2],
+    )
+
+    retry = repo.reset_job_for_retry(job.id)
+    assert retry.status == ImportJobStatus.QUEUED.value
+    assert retry.progress == 0
+    assert retry.cancel_requested is False
+    assert retry.failed_pages_json == "[2]"
+    assert repo.retry_page_numbers(job.id) == [2]

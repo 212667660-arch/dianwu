@@ -362,6 +362,8 @@ export function validateDesktopRequest(input, { stream = false } = {}) {
     const retryBody = validateRetryBody(input.body)
     if (!retryBody.ok) return retryBody
     normalizedBody = retryBody.value
+  } else if (route.kind === 'knowledge-import-retry' && input.body !== undefined) {
+    return denied('Knowledge OCR retry does not accept a request body.')
   }
 
   if (route.kind === 'generation-cancel') {
@@ -469,6 +471,10 @@ function matchAllowedRoute(method, path, stream) {
   const knowledgeImportMatch = /^\/api\/knowledge\/imports\/([1-9]\d*)$/.exec(path)
   if (knowledgeImportMatch && ['GET', 'DELETE'].includes(method)) {
     return { ok: true, kind: 'knowledge-import' }
+  }
+  const knowledgeImportRetryMatch = /^\/api\/knowledge\/imports\/([1-9]\d*)\/retry$/.exec(path)
+  if (knowledgeImportRetryMatch && method === 'POST') {
+    return { ok: true, kind: 'knowledge-import-retry' }
   }
 
   const sessionMatch = /^\/api\/sessions\/([^/]+)(?:\/(progress|next-action|reviews|mistakes))?$/.exec(path)

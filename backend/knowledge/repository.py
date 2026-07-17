@@ -384,22 +384,38 @@ class KnowledgeRepository:
         stage: str | None = None,
         retryable: bool = False,
         safe_error_code: str | None = None,
+        current_page: int | None = None,
+        page_count: int | None = None,
+        eta_seconds: int | None = None,
+        failed_pages: list[int] | None = None,
     ) -> KnowledgeImportJob:
+        values: dict[str, object] = {
+            "status": status.value,
+            "progress": max(0, min(progress, 100)),
+            "stage": stage or status.value.lower(),
+            "retryable": retryable,
+            "safe_error_code": safe_error_code,
+            "version": KnowledgeImportJob.version + 1,
+            "updated_at": datetime.utcnow(),
+        }
+        if current_page is not None:
+            values["current_page"] = current_page
+        if page_count is not None:
+            values["page_count"] = page_count
+        if eta_seconds is not None:
+            values["eta_seconds"] = eta_seconds
+        if failed_pages is not None:
+            values["failed_pages_json"] = json.dumps(
+                sorted(set(failed_pages)),
+                separators=(",", ":"),
+            )
         result = self.db.execute(
             update(KnowledgeImportJob)
             .where(
                 KnowledgeImportJob.id == job_id,
                 KnowledgeImportJob.version == expected_version,
             )
-            .values(
-                status=status.value,
-                progress=max(0, min(progress, 100)),
-                stage=stage or status.value.lower(),
-                retryable=retryable,
-                safe_error_code=safe_error_code,
-                version=KnowledgeImportJob.version + 1,
-                updated_at=datetime.utcnow(),
-            )
+            .values(**values)
             .execution_options(synchronize_session=False)
         )
         if result.rowcount != 1:
@@ -408,6 +424,44 @@ class KnowledgeRepository:
         self.db.commit()
         self.db.expire_all()
         return self.require_job(job_id)
+
+    def retry_page_numbers(self, job_id: int) -> list[int]:
+        job = self.require_job(job_id)
+        try:
+            raw = json.loads(job.failed_pages_json or "[]")
+        except (TypeError, json.JSONDecodeError):
+            return []
+        if not isinstance(raw, list):
+            return []
+        return sorted(
+            {
+                int(item)
+                for item in raw
+                if isinstance(item, int) and 1 <= item <= 2_000
+            }
+        )
+
+    def reset_job_for_retry(self, job_id: int) -> KnowledgeImportJob:
+        job = self.require_job(job_id)
+        if job.status not in {
+            ImportJobStatus.FAILED.value,
+            ImportJobStatus.OCR_REQUIRED.value,
+            ImportJobStatus.INTERRUPTED.value,
+        }:
+            raise KnowledgeRecordConflict("knowledge import job is not retryable")
+        job.status = ImportJobStatus.QUEUED.value
+        job.progress = 0
+        job.stage = "queued"
+        job.retryable = False
+        job.safe_error_code = None
+        job.cancel_requested = False
+        job.current_page = None
+        job.eta_seconds = None
+        job.version += 1
+        job.updated_at = datetime.utcnow()
+        self.db.commit()
+        self.db.refresh(job)
+        return job
 
     def request_cancel(self, job_id: int) -> KnowledgeImportJob:
         job = self.require_job(job_id)
@@ -451,7 +505,12 @@ class KnowledgeRepository:
         document.page_count = done.page_count
         document.slide_count = done.slide_count
         document.sheet_count = done.sheet_count
-        document.text_characters = done.text_characters
+        if done.ocr_performed:
+            document.text_characters = sum(
+                len(block.text) for block in self.worker_block_events(job_id)
+            )
+        else:
+            document.text_characters = done.text_characters
         self.db.commit()
 
     def clear_worker_output(self, job_id: int) -> None:

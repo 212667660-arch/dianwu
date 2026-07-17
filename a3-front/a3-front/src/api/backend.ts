@@ -239,6 +239,7 @@ export const backendApi = {
     return desktopEnvelope<KnowledgeImportBatch>(await window.a3Desktop.knowledgeImportDroppedFiles(files, collectionId))
   },
   async cancelKnowledgeImport(jobId: number) { return activeTransport().request<KnowledgeImportJob>({ method: 'DELETE', path: `/api/knowledge/imports/${jobId}` }) },
+  async retryKnowledgeImport(jobId: number) { return activeTransport().request<KnowledgeImportJob>({ method: 'POST', path: `/api/knowledge/imports/${jobId}/retry` }) },
   async deleteKnowledgeDocument(documentId: number) { return activeTransport().request<void>({ method: 'DELETE', path: `/api/knowledge/documents/${documentId}` }) },
   async rebuildKnowledgeDocument(documentId: number) { return activeTransport().request<KnowledgeImportJob>({ method: 'POST', path: `/api/knowledge/documents/${documentId}/rebuild` }) },
   async revealKnowledgeSource(documentId: number) {

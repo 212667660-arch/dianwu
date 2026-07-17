@@ -315,3 +315,12 @@ class KnowledgeObjectMissingError(AppError):
 class KnowledgeCollectionConflictError(AppError):
     def __init__(self) -> None:
         super().__init__("KNOWLEDGE_COLLECTION_CONFLICT", "已存在同名知识库集合。", 409)
+
+
+class KnowledgeImportNotRetryableError(AppError):
+    def __init__(self) -> None:
+        super().__init__(
+            "KNOWLEDGE_IMPORT_NOT_RETRYABLE",
+            "当前知识库导入任务不能重试。",
+            409,
+        )

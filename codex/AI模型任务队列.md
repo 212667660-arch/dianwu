@@ -2,8 +2,8 @@
 
 > 项目：基于大模型的个性化资源生成与学习多智能体系统开发
 > 队列位置：E:\软件杯\codex\AI模型任务队列.md
-> 当前模型批次：Sol（S-033 至 S-037 全面优化与最终验收进行中）
-> 最后审视日期：2026-07-17
+> 当前模型批次：Sol（S-034 知识库批量管理与回收站实施中）
+> 最后审视日期：2026-07-18
 
 ## 一、使用规则
 
@@ -85,8 +85,8 @@
 | S-030 | P0 | 完成 | 修复 DeepSeek Reviewer 返回受控字段但省略本地化协议封套时被误判为审核不可用 | S-026 内容安全 Reviewer、用户真实桌面截图与运行日志 | 已保留 fail-closed，严格兼容规范封套、`[content-safety/v1]` 加五字段和纯五字段三种受控形式；自由文本、额外行、乱序字段与非法枚举继续拒绝；证据见 S-030-COMPLETE |
 | S-031 | P0 | 完成 | 修复墨团连续点击视觉放大并完成本地教材 500 MiB 导入、预览和外部阅读器闭环 | T-035、T-036、用户真实教材目录与本轮诊断 | 画布/DPR/窗口/计时器不变量、SHA-256 预览缓存、单文件与批次 500 MiB、真实 77/188 MB PDF 导入解析、只读本地阅读器和最终桌面包验收均通过；证据见 S-031-S032-ACCEPTANCE |
 | S-032 | P0 | 完成 | 接入合法初高中数学教材目录并增强知识点总结和分步解题 | S-031、现有知识检索与内容安全边界 | 人教社官方目录只读元数据、sourceId 到官方 URL 精确映射、教材集合绑定、知识点总结、例题/自适应练习分步解题、可信引用或证据不足门均完成；证据见 S-031-S032-ACCEPTANCE |
-| S-033 | P0 | 进行中 | 完成扫描教材离线 OCR、公式文本保留、逐页进度和页码引用闭环 | S-031、现有 OCR 骨架与可选包校验 | OCR 引擎适配、失败页隔离重试、逐页块与页码引用、扫描教材真实验收 |
-| S-034 | P1 | 就绪 | 完成知识库批量管理、回收站、标签收藏、排序筛选和重复文件提示 | S-031、知识库现有集合/文档模型 | 批量移动/删除/恢复、软删除保留期、标签与收藏、可解释去重结果、前后端闭环 |
+| S-033 | P0 | 完成 | 完成扫描教材离线 OCR、公式文本保留、逐页进度和页码引用闭环 | S-031、现有 OCR 骨架与可选包校验 | RapidOCR/ONNX 离线引擎、逐页进度/ETA、失败页隔离与原任务重试、真实 PDF 页定位、PyInstaller OCR 包验收均完成；证据见 S-033-COMPLETE |
+| S-034 | P1 | 进行中 | 完成知识库批量管理、回收站、标签收藏、排序筛选和重复文件提示 | S-031、知识库现有集合/文档模型 | 批量移动/删除/恢复、软删除保留期、标签与收藏、可解释去重结果、前后端闭环 |
 | S-035 | P1 | 就绪 | 完成首次启动、桌面诊断、日志导出、版本展示与墨团设置增强 | S-031、现有托盘/桌宠/生命周期 | 首次启动向导、托盘主窗口/墨团/暂停/退出、诊断报告、日志导出、置顶/音量/多屏边界 |
 | S-036 | P1 | 就绪 | 完成可信学习交互与比赛一键演示、离线降级和前后效果对比 | S-033、现有安全引用/掌握度/Agent 工作台 | 教材/模型补充区分、证据不足重检、页码范围、答案复核、内置演示数据与一键演示 |
 | S-037 | P0 | 阻塞 | 对全部前端、后端、Electron 和最终桌面包执行发布级验收 | S-033、S-034、S-035、S-036 | 全量测试、构建、PyInstaller、desktop pack、生命周期、真实 OCR/导入和零残留进程证据 |
@@ -331,3 +331,4 @@ S-016 已完成：本仓库提交身份已设置为 `Wei kb <212667660@qq.com>`�
 | 2026-07-17 | S-022-TASK7 | Sol | a3-front/a3-front/src/api/types.ts、a3-front/a3-front/src/api/backend.ts、a3-front/a3-front/src/api/backend.test.ts、a3-front/a3-front/electron/ipc-contract.mjs、a3-front/a3-front/electron/ipc-contract.test.mjs、a3-front/a3-front/electron/backend-proxy.test.mjs、codex/AI模型任务队列.md | 新增严格 ResourceSelection/ResourceBundle/ArtifactType 类型，chat/stream 发送固定资源选择字段并提供 retryResourceArtifact；Electron 仅允许固定 chat/retry body 与路由，额外模型/令牌字段在代理前拒绝。vue-tsc 通过；API/传输 21 passed；IPC/代理 47 passed。 |
 | 2026-07-17 | S-022-TASK8 | Sol | a3-front/a3-front/src/components/learning/SafeMarkdown.vue、a3-front/a3-front/src/components/learning/ResourceCard.vue、a3-front/a3-front/src/components/learning/SafeMermaid.vue、a3-front/a3-front/src/tests/components/SafeMarkdown.test.ts、a3-front/a3-front/src/tests/components/ResourceBundle.test.ts、a3-front/a3-front/src/tests/components/SafeMermaid.test.ts、codex/AI模型任务队列.md | 移除模型内容 v-html，SafeMarkdown 仅以 Vue 插值渲染标题/列表/代码/段落；mind_map 只走 SafeMermaid，失败产物无复制入口；Mermaid 限制 2 万字符/250 行，拒绝 init/click/HTML 指令并在渲染异常时降级大纲。安全渲染 13 passed；前端全量 105 passed；vue-tsc 通过。 |
 | 2026-07-17 | S-022-TASK9 | Sol | a3-front/a3-front/src/components/learning/ResourceMenu.vue、a3-front/a3-front/src/components/learning/ResourceBundle.vue、a3-front/a3-front/src/components/learning/ResourceCard.vue、a3-front/a3-front/src/views/SmartTutor.vue、a3-front/a3-front/src/views/SmartTutor.test.ts、a3-front/a3-front/src/stores/backend.ts、a3-front/a3-front/src/stores/backend.test.ts、a3-front/a3-front/src/api/types.ts、a3-front/a3-front/src/tests/components/ResourceBundle.test.ts、codex/AI模型任务队列.md | SmartTutor 在 PROFILED/GENERATING 状态显示资源选择器，传递 bundle/single 选择，实时展示进度与产物，渲染最终及历史 bundle，隐藏历史 JSON 消息，并按 bundle/type 独立重试且显示重试中状态。定向 35 passed；前端全量 109 passed；vue-tsc 通过。 |
+| 2026-07-18 | S-033-COMPLETE | Sol | backend/knowledge/ocr_engine.py、ocr.py、worker_protocol.py、worker_main.py、import_service.py、models.py、repository.py、schemas.py、service.py、backend/routers/knowledge.py、backend/run.py、backend/database.py、backend/errors.py、backend/requirements.txt、backend/build_api.ps1、backend/tests/knowledge、a3-front/a3-front/src/api、stores/backend.ts、views/KnowledgeLibrary.vue、components/knowledge/DocumentGrid.vue、electron/ipc-contract.mjs、OCR 设计与计划、codex/AI模型任务队列.md | 接入 RapidOCR 1.2.3 + ONNX Runtime 1.22.1 的完全离线中文 OCR；保留公式字符并修正常见 x/× 歧义；扫描 PDF 自动切换 OCR，逐页发出真实 PDF 页定位、进度和 ETA，单页失败继续并保留成功块，同一任务只重试失败页；前端显示页进度、剩余时间、失败页与重试入口，Electron 只放行空 body 固定重试路由。真实生成两页中文数学扫描 PDF 识别成功，源码事件页码 1/2；打包 worker 诊断 available=true，输出 2 个页块、2 个 OCR 进度事件、ocr_performed=true、failed_pages=[]、text_characters=77。定位并修复 PyInstaller 混装 MSVC 14.36/14.51 导致 ONNX DLL 初始化失败，构建脚本统一覆盖 System32 发布运行库。最终验证：knowledge pytest 141 passed、7 skipped；IPC 25 passed；知识库 Vitest 15 passed；compileall 与 build:desktop 通过；PyInstaller 构建和打包 OCR worker 冒烟通过。 |

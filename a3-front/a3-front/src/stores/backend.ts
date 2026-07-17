@@ -319,6 +319,7 @@ export const useBackendStore = defineStore('backend', () => {
   async function chooseKnowledgeFiles(collectionId: number) { const result = await backendApi.chooseKnowledgeFiles(collectionId); await refreshKnowledge(); return result }
   async function importDroppedKnowledgeFiles(files: FileList | File[], collectionId: number) { const result = await backendApi.importDroppedKnowledgeFiles(files, collectionId); await refreshKnowledge(); return result }
   async function cancelKnowledgeJob(jobId: number) { const result = await backendApi.cancelKnowledgeImport(jobId); await refreshKnowledge(); return result }
+  async function retryKnowledgeJob(jobId: number) { const result = await backendApi.retryKnowledgeImport(jobId); await refreshKnowledge(); return result }
   async function deleteKnowledgeDocument(documentId: number) { await backendApi.deleteKnowledgeDocument(documentId); await refreshKnowledge() }
   async function rebuildKnowledgeDocument(documentId: number) { const result = await backendApi.rebuildKnowledgeDocument(documentId); await refreshKnowledge(); return result }
 
@@ -333,6 +334,6 @@ export const useBackendStore = defineStore('backend', () => {
     refreshModelProfiles, testModelProfile, upsertModelProfile, deleteModelProfile, saveModelPolicy,
     loadSessionModelPreference, saveSessionModelPreference,
     refreshKnowledge, saveSessionKnowledgeCollections, chooseKnowledgeFiles,
-    importDroppedKnowledgeFiles, cancelKnowledgeJob, deleteKnowledgeDocument, rebuildKnowledgeDocument,
+    importDroppedKnowledgeFiles, cancelKnowledgeJob, retryKnowledgeJob, deleteKnowledgeDocument, rebuildKnowledgeDocument,
   }
 })
