@@ -64,4 +64,3 @@
 - 单元测试证明普通关闭在托盘存在时隐藏，在退出中或托盘缺失时不隐藏。
 - Electron 全量 Node 测试、Vitest、`build:desktop` 和 `desktop:pack` 通过。
 - 最新 unpacked 包测试模式日志包含 `tray ready`、后端 ready/stop 与强制退出，退出码为 0，残留进程为 0。
-
