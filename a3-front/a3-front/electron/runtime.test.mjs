@@ -175,6 +175,9 @@ test('preload exposes fixed request, stream, model profile, knowledge, and pet b
     'desktopState:',
     'desktopCompleteOnboarding:',
     'desktopInfo:',
+    'desktopDiagnostics:',
+    'desktopExportDiagnostics:',
+    'desktopCheckUpdates:',
   ]) {
     assert.match(preload, new RegExp(name))
   }

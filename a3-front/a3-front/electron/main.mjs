@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { awaitBackendStartup, shouldNotifyBackendExit, stopBackendProcess } from './backend-lifecycle.mjs'
 import { createBackendProxy } from './backend-proxy.mjs'
 import { createDesktopStateStore } from './desktop-state.mjs'
+import { createDesktopDiagnostics } from './desktop-diagnostics.mjs'
 import {
   desktopError,
   isTrustedDesktopSender,
@@ -52,6 +53,32 @@ let isQuitting = false
 const desktopStateStore = createDesktopStateStore({
   fs,
   filePath: path.join(app.getPath('userData'), 'desktop-state.json'),
+})
+const desktopDiagnostics = createDesktopDiagnostics({
+  fs,
+  logPath: electronLogPath(),
+  showSaveDialog: () => {
+    const options = {
+      title: '导出智学协作台诊断报告',
+      defaultPath: `A3-diagnostics-${new Date().toISOString().slice(0, 10)}.json`,
+      filters: [{ name: 'JSON 诊断报告', extensions: ['json'] }],
+    }
+    return mainWindow && !mainWindow.isDestroyed()
+      ? dialog.showSaveDialog(mainWindow, options)
+      : dialog.showSaveDialog(options)
+  },
+  context: async () => {
+    const info = await collectDesktopInfo()
+    return {
+      app_version: info.app_version,
+      platform: process.platform,
+      backend_ready: info.backend_ready,
+      ocr_available: info.ocr_available,
+      data_directory_ready: info.data_directory_ready,
+      model_configured: info.model_configured,
+      ai_paused: desktopStateStore.snapshot().ai_paused,
+    }
+  },
 })
 
 const petController = createPetController({
@@ -346,6 +373,45 @@ function showStartupError(error) {
   window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html><meta charset="utf-8"><style>body{margin:0;padding:42px;background:#f5efe6;color:#40372f;font:16px 'Microsoft YaHei',sans-serif}h1{font-size:24px}.card{padding:28px;background:#fffaf4;border:1px solid #e4d8ca;border-radius:18px}p{line-height:1.7;color:#6f6254}</style><main class="card"><h1>智学协作台未能启动</h1><p>本地学习服务尚未就绪。请检查安装文件或稍后重试。</p><p>${detail}</p></main>` )}`)
 }
 
+async function offerStartupDiagnostics(error) {
+  const result = await dialog.showMessageBox({
+    type: 'error',
+    title: '智学协作台启动失败',
+    message: '本地学习服务未能启动。',
+    detail: error instanceof Error ? error.message.slice(0, 500) : '未知错误',
+    buttons: ['导出诊断报告', '关闭'],
+    defaultId: 0,
+    cancelId: 1,
+  })
+  if (result.response === 0) await desktopDiagnostics.exportReport().catch(() => null)
+}
+
+async function collectDesktopInfo() {
+  let ocrAvailable = false
+  let ocrVersion = null
+  try {
+    const knowledgeStatus = await internalRuntimeRequest('GET', '/api/knowledge/status', undefined, true)
+    ocrAvailable = knowledgeStatus?.ocr_pack?.available === true
+    ocrVersion = typeof knowledgeStatus?.ocr_pack?.version === 'string' ? knowledgeStatus.ocr_pack.version : null
+  } catch {}
+  let modelConfigured = false
+  try {
+    const vault = await modelProfileVault.load()
+    modelConfigured = vault.profiles.some(profile => profile.enabled && typeof profile.api_key === 'string' && profile.api_key.length > 0)
+  } catch {}
+  const dataDirectoryReady = await fs.stat(app.getPath('userData')).then(value => value.isDirectory()).catch(() => false)
+  return {
+    app_version: app.getVersion(),
+    backend_protocol: 'a3-desktop-api/v1',
+    backend_ready: Boolean(backendRuntime),
+    data_directory_ready: dataDirectoryReady,
+    model_configured: modelConfigured,
+    ocr_available: ocrAvailable,
+    ocr_version: ocrVersion,
+    update_status: 'offline_build',
+  }
+}
+
 function trustedKnowledgeSender(event) {
   return Boolean(
     backendRuntime
@@ -458,30 +524,17 @@ ipcMain.handle('a3:desktop-complete-onboarding', async (event, input) => {
 })
 ipcMain.handle('a3:desktop-info', async event => {
   if (!trustedKnowledgeSender(event)) return { ok: false, status: 403, error: desktopError('DESKTOP_REQUEST_DENIED', '桌面信息请求被拒绝。') }
-  let ocrAvailable = false
-  try {
-    const knowledgeStatus = await internalRuntimeRequest('GET', '/api/knowledge/status', undefined, true)
-    ocrAvailable = knowledgeStatus?.ocr_pack?.available === true
-  } catch {}
-  let modelConfigured = false
-  try {
-    const vault = await modelProfileVault.load()
-    modelConfigured = vault.profiles.some(profile => profile.enabled && typeof profile.api_key === 'string' && profile.api_key.length > 0)
-  } catch {}
-  const dataDirectoryReady = await fs.stat(app.getPath('userData')).then(value => value.isDirectory()).catch(() => false)
-  return {
-    ok: true,
-    status: 200,
-    data: {
-      app_version: app.getVersion(),
-      backend_ready: Boolean(backendRuntime),
-      data_directory_ready: dataDirectoryReady,
-      model_configured: modelConfigured,
-      ocr_available: ocrAvailable,
-      update_status: 'offline_build',
-    },
-  }
+  return { ok: true, status: 200, data: await collectDesktopInfo() }
 })
+ipcMain.handle('a3:desktop-diagnostics', async event => trustedKnowledgeSender(event)
+  ? { ok: true, status: 200, data: await desktopDiagnostics.report() }
+  : { ok: false, status: 403, error: desktopError('DESKTOP_REQUEST_DENIED', '诊断请求被拒绝。') })
+ipcMain.handle('a3:desktop-export-diagnostics', async event => trustedKnowledgeSender(event)
+  ? { ok: true, status: 200, data: await desktopDiagnostics.exportReport() }
+  : { ok: false, status: 403, error: desktopError('DESKTOP_REQUEST_DENIED', '诊断导出请求被拒绝。') })
+ipcMain.handle('a3:desktop-check-updates', event => trustedKnowledgeSender(event)
+  ? { ok: true, status: 200, data: desktopDiagnostics.checkForUpdates() }
+  : { ok: false, status: 403, error: desktopError('DESKTOP_REQUEST_DENIED', '更新检查请求被拒绝。') })
 ipcMain.handle('a3:pet-ready', event => petController.isPetSender(event)
   ? petController.readyPayload()
   : deniedPetRequest())
@@ -522,6 +575,7 @@ app.whenReady().then(async () => {
   } catch (error) {
     await log(`startup failed: ${error instanceof Error ? error.message : String(error)}`)
     showStartupError(error)
+    void offerStartupDiagnostics(error)
   }
 })
 app.on('before-quit', () => {

@@ -1,7 +1,7 @@
 {
   "name": "a3-front",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "A3 本地优先的个性化学习多智能体桌面应用",
   "author": "Wei kb <212667660@qq.com>",
   "type": "module",
@@ -11,7 +11,7 @@
     "build": "vue-tsc -b && vite build",
     "build:desktop": "vue-tsc -b && vite build --base=./",
     "preview": "vite preview",
-    "test": "node --test electron/runtime.test.mjs electron/desktop-state.test.mjs electron/tray-lifecycle.test.mjs electron/backend-lifecycle.test.mjs electron/ipc-contract.test.mjs electron/backend-proxy.test.mjs electron/model-config.test.mjs electron/model-profile-vault.test.mjs electron/model-config-controller.test.mjs electron/model-profile-controller.test.mjs electron/knowledge-import.test.mjs electron/knowledge-controller.test.mjs electron/pet-config.test.mjs electron/pet-controller.test.mjs electron/pet-renderer.test.mjs electron/pet-audio.test.mjs electron/pet-character-import.test.mjs && vitest run",
+    "test": "node --test electron/runtime.test.mjs electron/desktop-state.test.mjs electron/desktop-diagnostics.test.mjs electron/tray-lifecycle.test.mjs electron/backend-lifecycle.test.mjs electron/ipc-contract.test.mjs electron/backend-proxy.test.mjs electron/model-config.test.mjs electron/model-profile-vault.test.mjs electron/model-config-controller.test.mjs electron/model-profile-controller.test.mjs electron/knowledge-import.test.mjs electron/knowledge-controller.test.mjs electron/pet-config.test.mjs electron/pet-controller.test.mjs electron/pet-renderer.test.mjs electron/pet-audio.test.mjs electron/pet-character-import.test.mjs && vitest run",
     "desktop:dev": "npm run build:desktop && electron .",
     "desktop:pack": "npm run build:desktop && electron-builder --dir",
     "desktop:dist": "npm run build:desktop && electron-builder --win nsis"

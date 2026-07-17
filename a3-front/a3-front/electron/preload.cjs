@@ -31,6 +31,9 @@ contextBridge.exposeInMainWorld('a3Desktop', Object.freeze({
   desktopState: () => ipcRenderer.invoke('a3:desktop-state'),
   desktopCompleteOnboarding: input => ipcRenderer.invoke('a3:desktop-complete-onboarding', input),
   desktopInfo: () => ipcRenderer.invoke('a3:desktop-info'),
+  desktopDiagnostics: () => ipcRenderer.invoke('a3:desktop-diagnostics'),
+  desktopExportDiagnostics: () => ipcRenderer.invoke('a3:desktop-export-diagnostics'),
+  desktopCheckUpdates: () => ipcRenderer.invoke('a3:desktop-check-updates'),
   startStream: (streamId, input) => ipcRenderer.send('a3:stream-start', streamId, input),
   cancelStream: (streamId) => ipcRenderer.send('a3:stream-cancel', streamId),
   onStreamEvent: (listener) => {

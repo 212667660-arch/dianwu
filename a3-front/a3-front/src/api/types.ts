@@ -4,7 +4,9 @@ export interface HealthStatus {
 }
 
 export interface DesktopState { version: 1; onboarding_completed: boolean; ai_paused: boolean }
-export interface DesktopInfo { app_version: string; backend_ready: boolean; data_directory_ready: boolean; model_configured: boolean; ocr_available: boolean; update_status: 'offline_build' | 'available' | 'current' | 'error' }
+export interface DesktopInfo { app_version: string; backend_protocol: string; backend_ready: boolean; data_directory_ready: boolean; model_configured: boolean; ocr_available: boolean; ocr_version: string | null; update_status: 'offline_build' | 'available' | 'current' | 'error' }
+export interface DesktopDiagnosticReport { generated_at?: string; app_version: string; platform: string; backend_ready: boolean; ocr_available: boolean; logs: string[] }
+export interface DesktopUpdateResult { status: 'offline_build' | 'available' | 'current' | 'error'; message: string }
 
 export interface SourceItem {
   title: string

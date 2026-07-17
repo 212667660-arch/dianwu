@@ -63,6 +63,12 @@ const routes = [
         component: () => import('@/views/ModelSettings.vue'),
         meta: { title: '模型设置', icon: Setting },
       },
+      {
+        path: '/desktop-settings',
+        name: 'DesktopSettings',
+        component: () => import('@/views/DesktopSettings.vue'),
+        meta: { title: '桌面设置', icon: Setting },
+      },
     ],
   },
 ]

@@ -5,7 +5,9 @@ import type {
   AttemptResponse,
   ChatResponse,
   DesktopInfo,
+  DesktopDiagnosticReport,
   DesktopState,
+  DesktopUpdateResult,
   HealthStatus,
   KnowledgeBinding,
   KnowledgeCollection,
@@ -75,10 +77,22 @@ export const backendApi = {
   },
   async desktopInfo(): Promise<DesktopInfo> {
     if (!window.a3Desktop?.desktopInfo) return {
-      app_version: 'web', backend_ready: true, data_directory_ready: true,
-      model_configured: false, ocr_available: false, update_status: 'offline_build',
+      app_version: 'web', backend_protocol: 'web-api', backend_ready: true, data_directory_ready: true,
+      model_configured: false, ocr_available: false, ocr_version: null, update_status: 'offline_build',
     }
     return desktopEnvelope<DesktopInfo>(await window.a3Desktop.desktopInfo())
+  },
+  async desktopDiagnostics(): Promise<DesktopDiagnosticReport> {
+    if (!window.a3Desktop?.desktopDiagnostics) return { app_version: 'web', platform: 'browser', backend_ready: true, ocr_available: false, logs: [] }
+    return desktopEnvelope<DesktopDiagnosticReport>(await window.a3Desktop.desktopDiagnostics())
+  },
+  async exportDesktopDiagnostics(): Promise<{ exported: boolean; file_name: string | null }> {
+    if (!window.a3Desktop?.desktopExportDiagnostics) return { exported: false, file_name: null }
+    return desktopEnvelope(await window.a3Desktop.desktopExportDiagnostics())
+  },
+  async checkDesktopUpdates(): Promise<DesktopUpdateResult> {
+    if (!window.a3Desktop?.desktopCheckUpdates) return { status: 'offline_build', message: '浏览器版本不执行桌面更新检查。' }
+    return desktopEnvelope<DesktopUpdateResult>(await window.a3Desktop.desktopCheckUpdates())
   },
   async live() {
     return activeTransport().request<HealthStatus>({ method: 'GET', path: '/health/live' })

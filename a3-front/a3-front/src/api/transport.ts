@@ -54,6 +54,9 @@ export interface DesktopBridge {
   desktopState?(): Promise<DesktopResponse>
   desktopCompleteOnboarding?(input: { offlineDemo: boolean }): Promise<DesktopResponse>
   desktopInfo?(): Promise<DesktopResponse>
+  desktopDiagnostics?(): Promise<DesktopResponse>
+  desktopExportDiagnostics?(): Promise<DesktopResponse>
+  desktopCheckUpdates?(): Promise<DesktopResponse>
   startStream(streamId: string, input: TransportRequest): void
   cancelStream(streamId: string): void
   onStreamEvent(listener: (message: DesktopStreamMessage) => void): () => void
