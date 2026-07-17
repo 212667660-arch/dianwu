@@ -60,7 +60,7 @@ function fakeWindow({ minimized = false, destroyed = false } = {}) {
 }
 
 
-function fixture({ window = fakeWindow(), requestQuit = () => {} } = {}) {
+function fixture({ window = fakeWindow(), requestQuit = () => {}, showPet = () => {}, getAiPaused = () => false, setAiPaused = async () => {} } = {}) {
   FakeTray.instances.length = 0
   return createTrayController({
     Tray: FakeTray,
@@ -68,6 +68,9 @@ function fixture({ window = fakeWindow(), requestQuit = () => {} } = {}) {
     icon: visibleIcon(),
     getMainWindow: () => window,
     requestQuit,
+    showPet,
+    getAiPaused,
+    setAiPaused,
   })
 }
 
@@ -84,20 +87,32 @@ test('tray click restores, shows, and focuses the main window', () => {
 })
 
 
-test('tray open and exit menu items call only their owned actions', () => {
+test('tray menu exposes main window pet AI pause and complete exit actions', async () => {
   const window = fakeWindow()
   let quits = 0
+  let petShows = 0
+  let paused = false
   const controller = fixture({
     window,
     requestQuit: () => { quits += 1 },
+    showPet: () => { petShows += 1 },
+    getAiPaused: () => paused,
+    setAiPaused: async value => { paused = value },
   })
 
-  const openItem = controller.menuTemplate.find(item => item.label === '打开智学协作台')
-  const exitItem = controller.menuTemplate.find(item => item.label === '退出智学协作台')
+  const openItem = controller.menuTemplate.find(item => item.label === '显示主窗口')
+  const petItem = controller.menuTemplate.find(item => item.label === '显示墨团')
+  const pauseItem = controller.menuTemplate.find(item => item.label === '暂停 AI')
+  const exitItem = controller.menuTemplate.find(item => item.label === '完全退出')
   openItem.click()
+  petItem.click()
+  await pauseItem.click()
   exitItem.click()
 
   assert.deepEqual(window.calls, ['show', 'focus'])
+  assert.equal(petShows, 1)
+  assert.equal(paused, true)
+  assert.equal(controller.menuTemplate.find(item => item.label === '继续 AI')?.label, '继续 AI')
   assert.equal(quits, 1)
 })
 

@@ -17,6 +17,7 @@ export function createBackendProxy({
   getMainWebContents,
   fetchImpl = fetch,
   log = async () => {},
+  isAiPaused = () => false,
 } = {}) {
   const streams = new Map()
 
@@ -39,6 +40,9 @@ export function createBackendProxy({
     const validation = validateDesktopRequest(input)
     if (!validation.ok) {
       return { ok: false, status: 400, error: validation.error }
+    }
+    if (aiPaused(isAiPaused) && isAiGenerationRoute(validation.value.path)) {
+      return aiPausedResponse()
     }
 
     let response
@@ -92,6 +96,10 @@ export function createBackendProxy({
     const validation = validateDesktopRequest(input, { stream: true })
     if (!validation.ok) {
       sendStreamMessage(event.sender, streamId, streamError(validation.error))
+      return
+    }
+    if (aiPaused(isAiPaused) && isAiGenerationRoute(validation.value.path)) {
+      sendStreamMessage(event.sender, streamId, streamError(aiPausedError(), 423))
       return
     }
     if (validation.value.method !== 'POST' || validation.value.path !== '/api/chat/stream') {
@@ -184,6 +192,24 @@ export function createBackendProxy({
       abortStream(stream)
     }
   }
+}
+
+function aiPaused(getter) {
+  try { return getter?.() === true } catch { return false }
+}
+
+function isAiGenerationRoute(path) {
+  return path === '/api/chat'
+    || path === '/api/chat/stream'
+    || /^\/api\/resource-bundles\/[^/]+\/artifacts\/[^/]+\/retry$/.test(path)
+}
+
+function aiPausedError() {
+  return desktopError('DESKTOP_AI_PAUSED', 'AI 已暂停，可从系统托盘继续。', true)
+}
+
+function aiPausedResponse() {
+  return { ok: false, status: 423, error: aiPausedError() }
 }
 
 function getCurrentRuntime(getRuntime) {

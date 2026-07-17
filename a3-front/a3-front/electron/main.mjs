@@ -230,6 +230,7 @@ async function startBackend() {
     getRuntime: () => backendRuntime,
     getMainWebContents: () => mainWindow?.webContents,
     log: entry => log(`backend proxy ${entry.event ?? 'event'}${entry.code ? `: ${entry.code}` : ''}`),
+    isAiPaused: () => desktopStateStore.snapshot().ai_paused,
   })
   await log(`backend ready on port ${port}`)
 }
@@ -322,6 +323,13 @@ async function createTray() {
     icon,
     getMainWindow: () => mainWindow,
     requestQuit: requestAppQuit,
+    showPet: () => { void petController.updateSettings({ visible: true }) },
+    getAiPaused: () => desktopStateStore.snapshot().ai_paused,
+    setAiPaused: async value => {
+      await desktopStateStore.setAiPaused(value)
+      if (value) backendProxy?.cleanupAll()
+      await log(`AI ${value ? 'paused' : 'resumed'} from tray`)
+    },
   })
   await log('tray ready')
 }

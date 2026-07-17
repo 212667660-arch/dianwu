@@ -5,7 +5,7 @@ import { createBackendProxy } from './backend-proxy.mjs'
 
 const FIVE_MIB = 5 * 1024 * 1024
 
-function createContext({ runtime, fetchImpl, log = async () => {} } = {}) {
+function createContext({ runtime, fetchImpl, log = async () => {}, isAiPaused = () => false } = {}) {
   const mainWebContents = { id: 1, isDestroyed: () => false, send() {} }
   const defaultRuntime = {
     baseUrl: 'http://127.0.0.1:8123/',
@@ -27,9 +27,33 @@ function createContext({ runtime, fetchImpl, log = async () => {} } = {}) {
       getMainWebContents: () => mainWebContents,
       fetchImpl,
       log,
+      isAiPaused,
     }),
   }
 }
+
+test('AI pause blocks ordinary and streaming generation before backend contact', async () => {
+  let fetchCalls = 0
+  const messages = []
+  const { event, mainWebContents, proxy } = createContext({
+    isAiPaused: () => true,
+    fetchImpl: async () => { fetchCalls += 1; return Response.json({}) },
+  })
+  mainWebContents.send = (_channel, payload) => messages.push(payload)
+
+  const result = await proxy.request(event, {
+    method: 'POST', path: '/api/chat', body: { session_id: 's1', message: 'hello' },
+  })
+  await proxy.startStream(event, 'paused_stream', {
+    method: 'POST', path: '/api/chat/stream', body: { session_id: 's1', message: 'hello' },
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.status, 423)
+  assert.equal(result.error.code, 'DESKTOP_AI_PAUSED')
+  assert.equal(messages[0].error.code, 'DESKTOP_AI_PAUSED')
+  assert.equal(fetchCalls, 0)
+})
 
 function sseResponse(chunks, { status = 200, headers = {} } = {}) {
   const encoder = new TextEncoder()
