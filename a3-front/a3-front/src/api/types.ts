@@ -374,6 +374,7 @@ export type PetSpeed = 0.5 | 0.75 | 1 | 1.25 | 1.5 | 2
 
 export interface PetSettings {
   visible: boolean
+  alwaysOnTop: boolean
   scale: PetScale
   speed: PetSpeed
   soundEnabled: boolean

@@ -405,7 +405,7 @@ function unavailablePetSnapshot(): PetSnapshot {
     available: false,
     pet: null,
     settings: {
-      visible: false, scale: 1, speed: 1,
+      visible: false, alwaysOnTop: true, scale: 1, speed: 1,
       soundEnabled: false, soundVolume: 0.5, voiceEnabled: false, voiceVolume: 0.75,
     },
     state: 'idle',

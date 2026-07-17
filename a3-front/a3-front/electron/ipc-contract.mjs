@@ -41,7 +41,7 @@ const TEXTBOOK_OFFICIAL_URLS = Object.freeze({
   'pep-junior-math': 'https://jc.pep.com.cn/?filed=%E5%88%9D%E4%B8%AD&subject=%E6%95%B0%E5%AD%A6',
   'pep-high-math': 'https://jc.pep.com.cn/?filed=%E9%AB%98%E4%B8%AD&subject=%E6%95%B0%E5%AD%A6',
 })
-const PET_SETTINGS_FIELDS = new Set(['visible', 'scale', 'speed', 'soundEnabled', 'soundVolume', 'voiceEnabled', 'voiceVolume'])
+const PET_SETTINGS_FIELDS = new Set(['visible', 'alwaysOnTop', 'scale', 'speed', 'soundEnabled', 'soundVolume', 'voiceEnabled', 'voiceVolume'])
 const PET_SCALE_VALUES = new Set([0.5, 0.75, 1, 1.25, 1.5])
 const PET_SPEED_VALUES = new Set([0.5, 0.75, 1, 1.25, 1.5, 2])
 const PET_VOLUME_VALUES = new Set([0, 0.25, 0.5, 0.75, 1])
@@ -341,6 +341,10 @@ export function validatePetSettingsInput(input) {
   if (Object.hasOwn(input, 'visible')) {
     if (typeof input.visible !== 'boolean') return invalid('Pet visibility is invalid.')
     value.visible = input.visible
+  }
+  if (Object.hasOwn(input, 'alwaysOnTop')) {
+    if (typeof input.alwaysOnTop !== 'boolean') return invalid('Pet always-on-top setting is invalid.')
+    value.alwaysOnTop = input.alwaysOnTop
   }
   if (Object.hasOwn(input, 'scale')) {
     if (!PET_SCALE_VALUES.has(input.scale)) return invalid('Pet scale is invalid.')

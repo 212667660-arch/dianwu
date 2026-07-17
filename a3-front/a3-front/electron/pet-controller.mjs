@@ -10,6 +10,7 @@ import {
 
 const DEFAULT_SETTINGS = Object.freeze({
   visible: true,
+  alwaysOnTop: true,
   scale: 1,
   speed: 1,
   soundEnabled: true,
@@ -68,7 +69,7 @@ export function createPetController({
       height: bounds.height,
       transparent: true,
       frame: false,
-      alwaysOnTop: true,
+      alwaysOnTop: settings.alwaysOnTop,
       skipTaskbar: true,
       resizable: false,
       movable: false,
@@ -126,6 +127,7 @@ export function createPetController({
         if (settings.visible) petWindow.showInactive()
         else petWindow.hide()
       }
+      if (Object.hasOwn(patch, 'alwaysOnTop')) petWindow.setAlwaysOnTop(settings.alwaysOnTop)
     }
 
     await persist()

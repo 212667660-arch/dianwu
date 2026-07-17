@@ -14,6 +14,14 @@
       <label for="pet-visible">显示伙伴</label>
       <input id="pet-visible" data-test="pet-visible" type="checkbox" :checked="snapshot.settings.visible" :disabled="busy || !snapshot.available" @change="changeVisible">
     </div>
+    <div class="pet-control visible-control">
+      <label for="pet-always-on-top">始终置顶</label>
+      <input id="pet-always-on-top" data-test="pet-always-on-top" type="checkbox" :checked="snapshot.settings.alwaysOnTop" :disabled="busy || !snapshot.available" @change="changeAlwaysOnTop">
+    </div>
+    <div class="preview-block">
+      <small>动作预览</small>
+      <div><button v-for="item in previewStates" :key="item.state" :data-test="`pet-preview-${item.state}`" type="button" :disabled="busy || !snapshot.available" @click="preview(item.state)">{{ item.label }}</button></div>
+    </div>
     <div class="audio-block">
       <div class="pet-control"><label for="pet-sound-enabled">动作音效</label><input id="pet-sound-enabled" data-test="pet-sound-enabled" type="checkbox" :checked="snapshot.settings.soundEnabled" :disabled="busy || !snapshot.available" @change="changeSoundEnabled"></div>
       <select data-test="pet-sound-volume" :value="snapshot.settings.soundVolume" :disabled="busy || !snapshot.available || !snapshot.settings.soundEnabled" @change="changeSoundVolume">
@@ -52,18 +60,23 @@ const speeds: PetSettings['speed'][] = [0.5, 0.75, 1, 1.25, 1.5, 2]
 const volumes: PetVolume[] = [0, 0.25, 0.5, 0.75, 1]
 const snapshot = reactive<PetSnapshot>({
   available: false, pet: null,
-  settings: { visible: false, scale: 1, speed: 1, soundEnabled: false, soundVolume: 0.5, voiceEnabled: false, voiceVolume: 0.75 },
+  settings: { visible: false, alwaysOnTop: true, scale: 1, speed: 1, soundEnabled: false, soundVolume: 0.5, voiceEnabled: false, voiceVolume: 0.75 },
   state: 'idle',
 })
 const busy = ref(false)
 const message = ref('')
 const stateLabel = computed(() => ({ idle: '安静陪伴', running: '正在努力', waiting: '等你回来', review: '认真检查', failed: '需要安慰' }[snapshot.state]))
+const previewStates = [
+  { state: 'idle', label: '休息' }, { state: 'running', label: '学习' }, { state: 'waiting', label: '等待' },
+  { state: 'review', label: '复核' }, { state: 'failed', label: '鼓励' },
+] as const
 
 onMounted(async () => {
   try { applySnapshot(await backendApi.pet()) }
   catch { message.value = '桌宠设置暂时无法读取。' }
 })
 function changeVisible(event: Event) { void update({ visible: (event.target as HTMLInputElement).checked }) }
+function changeAlwaysOnTop(event: Event) { void update({ alwaysOnTop: (event.target as HTMLInputElement).checked }) }
 function changeScale(event: Event) { void update({ scale: Number((event.target as HTMLSelectElement).value) as PetSettings['scale'] }) }
 function changeSpeed(event: Event) { void update({ speed: Number((event.target as HTMLSelectElement).value) as PetSettings['speed'] }) }
 function changeSoundEnabled(event: Event) { void update({ soundEnabled: (event.target as HTMLInputElement).checked }) }
@@ -72,6 +85,13 @@ function changeVoiceEnabled(event: Event) { void update({ voiceEnabled: (event.t
 function changeVoiceVolume(event: Event) { void update({ voiceVolume: Number((event.target as HTMLSelectElement).value) as PetVolume }) }
 async function chooseCharacter() { await runAction(() => backendApi.choosePetCharacter()) }
 async function resetCharacter() { await runAction(() => backendApi.resetPetCharacter()) }
+async function preview(state: typeof previewStates[number]['state']) {
+  busy.value = true
+  message.value = ''
+  try { snapshot.state = await backendApi.setPetTaskState(state) }
+  catch { message.value = '动作预览暂时不可用。' }
+  finally { busy.value = false }
+}
 async function runAction(action: () => Promise<PetSnapshot>) {
   busy.value = true
   message.value = ''
@@ -122,5 +142,5 @@ function speedLabel(value: number) {
 .audio-block { display: grid; gap: 6px; margin-top: 10px; padding-top: 9px; border-top: 1px dashed #dce5df; }
 .audio-block select { padding: 6px 7px; color: #526f6e; font-size: 10px; background: rgba(255,255,255,.72); border: 1px solid #d9e4dd; border-radius: 8px; }
 .audio-block small { color: #9b9186; font-size: 8px; line-height: 1.45; }
-.pet-message { display: block; margin-top: 8px; color: #aa6c5f; font-size: 9px; }
+.preview-block{margin-top:10px;padding-top:9px;border-top:1px dashed #dce5df}.preview-block>small{color:#8a8178;font-size:9px}.preview-block div{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}.preview-block button{padding:5px 7px;color:#587b77;font-size:8px;background:#fff;border:1px solid #d8e4dd;border-radius:7px;cursor:pointer}.preview-block button:disabled{opacity:.45}.pet-message { display: block; margin-top: 8px; color: #aa6c5f; font-size: 9px; }
 </style>

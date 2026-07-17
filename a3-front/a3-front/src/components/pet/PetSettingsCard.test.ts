@@ -6,6 +6,7 @@ const apiMock = vi.hoisted(() => ({
   updatePetSettings: vi.fn(),
   choosePetCharacter: vi.fn(),
   resetPetCharacter: vi.fn(),
+  setPetTaskState: vi.fn(),
 }))
 vi.mock('@/api', () => ({ backendApi: apiMock }))
 
@@ -17,16 +18,17 @@ describe('PetSettingsCard', () => {
     apiMock.pet.mockResolvedValue({
       available: true,
       pet: { id: 'motuan', displayName: '墨团', description: '学习伙伴' },
-      settings: { visible: true, scale: 1, speed: 1, soundEnabled: true, soundVolume: 0.5, voiceEnabled: false, voiceVolume: 0.75 },
+      settings: { visible: true, alwaysOnTop: true, scale: 1, speed: 1, soundEnabled: true, soundVolume: 0.5, voiceEnabled: false, voiceVolume: 0.75 },
       state: 'idle',
     })
     apiMock.updatePetSettings.mockImplementation(async patch => ({
       available: true,
       pet: { id: 'motuan', displayName: '墨团', description: '学习伙伴' },
-      settings: { visible: true, scale: 1, speed: 1, soundEnabled: true, soundVolume: 0.5, voiceEnabled: false, voiceVolume: 0.75, ...patch },
+      settings: { visible: true, alwaysOnTop: true, scale: 1, speed: 1, soundEnabled: true, soundVolume: 0.5, voiceEnabled: false, voiceVolume: 0.75, ...patch },
       state: 'idle',
     }))
   })
+  apiMock.setPetTaskState.mockImplementation(async state => state)
 
   it('loads and updates visibility scale and animation speed', async () => {
     const wrapper = mount(PetSettingsCard)
@@ -48,6 +50,19 @@ describe('PetSettingsCard', () => {
     expect(apiMock.updatePetSettings).toHaveBeenNthCalledWith(5, { soundEnabled: false })
     expect(apiMock.updatePetSettings).toHaveBeenNthCalledWith(6, { voiceEnabled: true })
     expect(apiMock.updatePetSettings).toHaveBeenNthCalledWith(7, { voiceVolume: 1 })
+  })
+
+  it('toggles always-on-top and previews learning-state actions', async () => {
+    const wrapper = mount(PetSettingsCard)
+    await flushPromises()
+
+    await wrapper.get('[data-test="pet-always-on-top"]').setValue(false)
+    await wrapper.get('[data-test="pet-preview-running"]').trigger('click')
+    await flushPromises()
+
+    expect(apiMock.updatePetSettings).toHaveBeenCalledWith({ alwaysOnTop: false })
+    expect(apiMock.setPetTaskState).toHaveBeenCalledWith('running')
+    expect(wrapper.text()).toContain('正在努力')
   })
 
   it('degrades safely in browser mode', async () => {

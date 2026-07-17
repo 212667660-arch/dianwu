@@ -44,6 +44,7 @@ class FakeWindow {
     this.destroyed = false
     this.bounds = { x: options.x, y: options.y, width: options.width, height: options.height }
     this.loaded = ''
+    this.alwaysOnTopCalls = []
     FakeWindow.created.push(this)
   }
   loadFile(file) { this.loaded = file }
@@ -55,6 +56,7 @@ class FakeWindow {
   getBounds() { return { ...this.bounds } }
   setBounds(bounds) { this.bounds = { ...this.bounds, ...bounds } }
   setPosition(x, y) { this.bounds.x = x; this.bounds.y = y }
+  setAlwaysOnTop(value) { this.alwaysOnTopCalls.push(value) }
   on() {}
 }
 
@@ -131,7 +133,7 @@ test('controller persists visibility scale speed and restores the saved position
   await controller.prepare()
   const window = controller.createWindow()
 
-  await controller.updateSettings({ visible: false, scale: 1.5, speed: 0.75 })
+  await controller.updateSettings({ visible: false, scale: 1.5, speed: 0.75, alwaysOnTop: false })
   assert.equal(window.visible, false)
   assert.equal(window.getBounds().width, 288)
   assert.equal(window.getBounds().height, 312)
@@ -140,6 +142,8 @@ test('controller persists visibility scale speed and restores the saved position
   assert.equal(controller.snapshot().settings.soundVolume, 0.5)
   assert.equal(controller.snapshot().settings.voiceEnabled, false)
   assert.equal(controller.snapshot().settings.voiceVolume, 0.75)
+  assert.equal(controller.snapshot().settings.alwaysOnTop, false)
+  assert.deepEqual(window.alwaysOnTopCalls, [false])
 
   controller.beginDrag({ screenX: 900, screenY: 500 })
   await controller.moveDrag({ screenX: 2500, screenY: 950 })
@@ -160,6 +164,8 @@ test('controller persists visibility scale speed and restores the saved position
   await restored.prepare()
   const restoredWindow = restored.createWindow({ forceHidden: true })
   assert.equal(restored.snapshot().settings.scale, 1.5)
+  assert.equal(restored.snapshot().settings.alwaysOnTop, false)
+  assert.equal(restoredWindow.options.alwaysOnTop, false)
   assert.equal(restoredWindow.getBounds().x, 2312)
   assert.equal(restoredWindow.getBounds().y, 588)
   assert.equal(restoredWindow.visible, false)

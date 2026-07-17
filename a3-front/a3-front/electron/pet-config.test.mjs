@@ -67,6 +67,7 @@ test('pet settings accept only fixed visibility scale and speed values', () => {
     scale: 1.25,
     speed: 1.5,
   })
+  assert.deepEqual(validatePetSettingsPatch({ alwaysOnTop: false }), { alwaysOnTop: false })
   assert.deepEqual(validatePetSettingsPatch({ visible: true }), { visible: true })
   assert.deepEqual(validatePetSettingsPatch({
     soundEnabled: false, soundVolume: 0.25, voiceEnabled: true, voiceVolume: 0.75,
@@ -78,6 +79,7 @@ test('pet settings accept only fixed visibility scale and speed values', () => {
   assert.throws(() => validatePetSettingsPatch({ visible: true, path: 'C:\\secret' }))
   assert.throws(() => validatePetSettingsPatch({ soundVolume: 0.4 }))
   assert.throws(() => validatePetSettingsPatch({ voiceEnabled: 'yes' }))
+  assert.throws(() => validatePetSettingsPatch({ alwaysOnTop: 'yes' }))
 })
 
 test('pet bounds clamp inside the nearest display including negative desktop coordinates', () => {

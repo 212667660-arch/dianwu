@@ -20,7 +20,7 @@ export const PET_TASK_STATES = Object.freeze(['idle', 'running', 'waiting', 'rev
 const MANIFEST_FIELDS = new Set([
   'id', 'displayName', 'description', 'spritesheetPath', 'cell', 'grid', 'animations',
 ])
-const SETTINGS_FIELDS = new Set(['visible', 'scale', 'speed', 'soundEnabled', 'soundVolume', 'voiceEnabled', 'voiceVolume'])
+const SETTINGS_FIELDS = new Set(['visible', 'alwaysOnTop', 'scale', 'speed', 'soundEnabled', 'soundVolume', 'voiceEnabled', 'voiceVolume'])
 
 export function validatePetManifest(input) {
   if (!isPlainObject(input) || !hasOnlyFields(input, MANIFEST_FIELDS)) {
@@ -88,6 +88,10 @@ export function validatePetSettingsPatch(input) {
   if (Object.hasOwn(input, 'visible')) {
     if (typeof input.visible !== 'boolean') throw new TypeError('Pet visibility is invalid.')
     value.visible = input.visible
+  }
+  if (Object.hasOwn(input, 'alwaysOnTop')) {
+    if (typeof input.alwaysOnTop !== 'boolean') throw new TypeError('Pet always-on-top setting is invalid.')
+    value.alwaysOnTop = input.alwaysOnTop
   }
   if (Object.hasOwn(input, 'scale')) {
     if (!PET_SCALE_VALUES.includes(input.scale)) throw new TypeError('Pet scale is invalid.')
