@@ -44,6 +44,20 @@ _COORDINATORS: dict[str, "KnowledgeImportCoordinator"] = {}
 logger = logging.getLogger(__name__)
 
 
+def parse_timeout_for_bytes(
+    byte_size: int,
+    *,
+    base_seconds: float = 120,
+    maximum_seconds: float = 900,
+) -> float:
+    hundred_mib = 100 * 1024 * 1024
+    fifty_mib = 50 * 1024 * 1024
+    if byte_size <= hundred_mib:
+        return base_seconds
+    extra_chunks = (byte_size - hundred_mib + fifty_mib - 1) // fifty_mib
+    return min(maximum_seconds, base_seconds + extra_chunks * 60)
+
+
 class WorkerReportedFailure(RuntimeError):
     def __init__(self, code: str, retryable: bool):
         super().__init__(code)
@@ -279,9 +293,14 @@ class KnowledgeImportService:
             async with self._active_lock:
                 self._active[job_id] = process
             self._transition(job_id, ImportJobStatus.PARSING, 5)
+            document = self.repository.require_document(current.document_id)
+            timeout_seconds = parse_timeout_for_bytes(
+                getattr(document, "byte_size", 0),
+                base_seconds=self.parse_timeout_seconds,
+            )
             done = await asyncio.wait_for(
                 self._consume(job_id, process),
-                timeout=self.parse_timeout_seconds,
+                timeout=timeout_seconds,
             )
             current = self._refresh_job(job_id)
             if current.cancel_requested:

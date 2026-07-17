@@ -17,6 +17,7 @@ from backend.knowledge.import_service import DEFAULT_LIMITS, spawn_isolated_work
 from backend.knowledge.worker_protocol import (
     BlockEvent,
     DoneEvent,
+    ProgressEvent,
     WorkerRequest,
     parse_worker_line,
 )
@@ -104,6 +105,26 @@ def test_blank_pdf_is_marked_for_ocr(tmp_path: Path) -> None:
 
     assert result.ocr_required is True
     assert result.page_count == 1
+
+
+def test_pdf_parser_reports_page_progress_before_completion(tmp_path: Path) -> None:
+    path = tmp_path / "progress.pdf"
+    pdf = fitz.open()
+    for index in range(3):
+        page = pdf.new_page()
+        page.insert_text((72, 72), f"Page {index + 1}")
+    pdf.save(path)
+    pdf.close()
+    progress: list[tuple[int, int]] = []
+
+    result = parse_document(
+        path,
+        ParserLimits(),
+        progress_callback=lambda current, total: progress.append((current, total)),
+    )
+
+    assert result.page_count == 3
+    assert progress == [(1, 3), (2, 3), (3, 3)]
 
 
 def test_rejects_encrypted_pdf_and_fake_signature(tmp_path: Path) -> None:
@@ -199,5 +220,39 @@ def test_isolated_worker_parses_controlled_object_and_emits_jsonl(tmp_path: Path
         assert await process.wait() == 0
         assert any(isinstance(event, BlockEvent) for event in events)
         assert isinstance(events[-1], DoneEvent)
+
+    asyncio.run(exercise())
+
+
+def test_isolated_pdf_worker_emits_page_progress_before_blocks(tmp_path: Path) -> None:
+    async def exercise() -> None:
+        digest = "b" * 64
+        objects = tmp_path / "knowledge" / "objects"
+        objects.mkdir(parents=True)
+        pdf = fitz.open()
+        for index in range(3):
+            page = pdf.new_page()
+            page.insert_text((72, 72), f"Page {index + 1}")
+        pdf.save(objects / digest)
+        pdf.close()
+        process = await spawn_isolated_worker(
+            WorkerRequest(
+                job_id=1,
+                object_relpath=f"objects/{digest}",
+                extension=".pdf",
+                limits=DEFAULT_LIMITS,
+            ),
+            object_root=objects,
+        )
+        assert process.stdout is not None
+        events = []
+        while line := await process.stdout.readline():
+            events.append(parse_worker_line(line))
+        assert await process.wait() == 0
+        first_block = next(index for index, event in enumerate(events) if isinstance(event, BlockEvent))
+        assert any(
+            isinstance(event, ProgressEvent) and event.progress > 5
+            for event in events[:first_block]
+        )
 
     asyncio.run(exercise())

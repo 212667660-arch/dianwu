@@ -14,12 +14,21 @@ from backend.database import Base
 from backend.knowledge.import_service import (
     KnowledgeImportCoordinator,
     KnowledgeImportService,
+    parse_timeout_for_bytes,
     worker_environment,
 )
 from backend.knowledge.models import ImportJobStatus
 from backend.knowledge.repository import KnowledgeRepository
 from backend.knowledge.search import KnowledgeSearchRepository
 from backend.knowledge.worker_protocol import DoneEvent
+
+
+def test_parse_timeout_scales_for_large_files_with_a_hard_cap() -> None:
+    mib = 1024 * 1024
+    assert parse_timeout_for_bytes(100 * mib, base_seconds=120) == 120
+    assert parse_timeout_for_bytes(188 * mib, base_seconds=120) == 240
+    assert parse_timeout_for_bytes(500 * mib, base_seconds=120) == 600
+    assert parse_timeout_for_bytes(10_000 * mib, base_seconds=120) == 900
 
 
 @dataclass(frozen=True)

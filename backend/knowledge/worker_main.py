@@ -65,10 +65,20 @@ def main() -> int:
         request = WorkerRequest.model_validate_json(raw)
         path = safe_object_path(request)
         emit(ProgressEvent(progress=5, stage="parsing"))
+
+        def report_parse_progress(current: int, total: int) -> None:
+            emit(
+                ProgressEvent(
+                    progress=min(65, 5 + int(current * 60 / max(total, 1))),
+                    stage="parsing",
+                )
+            )
+
         result = parse_document(
             path,
             ParserLimits(**request.limits),
             extension=request.extension,
+            progress_callback=report_parse_progress,
         )
         total = max(len(result.blocks), 1)
         for ordinal, block in enumerate(result.blocks):
@@ -85,7 +95,7 @@ def main() -> int:
             )
             emit(
                 ProgressEvent(
-                    progress=min(90, 5 + int((ordinal + 1) * 85 / total)),
+                    progress=min(90, 65 + int((ordinal + 1) * 25 / total)),
                     stage="parsing",
                 )
             )

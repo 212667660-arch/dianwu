@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import codecs
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 import re
@@ -150,7 +151,11 @@ def _validate_office_archive(path: Path, limits: ParserLimits) -> None:
         raise KnowledgeParseError("KNOWLEDGE_PARSE_FAILED") from exc
 
 
-def _parse_pdf(path: Path, limits: ParserLimits) -> ParsedDocument:
+def _parse_pdf(
+    path: Path,
+    limits: ParserLimits,
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> ParsedDocument:
     collector = _BlockCollector(limits)
     try:
         document = fitz.open(path)
@@ -172,6 +177,8 @@ def _parse_pdf(path: Path, limits: ParserLimits) -> ParsedDocument:
                     locator_end=index,
                 )
             )
+            if progress_callback is not None:
+                progress_callback(index, page_count)
         average = collector.characters / max(page_count, 1)
         return collector.result(
             page_count=page_count,
@@ -440,6 +447,7 @@ def parse_document(
     limits: ParserLimits,
     *,
     extension: str | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> ParsedDocument:
     file_path = Path(path)
     selected_extension = (extension or file_path.suffix).lower()
@@ -461,6 +469,8 @@ def parse_document(
         ".markdown": _parse_markdown,
     }[selected_extension]
     try:
+        if selected_extension == ".pdf":
+            return _parse_pdf(file_path, limits, progress_callback)
         return parser(file_path, limits)
     except KnowledgeParseError:
         raise
