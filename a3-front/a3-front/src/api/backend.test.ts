@@ -291,17 +291,14 @@ describe('knowledge API', () => {
     }
 
     await backendApi.textbookCatalog({ stage: '高中', subject: '数学', publisher: '人民教育出版社' })
-    await backendApi.openOfficialTextbook('pep-high-math', 'https://jc.pep.com.cn/?filed=高中&subject=数学')
+    await backendApi.openOfficialTextbook('pep-high-math')
 
     expect(request).toHaveBeenCalledWith({
       method: 'GET',
       path: '/api/knowledge/textbooks',
       query: { stage: '高中', subject: '数学', publisher: '人民教育出版社' },
     })
-    expect(knowledgeOpenOfficialTextbook).toHaveBeenCalledWith(
-      'pep-high-math',
-      'https://jc.pep.com.cn/?filed=高中&subject=数学',
-    )
+    expect(knowledgeOpenOfficialTextbook).toHaveBeenCalledWith('pep-high-math')
   })
 
   it('uses fixed desktop import bridge and posts no renderer paths', async () => {

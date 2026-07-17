@@ -44,7 +44,7 @@ export interface DesktopBridge {
   knowledgeImportDroppedFiles?(files: FileList | File[], collectionId: number): Promise<DesktopResponse>
   knowledgeRevealSource?(documentId: number): Promise<DesktopResponse>
   knowledgeOpenSource?(documentId: number, locator: KnowledgeLocator): Promise<DesktopResponse>
-  knowledgeOpenOfficialTextbook?(sourceId: string, url: string): Promise<DesktopResponse>
+  knowledgeOpenOfficialTextbook?(sourceId: string): Promise<DesktopResponse>
   knowledgeOnImportProgress?(listener: (jobs: KnowledgeImportBatch['jobs']) => void): () => void
   petGet?(): Promise<DesktopResponse>
   petUpdateSettings?(input: Partial<PetSettings>): Promise<DesktopResponse>

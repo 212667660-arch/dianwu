@@ -18,12 +18,9 @@ import {
   validateDesktopRequest,
 } from './ipc-contract.mjs'
 
-test('official textbook links accept only controlled PEP HTTPS URLs', () => {
+test('official textbook links resolve only exact catalog source IDs', () => {
   assert.deepEqual(
-    validateTextbookOpen({
-      sourceId: 'pep-high-math',
-      url: 'https://jc.pep.com.cn/?filed=%E9%AB%98%E4%B8%AD&subject=%E6%95%B0%E5%AD%A6',
-    }),
+    validateTextbookOpen({ sourceId: 'pep-high-math' }),
     {
       ok: true,
       value: {
@@ -33,10 +30,9 @@ test('official textbook links accept only controlled PEP HTTPS URLs', () => {
     },
   )
   for (const input of [
-    { sourceId: 'pep-high-math', url: 'https://attacker.example/book' },
-    { sourceId: '../bad', url: 'https://jc.pep.com.cn/' },
-    { sourceId: 'pep-high-math', url: 'http://jc.pep.com.cn/' },
-    { sourceId: 'pep-high-math', url: 'https://jc.pep.com.cn/#fragment' },
+    { sourceId: 'unknown-textbook' },
+    { sourceId: '../bad' },
+    { sourceId: 'pep-high-math', url: 'https://jc.pep.com.cn/other' },
   ]) {
     assert.equal(validateTextbookOpen(input).ok, false)
   }

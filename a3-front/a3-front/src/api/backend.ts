@@ -249,9 +249,9 @@ export const backendApi = {
     if (!window.a3Desktop?.knowledgeOpenSource) throw new Error('来源预览仅桌面版可用。')
     return desktopEnvelope<{ mode: string; displayName: string }>(await window.a3Desktop.knowledgeOpenSource(documentId, locator))
   },
-  async openOfficialTextbook(sourceId: string, url: string) {
+  async openOfficialTextbook(sourceId: string) {
     if (!window.a3Desktop?.knowledgeOpenOfficialTextbook) throw new Error('官方教材在线阅读仅桌面版可用。')
-    return desktopEnvelope<{ sourceId: string }>(await window.a3Desktop.knowledgeOpenOfficialTextbook(sourceId, url))
+    return desktopEnvelope<{ sourceId: string }>(await window.a3Desktop.knowledgeOpenOfficialTextbook(sourceId))
   },
   async pet(): Promise<PetSnapshot> {
     const bridge = window.a3Desktop

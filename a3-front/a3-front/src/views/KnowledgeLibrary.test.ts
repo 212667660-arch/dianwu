@@ -70,10 +70,7 @@ it('shows and opens the authorized textbook catalog', async () => {
   await wrapper.get('[aria-label="在线阅读 人教版高中数学教材电子版目录"]').trigger('click')
   await flushPromises()
 
-  expect(apiMock.openOfficialTextbook).toHaveBeenCalledWith(
-    'pep-high-math',
-    'https://jc.pep.com.cn/?filed=高中&subject=数学',
-  )
+  expect(apiMock.openOfficialTextbook).toHaveBeenCalledWith('pep-high-math')
 })
 
 it('launches SmartTutor with the selected collection and a textbook summary prompt', async () => {

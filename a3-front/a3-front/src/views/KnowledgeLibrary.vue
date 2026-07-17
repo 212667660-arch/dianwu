@@ -165,7 +165,7 @@ async function openDocument(id: number) {
 
 async function openOfficialTextbook(item: TextbookCatalogItem) {
   try {
-    await backendApi.openOfficialTextbook(item.source_id, item.official_url)
+    await backendApi.openOfficialTextbook(item.source_id)
   } catch (error) {
     ElMessage.error(errorMessage(error))
   }
