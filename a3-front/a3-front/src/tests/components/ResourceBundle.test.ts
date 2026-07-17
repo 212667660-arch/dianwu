@@ -132,4 +132,24 @@ describe("ResourceBundle", () => {
     expect(blockedCard.text()).toContain("内容未通过安全检查");
     expect(blockedCard.text()).not.toContain("ACTIVE_CONTENT_BLOCKED");
   });
+
+  it("shows the independent answer reviewer verdict", async () => {
+    const reviewed: ResourceBundleType = {
+      ...mockBundle,
+      artifacts: [{
+        ...mockBundle.artifacts[0],
+        type_specific_data: {
+          answer_review: {
+            agent: 'answer-reviewer/v1', status: 'REPAIRED', issues: [],
+            repair_attempted: true, formula_checked: true, substitution_checked: true,
+          },
+        },
+      }, mockBundle.artifacts[1]],
+    }
+    const wrapper = mount(ResourceBundle, { props: { bundle: reviewed } })
+    const card = wrapper.findAll('.resource-card')[0]
+
+    expect(card.text()).toContain('答案复核：已修正')
+    expect(card.text()).toContain('公式与代入已检查')
+  })
 });

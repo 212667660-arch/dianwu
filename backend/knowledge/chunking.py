@@ -63,6 +63,13 @@ def _compatible(left: StructuredBlock, right: StructuredBlock) -> bool:
         left.locator_type == right.locator_type
         and left.sheet_name == right.sheet_name
         and tuple(left.heading_path) == tuple(right.heading_path)
+        and (
+            left.locator_type != "page"
+            or (
+                left.locator_start == right.locator_start
+                and left.locator_end == right.locator_end
+            )
+        )
         and right.locator_start <= left.locator_end + 1
     )
 

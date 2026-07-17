@@ -7,6 +7,8 @@
         {{ artifact.status === 'SUCCEEDED' ? '✅' : artifact.status === 'FAILED' ? '❌' : '⏹' }}
       </span>
       <span class="card-score">质量: {{ artifact.quality_score }}</span>
+      <span v-if="answerReview" class="review-badge" :class="answerReview.status.toLowerCase()">答案复核：{{ reviewLabel }}</span>
+      <span v-if="answerReview?.formula_checked && answerReview?.substitution_checked" class="review-detail">公式与代入已检查</span>
       <button class="card-toggle">{{ expanded ? '收起' : '展开' }}</button>
     </div>
     <div v-if="expanded" class="card-body">
@@ -79,6 +81,19 @@ const mindMapOutline = computed(() => {
   return typeof outline === "string" ? outline : undefined;
 });
 
+const answerReview = computed(() => {
+  const value = props.artifact.type_specific_data?.answer_review
+  if (!value || typeof value !== 'object') return null
+  const item = value as Record<string, unknown>
+  if (!['PASSED', 'REPAIRED', 'WARNING'].includes(String(item.status))) return null
+  return {
+    status: String(item.status) as 'PASSED' | 'REPAIRED' | 'WARNING',
+    formula_checked: item.formula_checked === true,
+    substitution_checked: item.substitution_checked === true,
+  }
+})
+const reviewLabel = computed(() => ({ PASSED: '已通过', REPAIRED: '已修正', WARNING: '需人工核对' }[answerReview.value?.status || 'PASSED']))
+
 function toggle() {
   expanded.value = !expanded.value;
 }
@@ -115,6 +130,7 @@ async function copyContent() {
 .card-title { font-weight: 600; flex: 1; }
 .card-status { font-size: 16px; }
 .card-score { font-size: 12px; color: #9ca3af; }
+.review-badge,.review-detail{padding:2px 6px;border-radius:999px;font-size:10px}.review-badge{color:#446f67;background:#e5f4ed}.review-badge.repaired{color:#725d35;background:#fff0cf}.review-badge.warning{color:#8c4d49;background:#fde7e4}.review-detail{color:#617b79;background:#edf4f2}
 .card-toggle {
   font-size: 12px; padding: 2px 8px;
   border: 1px solid #d1d5db; border-radius: 4px;

@@ -75,7 +75,10 @@ def _sqlite_migrate() -> None:
                 aggregate_quality REAL NOT NULL DEFAULT 0.0,
                 created_at VARCHAR(64) NOT NULL DEFAULT '',
                 knowledge_sources_json TEXT NOT NULL DEFAULT '[]',
-                public_sources_json TEXT NOT NULL DEFAULT '[]'
+                public_sources_json TEXT NOT NULL DEFAULT '[]',
+                evidence_status VARCHAR(16) NOT NULL DEFAULT 'unavailable',
+                knowledge_scope_json TEXT,
+                recovery_actions_json TEXT NOT NULL DEFAULT '[]'
             )
         """))
         connection.execute(text("""
@@ -103,6 +106,11 @@ def _sqlite_migrate() -> None:
         ))
     _add_missing_columns("resource_artifacts", {
         "safety_json": "TEXT",
+    })
+    _add_missing_columns("resource_bundles", {
+        "evidence_status": "VARCHAR(16) NOT NULL DEFAULT 'unavailable'",
+        "knowledge_scope_json": "TEXT",
+        "recovery_actions_json": "TEXT NOT NULL DEFAULT '[]'",
     })
     _add_missing_columns("knowledge_import_jobs", {
         "current_page": "INTEGER",

@@ -21,6 +21,7 @@ const storeMock = vi.hoisted(() => ({
   refreshSession: vi.fn(), modelProfiles: [], modelPolicy: null, sessionModelPreference: null, modelProfileBusy: false,
   refreshModelProfiles: vi.fn(), loadSessionModelPreference: vi.fn(), saveSessionModelPreference: vi.fn(),
   knowledgeCollections: [{ id: 3, name: '高数' }], boundKnowledgeCollectionIds: [], knowledgePrivacyMode: 'allow_model_context',
+  knowledgeDocuments: [{ id: 9, display_name: '极限讲义.pdf', page_count: 120, collection_ids: [3] }],
   refreshKnowledge: vi.fn(), saveSessionKnowledgeCollections: vi.fn(),
   retryResourceArtifact: vi.fn(), resourceBundles: [],
 }))
@@ -122,6 +123,47 @@ describe('SmartTutor failure recovery', () => {
       expect.any(Function),
       expect.any(AbortSignal),
       { mode: 'single', resourceType: 'mind_map' },
+    )
+  })
+
+  it('sends a selected textbook page range and expands it after insufficient evidence', async () => {
+    backendStore.session = { state: 'PROFILED', messages: [], resource_bundles: [] } as any
+    let call = 0
+    apiMock.streamChat.mockImplementation(async (_sessionId, _message, onEvent) => {
+      call += 1
+      if (call === 1) {
+        onEvent({
+          event: 'knowledge_evidence', status: 'insufficient',
+          scope: { document_id: 9, page_start: 12, page_end: 20, search_mode: 'focused' },
+          recovery_actions: ['retry', 'expand_range'],
+        })
+      }
+    })
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/tutor', component: SmartTutor }] })
+    await router.push('/tutor'); await router.isReady()
+    const wrapper = mount(SmartTutor, { global: { plugins: [router], stubs } })
+
+    await wrapper.get('[data-testid="knowledge-scope-document"]').setValue('9')
+    await wrapper.get('[data-testid="knowledge-scope-start"]').setValue('12')
+    await wrapper.get('[data-testid="knowledge-scope-end"]').setValue('20')
+    await wrapper.get('textarea').setValue('总结这一节')
+    await wrapper.get('[data-testid="send"]').trigger('click')
+    await flushPromises()
+
+    expect(apiMock.streamChat).toHaveBeenNthCalledWith(
+      1, 'test-session', '总结这一节', expect.any(Function), expect.any(AbortSignal),
+      { mode: 'bundle' },
+      { documentId: 9, pageStart: 12, pageEnd: 20, searchMode: 'focused' },
+    )
+    expect(wrapper.get('[data-testid="evidence-recovery"]').text()).toContain('教材证据不足')
+
+    await wrapper.get('[data-testid="expand-evidence-range"]').trigger('click')
+    await flushPromises()
+
+    expect(apiMock.streamChat).toHaveBeenNthCalledWith(
+      2, 'test-session', '总结这一节', expect.any(Function), expect.any(AbortSignal),
+      { mode: 'bundle' },
+      { documentId: 9, pageStart: 12, pageEnd: 20, searchMode: 'expanded' },
     )
   })
 

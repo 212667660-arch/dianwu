@@ -69,11 +69,29 @@
           <a v-for="source in sources" :key="source.url" :href="source.url" target="_blank" rel="noreferrer">{{ source.title }}</a>
         </div>
         <KnowledgeSourceList v-if="knowledgeSources.length" :sources="knowledgeSources" @open="openKnowledgeSource" />
+        <div v-if="evidenceStatus === 'insufficient'" class="evidence-recovery" data-testid="evidence-recovery">
+          <div><strong>教材证据不足</strong><p>当前页码范围没有检索到足够依据。你可以按原范围重新检索，或扩大到相邻页面。</p></div>
+          <div class="evidence-actions">
+            <button type="button" :disabled="generating" data-testid="retry-evidence" @click="retryEvidence(false)">重新检索</button>
+            <button v-if="evidenceRecoveryActions.includes('expand_range')" type="button" :disabled="generating" data-testid="expand-evidence-range" @click="retryEvidence(true)">扩大范围</button>
+          </div>
+        </div>
       </div>
 
       <div class="composer-wrap">
         <div class="composer">
           <el-input v-model="editor" type="textarea" :rows="3" maxlength="8000" show-word-limit resize="none" placeholder="说点什么…" @keydown.ctrl.enter.prevent="send" />
+          <div v-if="canGenerateResources" class="knowledge-scope-controls">
+            <label>教材范围
+              <select v-model.number="scopeDocumentId" data-testid="knowledge-scope-document">
+                <option value="">全部已绑定资料</option>
+                <option v-for="document in backend.knowledgeDocuments" :key="document.id" :value="document.id">{{ document.display_name }}</option>
+              </select>
+            </label>
+            <label>起始页<input v-model.number="scopePageStart" data-testid="knowledge-scope-start" type="number" min="1" :max="selectedScopePageCount || 9999" placeholder="可选"></label>
+            <label>结束页<input v-model.number="scopePageEnd" data-testid="knowledge-scope-end" type="number" min="1" :max="selectedScopePageCount || 9999" placeholder="可选"></label>
+            <span>{{ scopeSearchMode === 'expanded' ? '已扩大相邻页检索' : '按所选页码精确检索' }}</span>
+          </div>
           <div class="composer-actions">
             <div class="composer-left">
               <ModelSelectionPopover
@@ -113,7 +131,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Close, Promotion } from '@element-plus/icons-vue'
-import { backendApi, DesktopApiError, errorMessage, type ArtifactType, type KnowledgeSource, type ReasoningEffort, type ResourceArtifact, type ResourceBundle as ResourceBundleType, type ResourceSelection, type SessionModelPreferenceInput, type SourceItem, type StreamEvent } from '@/api'
+import { backendApi, DesktopApiError, errorMessage, type ArtifactType, type EvidenceStatus, type KnowledgeScope, type KnowledgeSource, type ReasoningEffort, type ResourceArtifact, type ResourceBundle as ResourceBundleType, type ResourceSelection, type SessionModelPreferenceInput, type SourceItem, type StreamEvent } from '@/api'
 import { useBackendStore } from '@/stores/backend'
 import KnowledgeSourceList from '@/components/knowledge/KnowledgeSourceList.vue'
 import ModelSelectionPopover from '@/components/model/ModelSelectionPopover.vue'
@@ -144,6 +162,13 @@ const effectiveReasoningEffort = ref<ReasoningEffort>()
 const retainedInterruptions = ref<Array<{ id: number; content: string }>>([])
 const sources = ref<SourceItem[]>([])
 const knowledgeSources = ref<KnowledgeSource[]>([])
+const evidenceStatus = ref<EvidenceStatus | ''>('')
+const evidenceRecoveryActions = ref<Array<'retry' | 'expand_range'>>([])
+const scopeDocumentId = ref<number | ''>('')
+const scopePageStart = ref<number | ''>('')
+const scopePageEnd = ref<number | ''>('')
+const scopeSearchMode = ref<'focused' | 'expanded'>('focused')
+const lastSubmittedMessage = ref('')
 const resourceSelection = ref<ResourceSelection>({ mode: 'bundle' })
 const activeBundle = ref<ResourceBundleType | null>(null)
 const resourceProgress = ref<{ completed: number; total: number; currentType: string } | null>(null)
@@ -169,6 +194,7 @@ const visibleActiveBundle = computed(() => {
     : activeBundle.value
 })
 const canGenerateResources = computed(() => ['PROFILED', 'GENERATING'].includes(backend.session?.state || ''))
+const selectedScopePageCount = computed(() => backend.knowledgeDocuments.find(item => item.id === scopeDocumentId.value)?.page_count || null)
 const phaseLabel = computed(() => generating.value ? `${activePhase.value}中` : backend.session?.state || '等待开始')
 const starters = ['我想学习一次函数，请先了解我的基础。', '我正在准备英语考试，希望制定复习计划。', '根据我的薄弱点生成一份笔记和分层练习。']
 
@@ -194,7 +220,13 @@ function handleEvent(event: StreamEvent) {
   }
   if (event.event === 'sources') sources.value = (event.sources || []).filter((item): item is SourceItem => 'url' in item)
   if (event.event === 'knowledge_sources') knowledgeSources.value = (event.sources || []).filter((item): item is KnowledgeSource => 'reference_id' in item)
+  if (event.event === 'knowledge_evidence') {
+    evidenceStatus.value = event.status === 'grounded' || event.status === 'insufficient' || event.status === 'unavailable' ? event.status : ''
+    evidenceRecoveryActions.value = event.recovery_actions || []
+  }
   if (event.event === 'resource_plan' && event.bundle_id) {
+    if (event.evidence_status) evidenceStatus.value = event.evidence_status
+    evidenceRecoveryActions.value = event.recovery_actions || []
     activeBundle.value = provisionalBundle(
       event.bundle_id,
       event.topic || '正在生成资源',
@@ -250,6 +282,7 @@ async function send() {
   if (!message || generating.value || !backend.modelConfigured) return
   if (streamInterrupted.value) preserveInterruptedText()
   generating.value = true
+  lastSubmittedMessage.value = message
   pendingUser.value = message
   editor.value = ''
   streamText.value = ''
@@ -263,6 +296,8 @@ async function send() {
   activeSessionId.value = requestSessionId
   sources.value = []
   knowledgeSources.value = []
+  evidenceStatus.value = ''
+  evidenceRecoveryActions.value = []
   activeBundle.value = null
   resourceProgress.value = null
   controller = new AbortController()
@@ -270,25 +305,22 @@ async function send() {
   activePetTask = petTask
   await scrollBottom()
   try {
+    const knowledgeScope = currentKnowledgeScope()
+    const selection = canGenerateResources.value ? resourceSelection.value : undefined
     if (useStream.value) {
-      await backendApi.streamChat(
-        requestSessionId,
-        message,
-        handleEvent,
-        controller.signal,
-        canGenerateResources.value ? resourceSelection.value : undefined,
-      )
+      if (knowledgeScope) await backendApi.streamChat(requestSessionId, message, handleEvent, controller.signal, selection, knowledgeScope)
+      else await backendApi.streamChat(requestSessionId, message, handleEvent, controller.signal, selection)
     } else {
-      const response = await backendApi.chat(
-        requestSessionId,
-        message,
-        canGenerateResources.value ? resourceSelection.value : undefined,
-      )
+      const response = knowledgeScope
+        ? await backendApi.chat(requestSessionId, message, selection, knowledgeScope)
+        : await backendApi.chat(requestSessionId, message, selection)
       streamText.value = response.reply
       sources.value = response.sources
       knowledgeSources.value = response.knowledge_sources || []
       activePhase.value = response.phase === 'profile' ? '画像' : response.phase === 'resource' ? '资源' : '诊断'
       activeBundle.value = response.bundle || null
+      evidenceStatus.value = response.evidence_status || response.bundle?.evidence_status || ''
+      evidenceRecoveryActions.value = response.recovery_actions || response.bundle?.recovery_actions || []
     }
     if (backend.sessionId === requestSessionId) await backend.refreshSession()
     if (streamInterrupted.value) { failedMessage.value = message; pendingUser.value = ''; petTask.complete('waiting') }
@@ -311,6 +343,25 @@ async function send() {
     if (activePetTask === petTask) activePetTask = null
     await scrollBottom()
   }
+}
+
+function currentKnowledgeScope(): KnowledgeScope | undefined {
+  const documentId = typeof scopeDocumentId.value === 'number' && scopeDocumentId.value > 0 ? scopeDocumentId.value : undefined
+  const pageStart = typeof scopePageStart.value === 'number' && scopePageStart.value > 0 ? scopePageStart.value : undefined
+  const pageEnd = typeof scopePageEnd.value === 'number' && scopePageEnd.value >= (pageStart || 1) ? scopePageEnd.value : undefined
+  if (!documentId && (!pageStart || !pageEnd)) return undefined
+  return {
+    ...(documentId ? { documentId } : {}),
+    ...(pageStart && pageEnd ? { pageStart, pageEnd } : {}),
+    searchMode: scopeSearchMode.value,
+  }
+}
+
+async function retryEvidence(expand: boolean) {
+  if (!lastSubmittedMessage.value || generating.value) return
+  if (expand) scopeSearchMode.value = 'expanded'
+  editor.value = lastSubmittedMessage.value
+  await send()
 }
 
 function isBundleMessage(content: string): boolean {
@@ -336,6 +387,9 @@ function provisionalBundle(bundleId: string, topic: string, requestedTypes: Arti
     created_at: new Date().toISOString(),
     knowledge_sources: [],
     public_sources: [],
+    evidence_status: evidenceStatus.value || 'unavailable',
+    knowledge_scope: null,
+    recovery_actions: evidenceRecoveryActions.value,
   }
 }
 
@@ -382,6 +436,9 @@ function bundleFromEvent(event: StreamEvent): ResourceBundleType | null {
     created_at: event.created_at,
     knowledge_sources: event.knowledge_sources || [],
     public_sources: event.public_sources || [],
+    evidence_status: event.evidence_status || 'unavailable',
+    knowledge_scope: event.scope || null,
+    recovery_actions: event.recovery_actions || [],
   }
 }
 
@@ -495,6 +552,8 @@ watch(() => backend.sessionId, currentSessionId => {
   streamText.value = ''
   sources.value = []
   knowledgeSources.value = []
+  evidenceStatus.value = ''
+  evidenceRecoveryActions.value = []
   activeBundle.value = null
   resourceProgress.value = null
   retryingArtifacts.value = new Set()
@@ -513,7 +572,7 @@ watch(() => backend.sessionId, currentSessionId => {
   }
 })
 onMounted(async () => {
-  await Promise.allSettled([backend.refreshModelProfiles(), backend.loadSessionModelPreference()])
+  await Promise.allSettled([backend.refreshModelProfiles(), backend.loadSessionModelPreference(), backend.refreshKnowledge()])
 })
 onBeforeUnmount(() => { controller?.abort(); activePetTask?.complete('idle'); activePetTask = null })
 </script>
@@ -557,9 +616,11 @@ onBeforeUnmount(() => { controller?.abort(); activePetTask?.complete('idle'); ac
 .connection-notice { margin: 2px auto 12px; padding: 8px 11px; border: 1px solid #ead7b6; border-radius: 999px; color: #7b623f; background: #fff6e6; text-align: center; font-size: 10px; }
 .inline-sources { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; color: #9b8f82; font-size: 10px; }
 .inline-sources a { color: #648c8d; text-decoration: none; }
+.evidence-recovery { display:flex; align-items:center; justify-content:space-between; gap:14px; margin:10px 0; padding:12px 14px; color:#755f3d; background:#fff6e7; border-left:4px solid #d5a568; border-radius:8px; }.evidence-recovery strong{font-size:13px}.evidence-recovery p{margin:4px 0 0;font-size:11px;line-height:1.55}.evidence-actions{display:flex;gap:7px}.evidence-actions button{padding:6px 9px;color:#755f3d;background:#fff;border:1px solid #dfc79e;border-radius:7px;cursor:pointer}
 .composer-wrap { margin-top: auto; padding: 0 16px 4px; }
 .composer { padding: 13px 14px 11px; background: rgba(255, 254, 251, .94); border: 1px solid #e4dbd0; border-radius: 16px; box-shadow: 0 12px 28px rgba(82, 67, 49, .09); }
 .composer :deep(.el-textarea__inner) { padding: 6px 4px; color: #51483f; background: transparent; border: 0; box-shadow: none; }
+.knowledge-scope-controls{display:flex;align-items:end;flex-wrap:wrap;gap:8px;margin-top:8px;padding:8px 10px;background:#f6f2eb;border:1px solid #e6ddd1;border-radius:10px}.knowledge-scope-controls label{display:grid;gap:3px;color:#8f8173;font-size:9px}.knowledge-scope-controls select,.knowledge-scope-controls input{height:28px;padding:3px 7px;color:#5d554d;background:#fff;border:1px solid #ddd3c6;border-radius:7px;font-size:10px}.knowledge-scope-controls select{max-width:190px}.knowledge-scope-controls input{width:74px}.knowledge-scope-controls>span{padding-bottom:6px;color:#8ca4a2;font-size:9px}
 .composer-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 7px; }
 .composer-left { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; color: #a09284; font-size: 10px; }
 .stream-toggle { display: inline-flex; align-items: center; gap: 5px; }

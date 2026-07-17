@@ -122,6 +122,34 @@ describe('resource bundle API contracts', () => {
     })
   })
 
+  it('sends a bounded textbook scope through chat and stream', async () => {
+    const request = vi.fn().mockResolvedValue({
+      ok: true, status: 200,
+      data: { reply: '', phase: 'resource', state: 'PROFILED', profile_version: 1, cached: false, sources: [], knowledge_sources: [], bundle: null },
+    })
+    let streamHandler: ((message: any) => void) | undefined
+    const startStream = vi.fn((streamId: string, input: unknown) => {
+      queueMicrotask(() => streamHandler?.({ streamId, type: 'done' }))
+      return input
+    })
+    window.a3Desktop = {
+      request, modelConfigTest: vi.fn(), modelConfigSave: vi.fn(), startStream,
+      cancelStream: vi.fn(), onStreamEvent: vi.fn(handler => { streamHandler = handler; return () => {} }),
+      onBackendExit: vi.fn(() => () => {}),
+    }
+    const scope = { documentId: 7, pageStart: 12, pageEnd: 36, searchMode: 'expanded' as const }
+
+    await backendApi.chat('s1', '总结教材', { mode: 'bundle' }, scope)
+    await backendApi.streamChat('s1', '生成例题', vi.fn(), undefined, { mode: 'bundle' }, scope)
+
+    expect(request.mock.calls[0][0].body.knowledge_scope).toEqual({
+      document_id: 7, page_start: 12, page_end: 36, search_mode: 'expanded',
+    })
+    expect(startStream.mock.calls[0][1]).toMatchObject({
+      body: { knowledge_scope: { document_id: 7, page_start: 12, page_end: 36, search_mode: 'expanded' } },
+    })
+  })
+
   it('uses the fixed history and artifact retry routes', async () => {
     const request = vi.fn()
       .mockResolvedValueOnce({ ok: true, status: 200, data: { session_id: 's1', messages: [], resources: [], resource_bundles: [] } })
@@ -141,6 +169,31 @@ describe('resource bundle API contracts', () => {
       path: '/api/resource-bundles/b1/artifacts/mind_map/retry',
       body: { session_id: 's1' },
     })
+  })
+})
+
+describe('competition demo API', () => {
+  it('uses only fixed seed reset and status routes without fixture payloads', async () => {
+    const snapshot = {
+      session_id: 'demo_offline_v1', seeded: true, mode: 'offline', degradation_message: '模型不可用',
+      dataset: { title: '原创演示', license: 'CC0-1.0', original: true, collection_id: 3 },
+      agent_steps: [], mastery_before: [], mastery_after: [], routes: { overview: '/dashboard', agents: '/agents', tutor: '/tutor' },
+    }
+    const request = vi.fn().mockResolvedValue({ ok: true, status: 200, data: snapshot })
+    window.a3Desktop = {
+      request, modelConfigTest: vi.fn(), modelConfigSave: vi.fn(), startStream: vi.fn(), cancelStream: vi.fn(),
+      onStreamEvent: vi.fn(() => () => {}), onBackendExit: vi.fn(() => () => {}),
+    }
+
+    await backendApi.demoStatus()
+    await backendApi.seedDemo()
+    await backendApi.resetDemo()
+
+    expect(request.mock.calls).toEqual([
+      [{ method: 'GET', path: '/api/demo/status' }],
+      [{ method: 'POST', path: '/api/demo/seed' }],
+      [{ method: 'POST', path: '/api/demo/reset' }],
+    ])
   })
 })
 

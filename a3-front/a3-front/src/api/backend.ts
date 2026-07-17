@@ -8,6 +8,7 @@ import type {
   DesktopDiagnosticReport,
   DesktopState,
   DesktopUpdateResult,
+  DemoSnapshot,
   HealthStatus,
   KnowledgeBinding,
   KnowledgeCollection,
@@ -38,6 +39,7 @@ import type {
   ProgressSnapshot,
   ResourceBundle,
   ResourceSelection,
+  KnowledgeScope,
   ArtifactType,
   ReviewTask,
   SessionHistory,
@@ -51,22 +53,31 @@ function activeTransport(): BackendTransport {
   return createWebTransport()
 }
 
-function chatBody(sessionId: string, message: string, selection?: ResourceSelection) {
-  if (!selection) return { session_id: sessionId, message }
+function chatBody(sessionId: string, message: string, selection?: ResourceSelection, scope?: KnowledgeScope) {
+  const knowledge_scope = scope ? {
+    ...(scope.documentId ? { document_id: scope.documentId } : {}),
+    ...(scope.pageStart && scope.pageEnd ? { page_start: scope.pageStart, page_end: scope.pageEnd } : {}),
+    search_mode: scope.searchMode || 'focused',
+  } : undefined
+  if (!selection) return { session_id: sessionId, message, ...(knowledge_scope ? { knowledge_scope } : {}) }
   if (selection.mode === 'bundle') {
-    return { session_id: sessionId, message, resource_mode: 'bundle' as const }
+    return { session_id: sessionId, message, resource_mode: 'bundle' as const, ...(knowledge_scope ? { knowledge_scope } : {}) }
   }
   return {
     session_id: sessionId,
     message,
     resource_mode: 'single' as const,
     resource_type: selection.resourceType,
+    ...(knowledge_scope ? { knowledge_scope } : {}),
   }
 }
 
 export { parseSseBlock, readSseBody }
 
 export const backendApi = {
+  async demoStatus() { return activeTransport().request<DemoSnapshot | { session_id: string; seeded: false }>({ method: 'GET', path: '/api/demo/status' }) },
+  async seedDemo() { return activeTransport().request<DemoSnapshot>({ method: 'POST', path: '/api/demo/seed' }) },
+  async resetDemo() { return activeTransport().request<DemoSnapshot>({ method: 'POST', path: '/api/demo/reset' }) },
   async desktopState(): Promise<DesktopState> {
     if (!window.a3Desktop?.desktopState) return { version: 1, onboarding_completed: true, ai_paused: false }
     return desktopEnvelope<DesktopState>(await window.a3Desktop.desktopState())
@@ -184,9 +195,9 @@ export const backendApi = {
       method: 'PUT', path: `/api/sessions/${encodeURIComponent(sessionId)}/model-preference`, body: input,
     })
   },
-  async chat(sessionId: string, message: string, selection?: ResourceSelection) {
+  async chat(sessionId: string, message: string, selection?: ResourceSelection, scope?: KnowledgeScope) {
     return activeTransport().request<ChatResponse>({
-      method: 'POST', path: '/api/chat', body: chatBody(sessionId, message, selection),
+      method: 'POST', path: '/api/chat', body: chatBody(sessionId, message, selection, scope),
     })
   },
   async streamChat(
@@ -195,11 +206,12 @@ export const backendApi = {
     onEvent: (event: StreamEvent) => void,
     signal?: AbortSignal,
     selection?: ResourceSelection,
+    scope?: KnowledgeScope,
   ) {
     return activeTransport().stream({
       method: 'POST',
       path: '/api/chat/stream',
-      body: chatBody(sessionId, message, selection),
+      body: chatBody(sessionId, message, selection, scope),
     }, onEvent, signal)
   },
   async cancelGeneration(generationId: string, sessionId: string) {

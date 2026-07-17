@@ -16,14 +16,21 @@ def save_bundle(db: Session, session_id: str, bundle: ResourceBundle) -> None:
     )
     knowledge_json = json.dumps(bundle.knowledge_sources, ensure_ascii=False)
     public_json = json.dumps(bundle.public_sources, ensure_ascii=False)
+    knowledge_scope_json = (
+        json.dumps(bundle.knowledge_scope, ensure_ascii=False)
+        if bundle.knowledge_scope is not None
+        else None
+    )
+    recovery_actions_json = json.dumps(bundle.recovery_actions, ensure_ascii=False)
     requested_json = json.dumps([t.value for t in bundle.requested_types], ensure_ascii=False)
     db.execute(
         text("""
             INSERT INTO resource_bundles (bundle_id, session_id, protocol_version, topic, profile_version,
                 learning_state_version, mode, status, requested_types, artifacts_json,
-                aggregate_quality, created_at, knowledge_sources_json, public_sources_json)
+                aggregate_quality, created_at, knowledge_sources_json, public_sources_json,
+                evidence_status, knowledge_scope_json, recovery_actions_json)
             VALUES (:bid, :sid, :pv, :topic, :profile_v, :lsv, :mode, :status, :rt, :artifacts,
-                :aq, :cat, :ks, :ps)
+                :aq, :cat, :ks, :ps, :evidence_status, :knowledge_scope, :recovery_actions)
             ON CONFLICT(bundle_id) DO UPDATE SET
                 session_id = excluded.session_id,
                 protocol_version = excluded.protocol_version,
@@ -36,14 +43,20 @@ def save_bundle(db: Session, session_id: str, bundle: ResourceBundle) -> None:
                 artifacts_json = excluded.artifacts_json,
                 aggregate_quality = excluded.aggregate_quality,
                 knowledge_sources_json = excluded.knowledge_sources_json,
-                public_sources_json = excluded.public_sources_json
+                public_sources_json = excluded.public_sources_json,
+                evidence_status = excluded.evidence_status,
+                knowledge_scope_json = excluded.knowledge_scope_json,
+                recovery_actions_json = excluded.recovery_actions_json
         """),
         {"bid": bundle.bundle_id, "sid": session_id, "pv": bundle.protocol_version,
          "topic": bundle.topic, "profile_v": bundle.profile_version,
          "lsv": bundle.learning_state_version, "mode": bundle.mode,
          "status": bundle.status.value, "rt": requested_json,
          "artifacts": artifacts_json, "aq": bundle.aggregate_quality,
-         "cat": bundle.created_at, "ks": knowledge_json, "ps": public_json},
+         "cat": bundle.created_at, "ks": knowledge_json, "ps": public_json,
+         "evidence_status": bundle.evidence_status,
+         "knowledge_scope": knowledge_scope_json,
+         "recovery_actions": recovery_actions_json},
     )
     db.execute(
         text("DELETE FROM resource_artifacts WHERE bundle_id = :bid"),
@@ -116,6 +129,13 @@ def get_bundle(db: Session, bundle_id: str) -> Optional[dict[str, Any]]:
     result["requested_types"] = json.loads(result.get("requested_types") or "[]")
     result["knowledge_sources"] = json.loads(result.get("knowledge_sources_json", "[]"))
     result["public_sources"] = json.loads(result.get("public_sources_json", "[]"))
+    result["evidence_status"] = str(result.get("evidence_status") or "unavailable")
+    result["knowledge_scope"] = (
+        json.loads(result["knowledge_scope_json"])
+        if result.get("knowledge_scope_json")
+        else None
+    )
+    result["recovery_actions"] = json.loads(result.get("recovery_actions_json") or "[]")
     return result
 
 

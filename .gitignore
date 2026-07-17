@@ -16,6 +16,8 @@
 **/*.sqlite
 **/*.sqlite3
 **/logs/
+backend/knowledge/objects/
+backend/knowledge/packs/
 *.log
 
 # Generated reports

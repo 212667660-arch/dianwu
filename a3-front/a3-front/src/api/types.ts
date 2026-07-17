@@ -7,6 +7,17 @@ export interface DesktopState { version: 1; onboarding_completed: boolean; ai_pa
 export interface DesktopInfo { app_version: string; backend_protocol: string; backend_ready: boolean; data_directory_ready: boolean; model_configured: boolean; ocr_available: boolean; ocr_version: string | null; update_status: 'offline_build' | 'available' | 'current' | 'error' }
 export interface DesktopDiagnosticReport { generated_at?: string; app_version: string; platform: string; backend_ready: boolean; ocr_available: boolean; logs: string[] }
 export interface DesktopUpdateResult { status: 'offline_build' | 'available' | 'current' | 'error'; message: string }
+export interface DemoSnapshot {
+  session_id: string
+  seeded: boolean
+  mode: 'offline' | 'online_assisted'
+  degradation_message: string
+  dataset: { title: string; license: string; original: boolean; collection_id: number | null }
+  agent_steps: Array<{ agent: string; status: 'COMPLETED'; detail: string }>
+  mastery_before: Array<{ name: string; score: number }>
+  mastery_after: Array<{ name: string; score: number }>
+  routes: { overview: string; agents: string; tutor: string }
+}
 
 export interface SourceItem {
   title: string
@@ -16,6 +27,8 @@ export interface SourceItem {
 
 export interface KnowledgeLocator { type: 'page' | 'slide' | 'sheet_rows' | 'paragraph'; start: number; end: number; sheet_name?: string }
 export interface KnowledgeSource { reference_id: string; document_id: number; document_name: string; locator_label: string; locator: KnowledgeLocator; chunk_id: number; retrieval_mode: 'keyword' | 'hybrid' }
+export interface KnowledgeScope { documentId?: number; pageStart?: number; pageEnd?: number; searchMode?: 'focused' | 'expanded' }
+export type EvidenceStatus = 'grounded' | 'insufficient' | 'unavailable'
 export interface CapabilityStatus { available: boolean; mode: string; error_code?: string | null; version?: string | null }
 export interface KnowledgeStatus { fts: CapabilityStatus; worker: CapabilityStatus; ocr_pack: CapabilityStatus; semantic_pack: CapabilityStatus }
 export interface KnowledgeCollection { id: number; name: string; description: string; color: string; document_count: number; bound_session_count: number; created_at: string; updated_at: string }
@@ -99,6 +112,9 @@ export interface ResourceBundle {
   created_at: string
   knowledge_sources: KnowledgeSource[]
   public_sources: Array<SourceItem & { reference_id: string }>
+  evidence_status?: EvidenceStatus
+  knowledge_scope?: Record<string, unknown> | null
+  recovery_actions?: Array<'retry' | 'expand_range'>
 }
 
 export interface ChatResponse {
@@ -110,6 +126,9 @@ export interface ChatResponse {
   sources: SourceItem[]
   knowledge_sources: KnowledgeSource[]
   bundle: ResourceBundle | null
+  evidence_status?: EvidenceStatus
+  knowledge_scope?: Record<string, unknown> | null
+  recovery_actions?: Array<'retry' | 'expand_range'>
 }
 
 export interface SessionMessage {
@@ -265,6 +284,9 @@ export interface StreamEvent {
   protocol_version?: 'learning-resource-bundle/v2'
   created_at?: string
   public_sources?: Array<SourceItem & { reference_id: string }>
+  evidence_status?: EvidenceStatus
+  scope?: Record<string, unknown> | null
+  recovery_actions?: Array<'retry' | 'expand_range'>
 }
 
 export interface ModelSettings {

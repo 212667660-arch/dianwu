@@ -11,6 +11,7 @@ from backend.database import Base
 from backend.knowledge.chunking import chunk_blocks
 from backend.knowledge.context import (
     KnowledgeCitationError,
+    KnowledgeRetrievalScope,
     render_untrusted_context,
     retrieve_knowledge_context,
     sanitize_citations,
@@ -272,3 +273,27 @@ def test_local_search_only_never_builds_model_context(indexed_knowledge) -> None
 
     assert context.prompt == ""
     assert context.citations == ()
+
+
+def test_empty_scoped_retrieval_exposes_recovery_actions(indexed_knowledge) -> None:
+    db, repository, visible, _hidden = indexed_knowledge
+    repository.replace_session_collections(
+        "student_scope",
+        [visible.id],
+        privacy_mode="allow_model_context",
+    )
+
+    context = retrieve_knowledge_context(
+        db,
+        "student_scope",
+        "完全不存在的内容",
+        scope=KnowledgeRetrievalScope(page_start=20, page_end=25),
+    )
+
+    assert context.evidence_status == "insufficient"
+    assert context.scope == {
+        "page_start": 20,
+        "page_end": 25,
+        "search_mode": "focused",
+    }
+    assert context.recovery_actions == ("retry", "expand_range")

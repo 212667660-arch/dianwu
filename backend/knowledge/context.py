@@ -36,6 +36,46 @@ class KnowledgeCitationError(ValueError):
 
 
 @dataclass(frozen=True)
+class KnowledgeRetrievalScope:
+    document_id: int | None = None
+    page_start: int | None = None
+    page_end: int | None = None
+    search_mode: Literal["focused", "expanded"] = "focused"
+
+    def __post_init__(self) -> None:
+        if self.document_id is not None and self.document_id < 1:
+            raise ValueError("knowledge document_id must be positive")
+        if (self.page_start is None) != (self.page_end is None):
+            raise ValueError("knowledge page range requires both endpoints")
+        if self.page_start is not None and self.page_end is not None:
+            if self.page_start < 1 or self.page_end < self.page_start:
+                raise ValueError("knowledge page range is invalid")
+            if self.page_end - self.page_start + 1 > 500:
+                raise ValueError("knowledge page range exceeds 500 pages")
+        if self.search_mode not in {"focused", "expanded"}:
+            raise ValueError("knowledge search mode is invalid")
+
+    def effective_page_range(self) -> tuple[int | None, int | None]:
+        if self.page_start is None or self.page_end is None:
+            return None, None
+        if self.search_mode == "focused":
+            return self.page_start, self.page_end
+        margin = max(10, (self.page_end - self.page_start + 1) // 2)
+        return max(1, self.page_start - margin), self.page_end + margin
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            **({"document_id": self.document_id} if self.document_id is not None else {}),
+            **(
+                {"page_start": self.page_start, "page_end": self.page_end}
+                if self.page_start is not None and self.page_end is not None
+                else {}
+            ),
+            "search_mode": self.search_mode,
+        }
+
+
+@dataclass(frozen=True)
 class KnowledgeCitation:
     reference_id: str
     document_id: int
@@ -53,10 +93,28 @@ class KnowledgeContext:
     prompt: str
     citations: tuple[KnowledgeCitation, ...]
     retrieval_mode: Literal["keyword", "hybrid"]
+    evidence_status: Literal["grounded", "insufficient", "unavailable"] = "grounded"
+    scope: dict[str, object] | None = None
+    recovery_actions: tuple[Literal["retry", "expand_range"], ...] = ()
 
     @classmethod
-    def empty(cls) -> "KnowledgeContext":
-        return cls(prompt="", citations=(), retrieval_mode="keyword")
+    def empty(
+        cls,
+        *,
+        evidence_status: Literal["insufficient", "unavailable"] = "insufficient",
+        scope: KnowledgeRetrievalScope | None = None,
+    ) -> "KnowledgeContext":
+        actions: tuple[Literal["retry", "expand_range"], ...] = ("retry",)
+        if scope is not None and scope.page_start is not None and scope.search_mode == "focused":
+            actions = ("retry", "expand_range")
+        return cls(
+            prompt="",
+            citations=(),
+            retrieval_mode="keyword",
+            evidence_status=evidence_status,
+            scope=scope.as_payload() if scope is not None else None,
+            recovery_actions=actions,
+        )
 
 
 def _safe_prompt_text(value: object) -> str:
@@ -99,10 +157,14 @@ def _citation(reference_id: str, hit) -> KnowledgeCitation:
     )
 
 
-def render_untrusted_context(items: Sequence[object]) -> KnowledgeContext:
+def render_untrusted_context(
+    items: Sequence[object],
+    *,
+    scope: KnowledgeRetrievalScope | None = None,
+) -> KnowledgeContext:
     bounded = list(items[:8])
     if not bounded:
-        return KnowledgeContext.empty()
+        return KnowledgeContext.empty(scope=scope)
 
     header = (
         '<knowledge_data untrusted="true">\n'
@@ -137,6 +199,8 @@ def render_untrusted_context(items: Sequence[object]) -> KnowledgeContext:
         prompt=prompt,
         citations=tuple(citations),
         retrieval_mode=retrieval_mode,
+        evidence_status="grounded",
+        scope=scope.as_payload() if scope is not None else None,
     )
 
 
@@ -214,13 +278,14 @@ def retrieve_knowledge_context(
     query: str,
     *,
     limit: int = 8,
+    scope: KnowledgeRetrievalScope | None = None,
 ) -> KnowledgeContext:
     repository = KnowledgeRepository(db)
     collection_ids = repository.bound_collection_ids(session_id)
     if not collection_ids:
-        return KnowledgeContext.empty()
+        return KnowledgeContext.empty(evidence_status="unavailable", scope=scope)
     if repository.session_privacy_mode(session_id) != "allow_model_context":
-        return KnowledgeContext.empty()
+        return KnowledgeContext.empty(evidence_status="unavailable", scope=scope)
     search = KnowledgeSearchRepository(db)
     hits = []
     seen_chunks: set[int] = set()
@@ -231,11 +296,15 @@ def retrieve_knowledge_context(
             if candidate and candidate not in candidates:
                 candidates.append(candidate)
     try:
+        page_start, page_end = scope.effective_page_range() if scope is not None else (None, None)
         for candidate in candidates[:7]:
             for hit in search.search(
                 candidate,
                 collection_ids,
                 max(1, min(limit, 8)),
+                document_id=scope.document_id if scope is not None else None,
+                page_start=page_start,
+                page_end=page_end,
             ):
                 if hit.chunk_id in seen_chunks:
                     continue
@@ -246,5 +315,5 @@ def retrieve_knowledge_context(
             if len(hits) == max(1, min(limit, 8)):
                 break
     except KnowledgeUnavailable:
-        return KnowledgeContext.empty()
-    return render_untrusted_context(hits)
+        return KnowledgeContext.empty(evidence_status="unavailable", scope=scope)
+    return render_untrusted_context(hits, scope=scope)

@@ -12,6 +12,31 @@ from backend.services.content_safety.models import SafetyMetadata
 SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
+class KnowledgeScope(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    document_id: Optional[int] = Field(default=None, ge=1)
+    page_start: Optional[int] = Field(default=None, ge=1)
+    page_end: Optional[int] = Field(default=None, ge=1)
+    search_mode: Literal["focused", "expanded"] = "focused"
+
+    @model_validator(mode="after")
+    def validate_page_range(self) -> "KnowledgeScope":
+        if (self.page_start is None) != (self.page_end is None):
+            raise ValueError("page_start and page_end must be provided together")
+        if self.page_start is not None and self.page_end is not None:
+            if self.page_end < self.page_start:
+                raise ValueError("page_end precedes page_start")
+            if self.page_end - self.page_start + 1 > 500:
+                raise ValueError("page range exceeds 500 pages")
+        return self
+
+    def to_domain(self):
+        from backend.knowledge.context import KnowledgeRetrievalScope
+
+        return KnowledgeRetrievalScope(**self.model_dump())
+
+
 class ChatRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -26,6 +51,7 @@ class ChatRequest(BaseModel):
         "extended_reading",
         "adaptive_practice",
     ]] = Field(default=None)
+    knowledge_scope: Optional[KnowledgeScope] = None
 
     @field_validator("message")
     @classmethod
@@ -172,6 +198,9 @@ class BundleResponse(BaseModel):
     created_at: str
     knowledge_sources: list[dict[str, Any]] = Field(default_factory=list)
     public_sources: list[dict[str, Any]] = Field(default_factory=list)
+    evidence_status: Literal["grounded", "insufficient", "unavailable"] = "unavailable"
+    knowledge_scope: Optional[dict[str, Any]] = None
+    recovery_actions: list[Literal["retry", "expand_range"]] = Field(default_factory=list)
 
 
 class RetryArtifactRequest(BaseModel):
@@ -204,6 +233,9 @@ class ChatResponse(BaseModel):
     sources: list[WebSearchResult] = Field(default_factory=list)
     knowledge_sources: list[KnowledgeSourceResult] = Field(default_factory=list)
     bundle: Optional[BundleResponse] = None
+    evidence_status: Literal["grounded", "insufficient", "unavailable"] = "unavailable"
+    knowledge_scope: Optional[dict[str, Any]] = None
+    recovery_actions: list[Literal["retry", "expand_range"]] = Field(default_factory=list)
 
 
 class WebSearchResponse(BaseModel):

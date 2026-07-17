@@ -22,6 +22,7 @@ import type {
   ReviewTask,
   ArtifactType,
   ResourceBundle,
+  DemoSnapshot,
   SessionHistory,
 } from '@/api'
 
@@ -54,6 +55,7 @@ export const useBackendStore = defineStore('backend', () => {
   const knowledgePrivacyMode = ref<KnowledgeBinding['privacy_mode']>('allow_model_context')
   const knowledgeLoading = ref(false)
   const knowledgeError = ref('')
+  const demoSnapshot = ref<DemoSnapshot | null>(null)
   let modelProfilePending = 0
   let profileStateTail = Promise.resolve<unknown>(undefined)
   let preferenceSaveTail = Promise.resolve<unknown>(undefined)
@@ -325,9 +327,23 @@ export const useBackendStore = defineStore('backend', () => {
   async function deleteKnowledgeDocument(documentId: number) { await backendApi.deleteKnowledgeDocument(documentId); await refreshKnowledge() }
   async function rebuildKnowledgeDocument(documentId: number) { const result = await backendApi.rebuildKnowledgeDocument(documentId); await refreshKnowledge(); return result }
 
+  async function startDemo(reset = false) {
+    const snapshot = reset ? await backendApi.resetDemo() : await backendApi.seedDemo()
+    demoSnapshot.value = snapshot
+    setSessionId(snapshot.session_id)
+    await refreshAll()
+    return snapshot
+  }
+
+  async function loadDemoStatus() {
+    const status = await backendApi.demoStatus()
+    demoSnapshot.value = status.seeded ? status as DemoSnapshot : null
+    return demoSnapshot.value
+  }
+
   return {
     sessionId, live, ready, model, session, progress, nextAction, reviews, mistakes,
-    knowledgeStatus, knowledgeCollections, knowledgeDocuments, knowledgeJobs,
+    knowledgeStatus, knowledgeCollections, knowledgeDocuments, knowledgeJobs, demoSnapshot,
     boundKnowledgeCollectionIds, knowledgePrivacyMode, knowledgeLoading, knowledgeError,
     resources, resourceBundles, questions, profileReady, modelConfigured, modelLoaded, loading, modelConfigBusy, modelProfileBusy, lastError,
     modelProfiles, modelPolicy, modelRuntimeStatus, sessionModelPreference,
@@ -337,5 +353,6 @@ export const useBackendStore = defineStore('backend', () => {
     loadSessionModelPreference, saveSessionModelPreference,
     refreshKnowledge, saveSessionKnowledgeCollections, chooseKnowledgeFiles,
     importDroppedKnowledgeFiles, cancelKnowledgeJob, retryKnowledgeJob, bulkKnowledgeDocuments, deleteKnowledgeDocument, rebuildKnowledgeDocument,
+    startDemo, loadDemoStatus,
   }
 })

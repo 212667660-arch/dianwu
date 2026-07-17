@@ -101,6 +101,9 @@ class ResourceBundle(BaseModel):
     created_at: str = Field(min_length=1, max_length=64)
     knowledge_sources: list[dict[str, Any]] = Field(default_factory=list)
     public_sources: list[dict[str, Any]] = Field(default_factory=list)
+    evidence_status: Literal["grounded", "insufficient", "unavailable"] = "unavailable"
+    knowledge_scope: Optional[dict[str, Any]] = None
+    recovery_actions: list[Literal["retry", "expand_range"]] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_catalog(self) -> "ResourceBundle":

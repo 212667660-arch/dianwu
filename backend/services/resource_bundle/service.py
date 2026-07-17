@@ -19,6 +19,7 @@ from backend.errors import (
 )
 from backend.knowledge.context import (
     KnowledgeContext,
+    KnowledgeRetrievalScope,
     citation_payload,
     retrieve_knowledge_context,
 )
@@ -230,6 +231,13 @@ def _bundle_from_record(record: dict[str, Any]) -> ResourceBundle:
         created_at=str(record["created_at"]),
         knowledge_sources=list(record.get("knowledge_sources") or []),
         public_sources=list(record.get("public_sources") or []),
+        evidence_status=str(record.get("evidence_status") or "unavailable"),
+        knowledge_scope=(
+            dict(record["knowledge_scope"])
+            if isinstance(record.get("knowledge_scope"), dict)
+            else None
+        ),
+        recovery_actions=list(record.get("recovery_actions") or []),
     )
 
 
@@ -273,6 +281,7 @@ class ResourceBundleService:
         is_disconnected: DisconnectCheck | None = None,
         on_event: EventSink | None = None,
         request_safety: Any | None = None,
+        knowledge_scope: KnowledgeRetrievalScope | None = None,
     ) -> ResourceBundle:
         session = repo.get_session(db, session_id)
         if session is None or session.state != repo.SessionState.PROFILED.value:
@@ -311,7 +320,11 @@ class ResourceBundleService:
                 self._learning_context_provider(db, session_id),
             ).safe_text
             query = build_knowledge_retrieval_query(db, session_id, safe_message)
-            knowledge_context = self._knowledge_retriever(db, session_id, query)
+            knowledge_context = (
+                self._knowledge_retriever(db, session_id, query, scope=knowledge_scope)
+                if knowledge_scope is not None
+                else self._knowledge_retriever(db, session_id, query)
+            )
             safe_knowledge = _filter_context(
                 self._safety_service,
                 knowledge_context.prompt,
@@ -321,9 +334,17 @@ class ResourceBundleService:
                     prompt=safe_knowledge.safe_text,
                     citations=knowledge_context.citations,
                     retrieval_mode=knowledge_context.retrieval_mode,
+                    evidence_status=knowledge_context.evidence_status,
+                    scope=knowledge_context.scope,
+                    recovery_actions=knowledge_context.recovery_actions,
                 )
             else:
-                knowledge_context = KnowledgeContext.empty()
+                knowledge_context = KnowledgeContext.empty(
+                    evidence_status=knowledge_context.evidence_status
+                    if knowledge_context.evidence_status != "grounded"
+                    else "unavailable",
+                    scope=knowledge_scope,
+                )
             knowledge_sources = knowledge_source_payload(
                 knowledge_context,
                 self._safety_service,
@@ -337,6 +358,11 @@ class ResourceBundleService:
             prompt_context = "\n\n".join(
                 item for item in (knowledge_context.prompt, public_context) if item
             )
+            if knowledge_context.evidence_status != "grounded":
+                prompt_context = "\n\n".join(filter(None, (
+                    prompt_context,
+                    '<evidence_status trusted="true">教材证据不足；不得伪造教材引用，必须明确说明证据不足。</evidence_status>',
+                )))
             source_allowlist = [
                 str(source["reference_id"])
                 for source in [*knowledge_sources, *public_sources]
@@ -373,6 +399,9 @@ class ResourceBundleService:
                     knowledge_sources=knowledge_sources,
                     public_sources=public_sources,
                     audit_session_tag=session_id,
+                    evidence_status=knowledge_context.evidence_status,
+                    knowledge_scope=knowledge_context.scope,
+                    recovery_actions=list(knowledge_context.recovery_actions),
                     on_event=on_event,
                 )
             finally:
@@ -386,6 +415,9 @@ class ResourceBundleService:
             bundle = result.bundle.model_copy(update={
                 "knowledge_sources": knowledge_sources,
                 "public_sources": public_sources,
+                "evidence_status": knowledge_context.evidence_status,
+                "knowledge_scope": knowledge_context.scope,
+                "recovery_actions": list(knowledge_context.recovery_actions),
             })
             save_bundle(db, session_id, bundle)
             repo.finish_bundle_generation(db, session)
@@ -456,6 +488,11 @@ class ResourceBundleService:
             original.knowledge_sources,
             original.public_sources,
         ).model_copy(update={"created_at": original.created_at})
+        updated = updated.model_copy(update={
+            "evidence_status": original.evidence_status,
+            "knowledge_scope": original.knowledge_scope,
+            "recovery_actions": original.recovery_actions,
+        })
         delete_bundle(db, temporary.bundle_id)
         save_bundle(db, session_id, updated)
         repo.commit(db)

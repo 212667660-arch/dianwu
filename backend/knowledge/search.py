@@ -158,6 +158,10 @@ class KnowledgeSearchRepository:
         query: str,
         collection_ids: Iterable[int],
         limit: int = 30,
+        *,
+        document_id: int | None = None,
+        page_start: int | None = None,
+        page_end: int | None = None,
     ) -> list[SearchHit]:
         selected_collections = sorted(
             {
@@ -188,6 +192,19 @@ class KnowledgeSearchRepository:
                 for index, collection_id in enumerate(selected_collections)
             },
         }
+        scope_conditions: list[str] = []
+        if document_id is not None:
+            scope_conditions.append("AND document.id = :document_id")
+            parameters["document_id"] = int(document_id)
+        if page_start is not None and page_end is not None:
+            scope_conditions.extend((
+                "AND chunk.locator_type = 'page'",
+                "AND chunk.locator_end >= :page_start",
+                "AND chunk.locator_start <= :page_end",
+            ))
+            parameters["page_start"] = int(page_start)
+            parameters["page_end"] = int(page_end)
+        scope_sql = "\n                  ".join(scope_conditions)
         rows = self.db.execute(
             text(
                 """
@@ -210,6 +227,7 @@ class KnowledgeSearchRepository:
                     ON document.id = chunk.document_id
                 WHERE knowledge_chunks_fts MATCH :match
                   AND document.deleted_at IS NULL
+                  """ + scope_sql + """
                   AND EXISTS (
                     SELECT 1
                     FROM knowledge_collection_documents AS link
@@ -244,6 +262,10 @@ class KnowledgeSearchRepository:
         self,
         chunk_ids: list[int],
         collection_ids: list[int],
+        *,
+        document_id: int | None = None,
+        page_start: int | None = None,
+        page_end: int | None = None,
     ) -> list[SearchHit]:
         if not chunk_ids or not collection_ids:
             return []
@@ -260,6 +282,19 @@ class KnowledgeSearchRepository:
                 for index, value in enumerate(collection_ids)
             },
         }
+        scope_conditions: list[str] = []
+        if document_id is not None:
+            scope_conditions.append("AND document.id = :document_id")
+            parameters["document_id"] = int(document_id)
+        if page_start is not None and page_end is not None:
+            scope_conditions.extend((
+                "AND chunk.locator_type = 'page'",
+                "AND chunk.locator_end >= :page_start",
+                "AND chunk.locator_start <= :page_end",
+            ))
+            parameters["page_start"] = int(page_start)
+            parameters["page_end"] = int(page_end)
+        scope_sql = "\n                  ".join(scope_conditions)
         rows = self.db.execute(
             text(
                 """
@@ -280,6 +315,7 @@ class KnowledgeSearchRepository:
                 + chunk_placeholders
                 + """)
                   AND document.deleted_at IS NULL
+                  """ + scope_sql + """
                   AND EXISTS (
                     SELECT 1
                     FROM knowledge_collection_documents AS link
@@ -314,6 +350,10 @@ class KnowledgeSearchRepository:
         query: str,
         collection_ids: Iterable[int],
         limit: int = 30,
+        *,
+        document_id: int | None = None,
+        page_start: int | None = None,
+        page_end: int | None = None,
     ) -> list[SearchHit]:
         selected_collections = sorted(
             {
@@ -328,6 +368,9 @@ class KnowledgeSearchRepository:
             query,
             selected_collections,
             30 if semantic_enabled else bounded_limit,
+            document_id=document_id,
+            page_start=page_start,
+            page_end=page_end,
         )
         if not semantic_enabled:
             return keyword_hits[:bounded_limit]
@@ -340,6 +383,9 @@ class KnowledgeSearchRepository:
             semantic_hits = self._hits_for_chunk_ids(
                 semantic_ids,
                 selected_collections,
+                document_id=document_id,
+                page_start=page_start,
+                page_end=page_end,
             )
         except Exception:
             logger.warning(

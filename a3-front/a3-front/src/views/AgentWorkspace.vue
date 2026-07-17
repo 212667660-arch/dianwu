@@ -13,6 +13,12 @@
       </article>
     </div>
 
+    <article v-if="backend.demoSnapshot" class="panel demo-agent-panel" data-testid="demo-agent-panel">
+      <div class="panel-header"><h2>一键演示 Agent 状态</h2><span class="status-pill" :class="backend.demoSnapshot.mode === 'offline' ? 'warn' : 'good'">{{ backend.demoSnapshot.mode === 'offline' ? '离线降级' : '在线辅助' }}</span></div>
+      <div class="panel-body demo-agent-list"><div v-for="step in backend.demoSnapshot.agent_steps" :key="step.agent"><span>COMPLETED</span><strong>{{ step.agent }}</strong><p>{{ step.detail }}</p></div></div>
+      <p v-if="backend.demoSnapshot.degradation_message" class="demo-agent-degradation">{{ backend.demoSnapshot.degradation_message }}</p>
+    </article>
+
     <div class="grid-2 main-grid">
       <article class="panel">
         <div class="panel-header"><h2>协作流程</h2><span class="muted">会话 {{ backend.sessionId }}</span></div>
@@ -55,7 +61,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { CircleCheck, Document, Plus, User } from '@element-plus/icons-vue'
 import { useBackendStore } from '@/stores/backend'
@@ -95,6 +101,7 @@ function compact(content: string) {
 function generate() {
   router.push({ path: '/tutor', query: { prompt: backend.nextAction?.suggested_request || '' } })
 }
+onMounted(() => { if (!backend.demoSnapshot) void backend.loadDemoStatus().catch(() => {}) })
 </script>
 
 <style scoped lang="scss">
@@ -105,6 +112,7 @@ function generate() {
 .agent-copy h2 { margin: 2px 0 4px; font-size: 17px; }
 .agent-copy p, .workflow-step p, .latest-resource p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
 .main-grid { align-items: stretch; }
+.demo-agent-panel{margin-bottom:16px}.demo-agent-list{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.demo-agent-list>div{padding:10px;background:#f6f2eb;border-radius:8px}.demo-agent-list span{display:block;color:var(--accent);font-size:9px}.demo-agent-list strong{display:block;margin:4px 0;font-size:12px}.demo-agent-list p,.demo-agent-degradation{margin:0;color:var(--muted);font-size:10px;line-height:1.5}.demo-agent-degradation{padding:0 16px 14px;color:#755f3d}
 .workflow-step { display: grid; grid-template-columns: 28px minmax(0, 1fr) 20px; align-items: center; gap: 11px; padding: 12px 0; opacity: .48; border-bottom: 1px solid var(--line); }
 .workflow-step:last-child { border: 0; }
 .workflow-step.done, .workflow-step.current { opacity: 1; }
@@ -119,5 +127,5 @@ function generate() {
 .event-row:last-child { border: 0; }
 .event-row p { margin: 0; line-height: 1.55; }
 .event-seq { color: var(--muted); font-size: 11px; }
-@media (max-width: 760px) { .agent-strip { grid-template-columns: 1fr; } .agent-unit { grid-template-columns: 44px minmax(0, 1fr); } .agent-unit > .status-pill { grid-column: 2; justify-self: start; } }
+@media (max-width: 760px) { .agent-strip { grid-template-columns: 1fr; } .agent-unit { grid-template-columns: 44px minmax(0, 1fr); } .agent-unit > .status-pill { grid-column: 2; justify-self: start; }.demo-agent-list{grid-template-columns:1fr} }
 </style>

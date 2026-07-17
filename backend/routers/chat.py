@@ -18,6 +18,7 @@ router = APIRouter(prefix="/api", tags=["chat"])
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)) -> ChatResponse:
+    knowledge_scope = req.knowledge_scope.to_domain() if req.knowledge_scope is not None else None
     if req.resource_mode:
         result = await handle_message(
             db,
@@ -26,6 +27,7 @@ async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)) -> Chat
             resource_mode=req.resource_mode,
             resource_type=req.resource_type,
             safety_service=content_safety_service,
+            knowledge_scope=knowledge_scope,
         )
     else:
         result = await handle_message(
@@ -33,6 +35,7 @@ async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)) -> Chat
             req.session_id,
             req.message,
             safety_service=content_safety_service,
+            knowledge_scope=knowledge_scope,
         )
     return ChatResponse(
         reply=result.reply,
@@ -47,16 +50,21 @@ async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)) -> Chat
             if result.bundle is not None
             else None
         ),
+        evidence_status=result.evidence_status,
+        knowledge_scope=result.knowledge_scope,
+        recovery_actions=result.recovery_actions,
     )
 
 
 @router.post("/chat/stream")
 async def chat_stream_endpoint(req: ChatRequest, request: Request, db: Session = Depends(get_db)) -> StreamingResponse:
+    knowledge_scope = req.knowledge_scope.to_domain() if req.knowledge_scope is not None else None
     async def events():
         async for event in stream_message(db, req.session_id, req.message, request.is_disconnected,
                                   resource_mode=req.resource_mode,
                                   resource_type=req.resource_type,
-                                  safety_service=content_safety_service):
+                                  safety_service=content_safety_service,
+                                  knowledge_scope=knowledge_scope):
             name = str(event.pop("event"))
             payload = json.dumps(event, ensure_ascii=False)
             yield f"event: {name}\ndata: {payload}\n\n"

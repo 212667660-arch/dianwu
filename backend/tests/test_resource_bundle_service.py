@@ -7,7 +7,7 @@ import pytest
 
 from backend.database import SessionLocal, init_db
 from backend.errors import UnexpectedBackendError
-from backend.knowledge.context import KnowledgeCitation, KnowledgeContext
+from backend.knowledge.context import KnowledgeCitation, KnowledgeContext, KnowledgeRetrievalScope
 from backend.models.schemas import WebSearchResult
 from backend.protocols.v2.models import (
     ArtifactStatus,
@@ -164,6 +164,53 @@ async def test_service_passes_learning_knowledge_and_sources_to_pipeline() -> No
     assert result.public_sources[0]["reference_id"] == "资料2"
     assert session is not None and session.state == repo.SessionState.PROFILED.value
     assert stored is not None and stored["protocol_version"] == "learning-resource-bundle/v2"
+
+
+@pytest.mark.asyncio
+async def test_service_passes_page_scope_and_evidence_status_to_retrieval_and_pipeline() -> None:
+    session_id = _session_id("bundle-service-page-scope")
+    _seed_profiled_session(session_id)
+    pipeline = CapturingPipeline()
+    captured: dict[str, object] = {}
+
+    def retrieve(_db, _sid, _query, *, scope):
+        captured["scope"] = scope
+        return KnowledgeContext(
+            prompt="",
+            citations=(),
+            retrieval_mode="keyword",
+            evidence_status="insufficient",
+            scope=scope.as_payload(),
+            recovery_actions=("retry", "expand_range"),
+        )
+
+    service = ResourceBundleService(
+        pipeline=pipeline,
+        safety_service=AllowSafety(),
+        learning_context_provider=lambda _db, _sid: "",
+        knowledge_retriever=retrieve,
+        web_search=lambda _message: _async_value([]),
+    )
+    scope = KnowledgeRetrievalScope(
+        document_id=9,
+        page_start=10,
+        page_end=20,
+        search_mode="focused",
+    )
+
+    with SessionLocal() as db:
+        await service.generate(
+            db,
+            session_id,
+            "总结教材",
+            ResourceSelection.bundle(),
+            generation_id="generation-page-scope",
+            knowledge_scope=scope,
+        )
+
+    assert captured["scope"] == scope
+    assert pipeline.calls[0]["evidence_status"] == "insufficient"
+    assert pipeline.calls[0]["knowledge_scope"] == scope.as_payload()
 
 
 @pytest.mark.asyncio

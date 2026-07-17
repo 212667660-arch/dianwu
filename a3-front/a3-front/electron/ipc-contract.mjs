@@ -46,7 +46,8 @@ const PET_SCALE_VALUES = new Set([0.5, 0.75, 1, 1.25, 1.5])
 const PET_SPEED_VALUES = new Set([0.5, 0.75, 1, 1.25, 1.5, 2])
 const PET_VOLUME_VALUES = new Set([0, 0.25, 0.5, 0.75, 1])
 const PET_TASK_STATES = new Set(['idle', 'running', 'waiting', 'review', 'failed'])
-const CHAT_BODY_FIELDS = new Set(['session_id', 'message', 'resource_mode', 'resource_type'])
+const CHAT_BODY_FIELDS = new Set(['session_id', 'message', 'resource_mode', 'resource_type', 'knowledge_scope'])
+const KNOWLEDGE_SCOPE_FIELDS = new Set(['document_id', 'page_start', 'page_end', 'search_mode'])
 const RESOURCE_MODES = new Set(['bundle', 'single'])
 const ARTIFACT_TYPES = new Set(['course_explanation', 'mind_map', 'question_bank', 'extended_reading', 'adaptive_practice'])
 const RETRY_BODY_FIELDS = new Set(['session_id'])
@@ -428,6 +429,8 @@ export function validateDesktopRequest(input, { stream = false } = {}) {
     const knowledgeBulkBody = validateKnowledgeBulkInput(input.body)
     if (!knowledgeBulkBody.ok) return knowledgeBulkBody
     normalizedBody = knowledgeBulkBody.value
+  } else if (route.kind === 'demo' && input.body !== undefined) {
+    return denied('Competition demo routes do not accept renderer fixture data.')
   }
 
   if (route.kind === 'generation-cancel') {
@@ -490,6 +493,10 @@ export function buildBackendUrl(baseUrl, request) {
 }
 
 function matchAllowedRoute(method, path, stream) {
+  if (
+    (method === 'GET' && path === '/api/demo/status')
+    || (method === 'POST' && (path === '/api/demo/seed' || path === '/api/demo/reset'))
+  ) return { ok: true, kind: 'demo' }
   if (method === 'GET' && (
     path === '/health/live'
     || path === '/health/ready'
@@ -670,20 +677,53 @@ function validateChatBody(body) {
   if (sessionId === null || !SESSION_ID_PATTERN.test(sessionId) || message === null) {
     return invalid('Chat body is invalid.')
   }
+  const scopeResult = validateKnowledgeScope(body.knowledge_scope)
+  if (!scopeResult.ok) return scopeResult
+  const knowledgeScope = scopeResult.value
   const mode = body.resource_mode
   const type = body.resource_type
   if (mode === undefined && type === undefined) {
-    return { ok: true, value: { session_id: sessionId, message } }
+    return { ok: true, value: { session_id: sessionId, message, ...(knowledgeScope ? { knowledge_scope: knowledgeScope } : {}) } }
   }
   if (!RESOURCE_MODES.has(mode)) return invalid('Chat resource mode is invalid.')
   if (mode === 'bundle') {
     if (type !== undefined) return invalid('Bundle mode does not accept resource_type.')
-    return { ok: true, value: { session_id: sessionId, message, resource_mode: mode } }
+    return { ok: true, value: { session_id: sessionId, message, resource_mode: mode, ...(knowledgeScope ? { knowledge_scope: knowledgeScope } : {}) } }
   }
   if (!ARTIFACT_TYPES.has(type)) return invalid('Single mode resource_type is invalid.')
   return {
     ok: true,
-    value: { session_id: sessionId, message, resource_mode: mode, resource_type: type },
+    value: { session_id: sessionId, message, resource_mode: mode, resource_type: type, ...(knowledgeScope ? { knowledge_scope: knowledgeScope } : {}) },
+  }
+}
+
+function validateKnowledgeScope(input) {
+  if (input === undefined) return { ok: true, value: undefined }
+  if (!isPlainObject(input)) return invalid('Knowledge scope must be an object.')
+  if (Object.keys(input).some(field => !KNOWLEDGE_SCOPE_FIELDS.has(field))) {
+    return denied('Knowledge scope contains an unsupported field.')
+  }
+  const documentId = input.document_id
+  if (documentId !== undefined && (!Number.isSafeInteger(documentId) || documentId < 1)) {
+    return invalid('Knowledge scope document is invalid.')
+  }
+  const hasStart = input.page_start !== undefined
+  const hasEnd = input.page_end !== undefined
+  if (hasStart !== hasEnd) return invalid('Knowledge scope page range is incomplete.')
+  if (hasStart && (
+    !Number.isSafeInteger(input.page_start) || !Number.isSafeInteger(input.page_end)
+    || input.page_start < 1 || input.page_end < input.page_start
+    || input.page_end - input.page_start + 1 > 500
+  )) return invalid('Knowledge scope page range is invalid.')
+  const searchMode = input.search_mode ?? 'focused'
+  if (!['focused', 'expanded'].includes(searchMode)) return invalid('Knowledge scope search mode is invalid.')
+  return {
+    ok: true,
+    value: {
+      ...(documentId === undefined ? {} : { document_id: documentId }),
+      ...(hasStart ? { page_start: input.page_start, page_end: input.page_end } : {}),
+      search_mode: searchMode,
+    },
   }
 }
 

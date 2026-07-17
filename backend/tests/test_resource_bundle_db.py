@@ -55,6 +55,44 @@ def test_save_and_retrieve_bundle():
         assert loaded["status"] == "COMPLETED"
 
 
+def test_save_and_retrieve_bundle_keeps_evidence_recovery_metadata():
+    bundle_id = _make_bundle_id()
+    artifact = ResourceArtifact(
+        artifact_id=f"{bundle_id}-course",
+        type=ArtifactType.COURSE_EXPLANATION,
+        title="讲解",
+        status=ArtifactStatus.SUCCEEDED,
+        body="证据不足",
+        quality_score=70,
+    )
+    bundle = ResourceBundle(
+        bundle_id=bundle_id,
+        topic="教材范围",
+        profile_version=1,
+        learning_state_version="v1",
+        mode="single",
+        status=BundleStatus.COMPLETED,
+        requested_types=[ArtifactType.COURSE_EXPLANATION],
+        artifacts=[artifact],
+        aggregate_quality=70,
+        created_at="2026-07-18T00:00:00Z",
+        evidence_status="insufficient",
+        knowledge_scope={"document_id": 9, "page_start": 12, "page_end": 20, "search_mode": "focused"},
+        recovery_actions=["retry", "expand_range"],
+    )
+
+    with SessionLocal() as db:
+        save_bundle(db, f"session-{bundle_id}", bundle)
+        db.commit()
+    with SessionLocal() as db:
+        loaded = get_bundle(db, bundle_id)
+
+    assert loaded is not None
+    assert loaded["evidence_status"] == "insufficient"
+    assert loaded["knowledge_scope"] == bundle.knowledge_scope
+    assert loaded["recovery_actions"] == ["retry", "expand_range"]
+
+
 def test_save_partial_and_retry_artifact():
     bundle_id = _make_bundle_id()
     aid = f"af-{uuid.uuid4().hex[:8]}"

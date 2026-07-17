@@ -21,6 +21,7 @@ from backend.services.content_safety.models import (
 from backend.services.content_safety.prompt_boundary import untrusted_json_block
 from backend.services.content_safety.reviewer import ReviewContext
 from backend.services.resource_bundle.aggregator import aggregate_bundle
+from backend.services.resource_bundle.answer_reviewer import AnswerReviewerAgent
 from backend.services.resource_bundle.cancel import (
     cleanup_cancellation, get_or_create_cancellation,
 )
@@ -175,9 +176,10 @@ async def _complete_or_cancel(gateway, messages, temperature, cancellation) -> C
 
 
 class BundlePipeline:
-    def __init__(self, gateway: Any, *, safety_service: Any | None = None) -> None:
+    def __init__(self, gateway: Any, *, safety_service: Any | None = None, answer_reviewer: Any | None = None) -> None:
         self._gateway = gateway
         self._safety_service = safety_service
+        self._answer_reviewer = answer_reviewer or AnswerReviewerAgent()
 
     async def run(
         self, bundle_id: str, mode: str, single_type: ArtifactType | None,
@@ -187,6 +189,9 @@ class BundlePipeline:
         knowledge_sources: list[dict[str, object]] | None = None,
         public_sources: list[dict[str, object]] | None = None,
         audit_session_tag: str = "",
+        evidence_status: str = "unavailable",
+        knowledge_scope: dict[str, object] | None = None,
+        recovery_actions: list[str] | None = None,
         on_event=None,
     ) -> PipelineResult:
         cancellation = get_or_create_cancellation(bundle_id)
@@ -245,6 +250,9 @@ class BundlePipeline:
                 "bundle_id": bundle_id,
                 "topic": brief.topic,
                 "requested_types": [item.value for item in requested_types],
+                "evidence_status": evidence_status,
+                "knowledge_scope": knowledge_scope,
+                "recovery_actions": recovery_actions or [],
             })
 
             semaphore = asyncio.Semaphore(_MAX_CONCURRENT)
@@ -281,6 +289,95 @@ class BundlePipeline:
                                 source_allowlist=tuple(brief.source_allowlist),
                                 subject_category=brief.subject_category,
                             )
+                            if (
+                                result.artifact.status == ArtifactStatus.SUCCEEDED
+                                and self._answer_reviewer.applies_to(at)
+                            ):
+                                await _emit(on_event, {
+                                    "event": "answer_review",
+                                    "artifact_type": at.value,
+                                    "status": "STARTED",
+                                })
+                                verdict = self._answer_reviewer.review(
+                                    result.artifact,
+                                    source_allowlist=set(brief.source_allowlist),
+                                    textbook_source_ids={
+                                        str(item.get("reference_id"))
+                                        for item in knowledge_sources or []
+                                        if item.get("reference_id")
+                                    },
+                                    subject_category=brief.subject_category,
+                                    require_textbook_sections=bool(knowledge_scope or knowledge_sources),
+                                )
+                                if verdict.approved:
+                                    result = SpecialistResult(
+                                        artifact=self._answer_reviewer.attach(
+                                            result.artifact,
+                                            verdict,
+                                            status="PASSED",
+                                            repair_attempted=False,
+                                        ),
+                                        raw_output=result.raw_output,
+                                    )
+                                    review_status = "PASSED"
+                                else:
+                                    repaired_completion = await _complete_or_cancel(
+                                        self._gateway,
+                                        self._answer_reviewer.repair_messages(messages, result.artifact, verdict),
+                                        0.2,
+                                        cancellation,
+                                    )
+                                    repaired = specialist.parse(
+                                        repaired_completion.text,
+                                        f"{bundle_id}-{at.value}",
+                                        source_allowlist=tuple(brief.source_allowlist),
+                                        subject_category=brief.subject_category,
+                                    )
+                                    repaired_verdict = (
+                                        self._answer_reviewer.review(
+                                            repaired.artifact,
+                                            source_allowlist=set(brief.source_allowlist),
+                                            textbook_source_ids={
+                                                str(item.get("reference_id"))
+                                                for item in knowledge_sources or []
+                                                if item.get("reference_id")
+                                            },
+                                            subject_category=brief.subject_category,
+                                            require_textbook_sections=bool(knowledge_scope or knowledge_sources),
+                                        )
+                                        if repaired.artifact.status == ArtifactStatus.SUCCEEDED
+                                        else verdict
+                                    )
+                                    if repaired.artifact.status == ArtifactStatus.SUCCEEDED and repaired_verdict.approved:
+                                        completion = repaired_completion
+                                        result = SpecialistResult(
+                                            artifact=self._answer_reviewer.attach(
+                                                repaired.artifact,
+                                                repaired_verdict,
+                                                status="REPAIRED",
+                                                repair_attempted=True,
+                                            ),
+                                            raw_output=repaired.raw_output,
+                                        )
+                                        review_status = "REPAIRED"
+                                    else:
+                                        result = SpecialistResult(
+                                            artifact=self._answer_reviewer.attach(
+                                                result.artifact,
+                                                repaired_verdict,
+                                                status="WARNING",
+                                                repair_attempted=True,
+                                                warning=True,
+                                            ),
+                                            raw_output=result.raw_output,
+                                        )
+                                        review_status = "WARNING"
+                                await _emit(on_event, {
+                                    "event": "answer_review",
+                                    "artifact_type": at.value,
+                                    "status": review_status,
+                                    "issues": result.artifact.type_specific_data["answer_review"]["issues"],
+                                })
                             if (
                                 self._safety_service is not None
                                 and result.artifact.status == ArtifactStatus.SUCCEEDED

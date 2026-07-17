@@ -29,7 +29,8 @@ class CourseExplanationSpecialist(Specialist):
             static_instruction=(
                 "请严格按照以下七个部分输出。逐步讲解需要说明每一步的依据；"
                 "只有服务器提供的[资料N]可以作为教材引用。检索证据不足时必须明确说明证据不足，"
-                "不得伪造教材原文、页码或引用：\n"
+                "不得伪造教材原文、页码或引用。另须增加‘## 教材内容’和‘## 模型补充知识’两个明确分区："
+                "教材分区只写检索证据并标注[资料N]或证据不足，模型补充分区不得冒充教材原文：\n"
                 f"{section_instruction}"
             ),
             brief=brief,

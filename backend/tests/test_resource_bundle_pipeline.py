@@ -29,6 +29,16 @@ PLAN_OUT = """[协议 resource-plan/v2]
 学科类别: math
 [协议结束]"""
 
+GROUNDED_PLAN_OUT = """[协议 resource-plan/v2]
+主题: 一次函数
+学习目标: 会代入求值
+目标难度: 基础
+薄弱知识点:
+风格约束:
+来源白名单: 资料1
+学科类别: math
+[协议结束]"""
+
 COURSE_OUT = """## 学习目标
 目标
 ## 核心概念与定义
@@ -43,6 +53,28 @@ COURSE_OUT = """## 学习目标
 误区
 ## 个性化建议
 建议"""
+
+COURSE_REVIEW_BAD = COURSE_OUT + """
+## 教材内容
+证据说明不完整。
+## 模型补充知识
+错误引用[资料1]。
+## 例题复核
+$y=2x+1
+代入 x=2。
+## 结果检查
+待检查。"""
+
+COURSE_REVIEW_REPAIRED = COURSE_OUT + """
+## 教材内容
+一次函数的定义与例题依据见[资料1]。
+## 模型补充知识
+图像直观属于模型补充说明。
+## 例题复核
+$y=2x+1$
+代入 $x=2$ 得 $y=2\\times2+1=5$。
+## 结果检查
+代回原式成立。"""
 
 MERMAID_OUT = """## Mermaid
 flowchart TD
@@ -156,12 +188,50 @@ class TestPipelineSingleMode:
         assert [event["event"] for event in events] == [
             "resource_plan",
             "resource_progress",
+            "answer_review",
+            "answer_review",
             "resource_artifact",
             "resource_progress",
             "resource_bundle",
         ]
         assert events[0]["topic"] == "测试主题"
         assert events[-1]["status"] == "COMPLETED"
+
+    @pytest.mark.asyncio
+    async def test_answer_reviewer_repairs_once_and_records_agent_verdict(self):
+        gateway = ScriptedGateway(completions=[
+            GROUNDED_PLAN_OUT,
+            COURSE_REVIEW_BAD,
+            COURSE_REVIEW_REPAIRED,
+        ])
+        pipeline = BundlePipeline(gateway=gateway)
+        events: list[dict[str, object]] = []
+
+        result = await pipeline.run(
+            bundle_id="test-answer-review",
+            mode="single",
+            single_type=ArtifactType.COURSE_EXPLANATION,
+            profile_text="画像",
+            learning_context="",
+            knowledge_context="[资料1] 一次函数教材",
+            user_request="生成例题",
+            source_allowlist=["资料1"],
+            knowledge_sources=[{"reference_id": "资料1"}],
+            subject_category_hint="math",
+            profile_version=1,
+            learning_state_version="v1",
+            knowledge_scope={"document_id": 1, "page_start": 1, "page_end": 5, "search_mode": "focused"},
+            on_event=events.append,
+        )
+
+        reviewed = result.bundle.artifacts[0]
+        assert reviewed.status == ArtifactStatus.SUCCEEDED
+        assert reviewed.body == COURSE_REVIEW_REPAIRED
+        assert reviewed.type_specific_data["answer_review"]["status"] == "REPAIRED"
+        assert reviewed.type_specific_data["answer_review"]["repair_attempted"] is True
+        assert [event["status"] for event in events if event["event"] == "answer_review"] == [
+            "STARTED", "REPAIRED",
+        ]
 
     @pytest.mark.asyncio
     async def test_failed_plan_event_keeps_trusted_source_snapshots(self):

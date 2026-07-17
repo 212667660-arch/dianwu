@@ -142,3 +142,55 @@ def test_trashed_document_is_excluded_from_keyword_search(search_fixture) -> Non
     repository.soft_delete_documents([document.id])
 
     assert search.search("回收站隔离", collection_ids=[first_id]) == []
+
+
+def test_page_scope_is_inclusive_and_can_lock_to_one_document(search_fixture) -> None:
+    repository, search, first_id, _second_id = search_fixture
+    first_document = repository.upsert_document(
+        sha256="f" * 64,
+        display_name="第一册.pdf",
+        extension=".pdf",
+        mime_type="application/pdf",
+        byte_size=100,
+        object_relpath=f"objects/{'f' * 64}",
+    )
+    second_document = repository.upsert_document(
+        sha256="9" * 64,
+        display_name="第二册.pdf",
+        extension=".pdf",
+        mime_type="application/pdf",
+        byte_size=100,
+        object_relpath=f"objects/{'9' * 64}",
+    )
+    for document in (first_document, second_document):
+        repository.link_document(first_id, document.id)
+        repository.replace_chunks(
+            document.id,
+            chunk_blocks(
+                [
+                    StructuredBlock(
+                        text=f"函数范围 第 {page} 页",
+                        heading_path=("函数",),
+                        locator_type="page",
+                        locator_start=page,
+                        locator_end=page,
+                    )
+                    for page in (1, 2, 3, 4)
+                ],
+                parser_version="chunk-v1",
+            ),
+        )
+        search.replace_document_index(document.id)
+
+    results = search.search(
+        "函数范围",
+        collection_ids=[first_id],
+        document_id=first_document.id,
+        page_start=2,
+        page_end=3,
+    )
+
+    assert [(item.document_id, item.locator_start) for item in results] == [
+        (first_document.id, 2),
+        (first_document.id, 3),
+    ]

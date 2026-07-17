@@ -16,6 +16,7 @@ from backend.knowledge.context import (
     citation_payload,
     retrieve_knowledge_context,
     sanitize_citations,
+    KnowledgeRetrievalScope,
 )
 from backend.protocols import parse_profile, parse_resource, serialize_profile, serialize_resource
 from backend.protocols.v2.models import ArtifactType, ResourceBundle
@@ -279,6 +280,9 @@ class ChatResult:
         sources: list[dict[str, str]] | None = None,
         knowledge_sources: list[dict[str, object]] | None = None,
         bundle: ResourceBundle | None = None,
+        evidence_status: str = "unavailable",
+        knowledge_scope: dict[str, object] | None = None,
+        recovery_actions: list[str] | None = None,
     ) -> None:
         self.reply = reply
         self.phase = phase
@@ -288,6 +292,9 @@ class ChatResult:
         self.sources = sources or []
         self.knowledge_sources = knowledge_sources or []
         self.bundle = bundle
+        self.evidence_status = evidence_status
+        self.knowledge_scope = knowledge_scope
+        self.recovery_actions = recovery_actions or []
 
 
 def _is_rediagnose(message: str) -> bool:
@@ -382,6 +389,17 @@ def _knowledge_payload(
     return knowledge_source_payload(context, safety_service)
 
 
+def _retrieve_scoped_knowledge(
+    db: Session,
+    session_id: str,
+    query: str,
+    scope: KnowledgeRetrievalScope | None,
+) -> KnowledgeContext:
+    if scope is None:
+        return retrieve_knowledge_context(db, session_id, query)
+    return retrieve_knowledge_context(db, session_id, query, scope=scope)
+
+
 async def _diagnosis_reply(
     db: Session,
     session,
@@ -423,6 +441,7 @@ async def handle_message(
     resource_mode: str | None = None,
     resource_type: str | None = None,
     safety_service: Any | None = None,
+    knowledge_scope: KnowledgeRetrievalScope | None = None,
 ) -> ChatResult:
     async with _workflow_lock(session_id):
         return await _handle_message(
@@ -432,6 +451,7 @@ async def handle_message(
             resource_mode=resource_mode,
             resource_type=resource_type,
             safety_service=safety_service,
+            knowledge_scope=knowledge_scope,
         )
 
 
@@ -442,6 +462,7 @@ async def _handle_message(
     resource_mode: str | None = None,
     resource_type: str | None = None,
     safety_service: Any | None = None,
+    knowledge_scope: KnowledgeRetrievalScope | None = None,
 ) -> ChatResult:
     session = repo.get_or_create_session(db, session_id)
     request_id = uuid.uuid4().hex
@@ -514,6 +535,7 @@ async def _handle_message(
                     selection,
                     generation_id=uuid.uuid4().hex,
                     request_safety=request_safety,
+                    knowledge_scope=knowledge_scope,
                 )
                 bundle_text = json.dumps(bundle.model_dump(mode="json"), ensure_ascii=False)
                 repo.append_message(db, session_id, "assistant", bundle_text)
@@ -524,13 +546,17 @@ async def _handle_message(
                     stable_session.state if stable_session is not None else repo.SessionState.PROFILED.value,
                     session.profile_version,
                     bundle=bundle,
+                    evidence_status=bundle.evidence_status,
+                    knowledge_scope=bundle.knowledge_scope,
+                    recovery_actions=bundle.recovery_actions,
                 )
             knowledge_context = _safe_knowledge_context(
                 safety_service,
-                retrieve_knowledge_context(
+                _retrieve_scoped_knowledge(
                     db,
                     session_id,
                     _knowledge_retrieval_query(db, session_id, message),
+                    knowledge_scope,
                 ),
             )
             knowledge_sources = _knowledge_payload(knowledge_context, safety_service)
@@ -620,6 +646,9 @@ async def _handle_message(
                 session.profile_version,
                 sources=source_payload,
                 knowledge_sources=knowledge_sources,
+                evidence_status=knowledge_context.evidence_status,
+                knowledge_scope=knowledge_context.scope,
+                recovery_actions=list(knowledge_context.recovery_actions),
             )
 
         if session.state == repo.SessionState.GENERATING.value:
@@ -633,19 +662,22 @@ async def _handle_message(
 async def stream_message(db: Session, session_id: str, message: str, is_disconnected,
                          resource_mode: str | None = None,
                          resource_type: str | None = None,
-                         safety_service: Any | None = None) -> AsyncIterator[dict[str, object]]:
+                         safety_service: Any | None = None,
+                         knowledge_scope: KnowledgeRetrievalScope | None = None) -> AsyncIterator[dict[str, object]]:
     async with _workflow_lock(session_id):
         async for event in _stream_message(db, session_id, message, is_disconnected,
                                         resource_mode=resource_mode,
                                         resource_type=resource_type,
-                                        safety_service=safety_service):
+                                        safety_service=safety_service,
+                                        knowledge_scope=knowledge_scope):
             yield event
 
 
 async def _stream_message(db: Session, session_id: str, message: str, is_disconnected,
                           resource_mode: str | None = None,
                           resource_type: str | None = None,
-                          safety_service: Any | None = None) -> AsyncIterator[dict[str, object]]:
+                          safety_service: Any | None = None,
+                          knowledge_scope: KnowledgeRetrievalScope | None = None) -> AsyncIterator[dict[str, object]]:
     request_id = uuid.uuid4().hex
     generation_id = uuid.uuid4().hex
     cancel_event = asyncio.Event()
@@ -779,6 +811,7 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
                 is_disconnected=is_disconnected,
                 on_event=on_bundle_event,
                 request_safety=request_safety,
+                knowledge_scope=knowledge_scope,
             ))
             while True:
                 queue_task = asyncio.create_task(event_queue.get())
@@ -819,10 +852,11 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
 
         knowledge_context = _safe_knowledge_context(
             safety_service,
-            retrieve_knowledge_context(
+            _retrieve_scoped_knowledge(
                 db,
                 session_id,
                 _knowledge_retrieval_query(db, session_id, message),
+                knowledge_scope,
             ),
         )
         knowledge_sources = _knowledge_payload(knowledge_context, safety_service)
@@ -860,6 +894,13 @@ async def _stream_message(db: Session, session_id: str, message: str, is_disconn
         }
         yield {"event": "sources", "request_id": request_id, "sources": source_payload, "cached": False}
         yield {"event": "knowledge_sources", "request_id": request_id, "sources": knowledge_sources, "cached": False}
+        yield {
+            "event": "knowledge_evidence",
+            "request_id": request_id,
+            "status": knowledge_context.evidence_status,
+            "scope": knowledge_context.scope,
+            "recovery_actions": list(knowledge_context.recovery_actions),
+        }
         learning_context = _safe_context_text(
             safety_service,
             learning.learning_context(db, session_id),

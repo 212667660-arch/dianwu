@@ -155,6 +155,43 @@ test('chat body permits only fixed resource selection fields', () => {
   }, undefined, 'DESKTOP_REQUEST_DENIED')
 })
 
+test('chat body accepts only bounded textbook page scopes', () => {
+  const accepted = expectAccepted({
+    method: 'POST', path: '/api/chat', body: {
+      session_id: 's1', message: '总结教材', resource_mode: 'bundle',
+      knowledge_scope: { document_id: 7, page_start: 12, page_end: 36, search_mode: 'expanded' },
+    },
+  })
+  assert.deepEqual(accepted.body.knowledge_scope, {
+    document_id: 7, page_start: 12, page_end: 36, search_mode: 'expanded',
+  })
+
+  for (const knowledge_scope of [
+    { page_start: 2 },
+    { page_start: 8, page_end: 7 },
+    { page_start: 1, page_end: 501 },
+    { page_start: 1, page_end: 2, search_mode: 'all' },
+    { document_id: 0 },
+    { page_start: 1, page_end: 2, secret: 'no' },
+  ]) {
+    assert.equal(validateDesktopRequest({
+      method: 'POST', path: '/api/chat', body: { session_id: 's1', message: '总结', knowledge_scope },
+    }).ok, false)
+  }
+})
+
+test('competition demo routes accept no renderer supplied seed data', () => {
+  for (const request of [
+    { method: 'GET', path: '/api/demo/status' },
+    { method: 'POST', path: '/api/demo/seed' },
+    { method: 'POST', path: '/api/demo/reset' },
+  ]) expectAccepted(request)
+
+  for (const path of ['/api/demo/seed', '/api/demo/reset']) {
+    assert.equal(validateDesktopRequest({ method: 'POST', path, body: { fixture: 'copyrighted-text' } }).ok, false)
+  }
+})
+
 test('artifact retry route accepts only session ownership', () => {
   const accepted = expectAccepted({
     method: 'POST',
