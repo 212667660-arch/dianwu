@@ -1,4 +1,4 @@
-import crypto from 'node:crypto'
+import { constants as fsConstants } from 'node:fs'
 import { chmod, copyFile, mkdir, rm } from 'node:fs/promises'
 import path from 'node:path'
 
@@ -25,6 +25,15 @@ export function createKnowledgeController({
 }) {
   let pollTimer = null
   let closed = false
+  let previewReady = null
+
+  function preparePreviewRoot() {
+    if (!previewReady) {
+      previewReady = rm(previewRoot, { recursive: true, force: true })
+        .then(() => mkdir(previewRoot, { recursive: true }))
+    }
+    return previewReady
+  }
 
   async function request(event, input) {
     if (!validateSender(event)) return failure('DESKTOP_REQUEST_DENIED', '知识库请求来源不可信。')
@@ -88,12 +97,17 @@ export function createKnowledgeController({
     if (!previewRoot) return failure('KNOWLEDGE_SOURCE_OPEN_FAILED', '预览目录尚未配置。')
     const source = await documentSource(event, documentId)
     if (source?.ok === false) return source
-    const directory = path.join(previewRoot, crypto.randomUUID())
+    await preparePreviewRoot()
+    const directory = path.join(previewRoot, source.document.sha256)
     await mkdir(directory, { recursive: true })
     const safeName = path.basename(source.document.display_name).replace(/[\0\r\n/\\]/g, '_').slice(0, 255) || 'knowledge-source'
     const previewPath = path.join(directory, safeName)
-    await copyFile(source.sourcePath, previewPath)
-    await chmod(previewPath, 0o444)
+    try {
+      await copyFile(source.sourcePath, previewPath, fsConstants.COPYFILE_EXCL)
+      await chmod(previewPath, 0o444)
+    } catch (error) {
+      if (error?.code !== 'EEXIST') throw error
+    }
     const message = await openPath(previewPath)
     if (message) return failure('KNOWLEDGE_SOURCE_OPEN_FAILED', message)
     return {

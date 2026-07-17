@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
@@ -61,6 +61,37 @@ test('open source resolves document hash to a controlled readonly copy', async (
   assert.equal(await readFile(opened[0], 'utf8'), 'source')
   assert.equal((await stat(opened[0])).mode & 0o222, 0)
   assert.equal(JSON.stringify(result).includes(root), false)
+})
+
+test('preview copies are cleaned once and reused by document hash', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'a3-preview-cache-'))
+  const objectPath = path.join(root, 'object')
+  const previewRoot = path.join(root, 'knowledge-preview')
+  const stalePath = path.join(previewRoot, 'stale', 'old.txt')
+  await writeFile(objectPath, 'source', 'utf8')
+  await mkdir(path.dirname(stalePath), { recursive: true })
+  await writeFile(stalePath, 'stale', 'utf8')
+  const opened = []
+  const controller = createKnowledgeController({
+    chooseFiles: async () => [],
+    importer: { importPaths: async () => [], resolveObject: async () => objectPath },
+    apiRequest: async () => ({
+      ok: true, status: 200,
+      data: { id: 9, sha256: 'c'.repeat(64), display_name: '教材.txt' },
+    }),
+    validateSender: () => true,
+    previewRoot,
+    openPath: async filePath => { opened.push(filePath); return '' },
+  })
+
+  assert.equal((await stat(stalePath)).isFile(), true)
+  assert.equal((await controller.openSource({}, 9, { type: 'page', start: 1, end: 1 })).ok, true)
+  assert.equal((await controller.openSource({}, 9, { type: 'page', start: 1, end: 1 })).ok, true)
+
+  assert.equal(opened.length, 2)
+  assert.equal(opened[0], opened[1])
+  await assert.rejects(stat(stalePath), error => error?.code === 'ENOENT')
+  assert.match(opened[0], new RegExp(`knowledge-preview[\\\\/]${'c'.repeat(64)}[\\\\/]`))
 })
 
 
