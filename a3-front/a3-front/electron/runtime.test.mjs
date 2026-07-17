@@ -275,6 +275,18 @@ test('renderer, preload, and desktop bundle do not receive token or backend addr
   }
 })
 
+test('main process owns a recoverable tray and complete exit lifecycle', () => {
+  const main = fs.readFileSync(path.join(projectDir, 'electron', 'main.mjs'), 'utf8')
+
+  assert.match(main, /import \{[^}]*\bMenu\b[^}]*\bTray\b[^}]*\} from 'electron'/s)
+  assert.match(main, /createTrayController/)
+  assert.match(main, /mainWindowCloseAction/)
+  assert.match(main, /mainWindow\.on\('close'/)
+  assert.match(main, /trayController\?\.show\(\)/)
+  assert.match(main, /trayController\?\.destroy\(\)/)
+  assert.match(main, /log\('tray ready'\)/)
+})
+
 test('test-mode startup forces Electron exit after the backend has stopped', () => {
   const main = fs.readFileSync(path.join(projectDir, 'electron', 'main.mjs'), 'utf8')
   const testModeExit = main.match(/async function exitTestMode\(\) \{[\s\S]*?\n\}/)?.[0]

@@ -1,5 +1,7 @@
 # System Tray Lifecycle Implementation Plan
 
+> 状态：3 个任务均已按 TDD 实施并完成 Windows 打包验收。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 为智学协作台增加始终可见的 Windows 系统托盘、主窗口恢复入口和能够完整回收后端/桌宠的退出入口。

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, safeStorage, screen, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, safeStorage, screen, shell, Tray } from 'electron'
 import { spawn } from 'node:child_process'
 import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
@@ -28,6 +28,7 @@ import { createModelProfileController } from './model-profile-controller.mjs'
 import { createPetController } from './pet-controller.mjs'
 import { createPetCharacterImporter, validatePetAtlasBitmap } from './pet-character-import.mjs'
 import { backendCommand, electronUserDataPath, navigationAction } from './runtime.mjs'
+import { createTrayController, mainWindowCloseAction, showMainWindow } from './tray-lifecycle.mjs'
 
 const mainDir = path.dirname(fileURLToPath(import.meta.url))
 const projectDir = path.resolve(mainDir, '..')
@@ -40,6 +41,7 @@ app.setPath('userData', electronUserDataPath({
 }))
 
 let mainWindow = null
+let trayController = null
 let backendProcess = null
 let backendRuntime = null
 let backendProxy = null
@@ -237,6 +239,8 @@ async function stopBackend() {
 
 async function exitTestMode() {
   isQuitting = true
+  trayController?.destroy()
+  trayController = null
   try {
     await stopBackend()
   } finally {
@@ -283,11 +287,42 @@ function createWindow() {
     backendProxy?.cleanupWebContents(mainWindow.webContents)
     if (action === 'external') void shell.openExternal(url)
   })
+  mainWindow.on('close', event => {
+    const action = mainWindowCloseAction({
+      isQuitting,
+      hasTray: Boolean(trayController),
+    })
+    if (action === 'hide') {
+      event.preventDefault()
+      mainWindow?.hide()
+    } else if (action === 'quit') {
+      event.preventDefault()
+      requestAppQuit()
+    }
+  })
   mainWindow.on('closed', () => {
     backendProxy?.cleanupWebContents(mainWebContents)
     mainWindow = null
   })
   mainWindow.loadFile(indexFile)
+}
+
+async function createTray() {
+  const icon = nativeImage.createFromPath(path.join(mainDir, 'assets', 'tray-icon.png'))
+  trayController = createTrayController({
+    Tray,
+    Menu,
+    icon,
+    getMainWindow: () => mainWindow,
+    requestQuit: requestAppQuit,
+  })
+  await log('tray ready')
+}
+
+function requestAppQuit() {
+  if (isQuitting) return
+  isQuitting = true
+  app.quit()
 }
 
 function showStartupError(error) {
@@ -396,10 +431,7 @@ ipcMain.on('a3:stream-cancel', (event, streamId) => { backendProxy?.cancelStream
 
 if (!app.requestSingleInstanceLock()) app.quit()
 app.on('second-instance', () => {
-  if (mainWindow) {
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.focus()
-  }
+  if (!trayController?.show()) showMainWindow(mainWindow)
 })
 app.whenReady().then(async () => {
   try {
@@ -408,6 +440,12 @@ app.whenReady().then(async () => {
     await startBackend()
     await modelProfileController.bootstrap()
     createWindow()
+    try {
+      await createTray()
+    } catch (error) {
+      trayController = null
+      await log(`tray creation failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
     petController.createWindow({ forceHidden: process.env.A3_ELECTRON_TEST_MODE === '1' })
     screen.on('display-added', reclampPetWindow)
     screen.on('display-removed', reclampPetWindow)
@@ -417,7 +455,14 @@ app.whenReady().then(async () => {
     showStartupError(error)
   }
 })
-app.on('before-quit', () => { isQuitting = true; petController.destroy(); void knowledgeController.shutdown(); stopBackend() })
+app.on('before-quit', () => {
+  isQuitting = true
+  trayController?.destroy()
+  trayController = null
+  petController.destroy()
+  void knowledgeController.shutdown()
+  stopBackend()
+})
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
 
 function withValidatedInput(validation, invoke) {
