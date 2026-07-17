@@ -51,6 +51,9 @@ export interface DesktopBridge {
   petSetTaskState?(state: PetTaskState): Promise<DesktopResponse>
   petChooseCharacter?(): Promise<DesktopResponse>
   petResetCharacter?(): Promise<DesktopResponse>
+  desktopState?(): Promise<DesktopResponse>
+  desktopCompleteOnboarding?(input: { offlineDemo: boolean }): Promise<DesktopResponse>
+  desktopInfo?(): Promise<DesktopResponse>
   startStream(streamId: string, input: TransportRequest): void
   cancelStream(streamId: string): void
   onStreamEvent(listener: (message: DesktopStreamMessage) => void): () => void

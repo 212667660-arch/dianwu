@@ -31,6 +31,7 @@ import { useRoute, useRouter } from 'vue-router'
 import ConversationRail from '@/components/workspace/ConversationRail.vue'
 import DeskPanel from '@/components/workspace/DeskPanel.vue'
 import { useBackendStore } from '@/stores/backend'
+import { backendApi } from '@/api'
 import { petTaskState, type PetTaskTicket } from '@/pet/task-state'
 const backend = useBackendStore()
 const router = useRouter()
@@ -67,6 +68,11 @@ async function startNewSession() { backend.setSessionId(`student_${Date.now().to
 function useSuggestion(prompt: string) { drawerOpen.value = false; deskDrawerOpen.value = false; router.push({ path: '/tutor', query: { prompt, at: Date.now().toString(36) } }) }
 onMounted(async () => {
   disposeBackendExit = window.a3Desktop?.onBackendExit?.(() => { backend.live = false; backend.ready = false; backend.lastError = '本地学习服务已停止，请重启桌面应用。' })
+  const desktopState = await backendApi.desktopState()
+  if (!desktopState.onboarding_completed) {
+    await router.replace('/onboarding')
+    return
+  }
   await backend.refreshAll()
   if (backend.live && !backend.modelConfigured && route.path !== '/model-settings') await router.replace('/model-settings')
 })

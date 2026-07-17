@@ -7,6 +7,7 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { awaitBackendStartup, shouldNotifyBackendExit, stopBackendProcess } from './backend-lifecycle.mjs'
 import { createBackendProxy } from './backend-proxy.mjs'
+import { createDesktopStateStore } from './desktop-state.mjs'
 import {
   desktopError,
   isTrustedDesktopSender,
@@ -47,6 +48,11 @@ let backendProcess = null
 let backendRuntime = null
 let backendProxy = null
 let isQuitting = false
+
+const desktopStateStore = createDesktopStateStore({
+  fs,
+  filePath: path.join(app.getPath('userData'), 'desktop-state.json'),
+})
 
 const petController = createPetController({
   BrowserWindow,
@@ -432,6 +438,42 @@ ipcMain.handle('a3:pet-reset-character', async event => {
     return petImportError()
   }
 })
+ipcMain.handle('a3:desktop-state', event => trustedKnowledgeSender(event)
+  ? { ok: true, status: 200, data: desktopStateStore.snapshot() }
+  : { ok: false, status: 403, error: desktopError('DESKTOP_REQUEST_DENIED', '桌面状态请求被拒绝。') })
+ipcMain.handle('a3:desktop-complete-onboarding', async (event, input) => {
+  if (!trustedKnowledgeSender(event)) return { ok: false, status: 403, error: desktopError('DESKTOP_REQUEST_DENIED', '首次启动设置请求被拒绝。') }
+  if (!input || typeof input.offlineDemo !== 'boolean' || Object.keys(input).some(key => key !== 'offlineDemo')) {
+    return { ok: false, status: 400, error: desktopError('DESKTOP_REQUEST_INVALID', '首次启动设置无效。') }
+  }
+  return { ok: true, status: 200, data: await desktopStateStore.completeOnboarding() }
+})
+ipcMain.handle('a3:desktop-info', async event => {
+  if (!trustedKnowledgeSender(event)) return { ok: false, status: 403, error: desktopError('DESKTOP_REQUEST_DENIED', '桌面信息请求被拒绝。') }
+  let ocrAvailable = false
+  try {
+    const knowledgeStatus = await internalRuntimeRequest('GET', '/api/knowledge/status', undefined, true)
+    ocrAvailable = knowledgeStatus?.ocr_pack?.available === true
+  } catch {}
+  let modelConfigured = false
+  try {
+    const vault = await modelProfileVault.load()
+    modelConfigured = vault.profiles.some(profile => profile.enabled && typeof profile.api_key === 'string' && profile.api_key.length > 0)
+  } catch {}
+  const dataDirectoryReady = await fs.stat(app.getPath('userData')).then(value => value.isDirectory()).catch(() => false)
+  return {
+    ok: true,
+    status: 200,
+    data: {
+      app_version: app.getVersion(),
+      backend_ready: Boolean(backendRuntime),
+      data_directory_ready: dataDirectoryReady,
+      model_configured: modelConfigured,
+      ocr_available: ocrAvailable,
+      update_status: 'offline_build',
+    },
+  }
+})
 ipcMain.handle('a3:pet-ready', event => petController.isPetSender(event)
   ? petController.readyPayload()
   : deniedPetRequest())
@@ -453,6 +495,7 @@ app.on('second-instance', () => {
 })
 app.whenReady().then(async () => {
   try {
+    await desktopStateStore.load()
     await knowledgeImporter.prepare()
     await petController.prepare()
     await startBackend()

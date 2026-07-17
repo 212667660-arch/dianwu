@@ -5,6 +5,12 @@ import { routerHistoryMode } from './history'
 
 const routes = [
   {
+    path: '/onboarding',
+    name: 'Onboarding',
+    component: () => import('@/views/Onboarding.vue'),
+    meta: { title: '首次启动' },
+  },
+  {
     path: '/',
     component: AppLayout,
     redirect: '/dashboard',

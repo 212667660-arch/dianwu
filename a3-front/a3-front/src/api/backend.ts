@@ -4,6 +4,8 @@ import { createWebTransport, parseSseBlock, readSseBody } from './web-transport'
 import type {
   AttemptResponse,
   ChatResponse,
+  DesktopInfo,
+  DesktopState,
   HealthStatus,
   KnowledgeBinding,
   KnowledgeCollection,
@@ -63,6 +65,21 @@ function chatBody(sessionId: string, message: string, selection?: ResourceSelect
 export { parseSseBlock, readSseBody }
 
 export const backendApi = {
+  async desktopState(): Promise<DesktopState> {
+    if (!window.a3Desktop?.desktopState) return { version: 1, onboarding_completed: true, ai_paused: false }
+    return desktopEnvelope<DesktopState>(await window.a3Desktop.desktopState())
+  },
+  async completeDesktopOnboarding(input: { offlineDemo: boolean }): Promise<DesktopState> {
+    if (!window.a3Desktop?.desktopCompleteOnboarding) return { version: 1, onboarding_completed: true, ai_paused: false }
+    return desktopEnvelope<DesktopState>(await window.a3Desktop.desktopCompleteOnboarding(input))
+  },
+  async desktopInfo(): Promise<DesktopInfo> {
+    if (!window.a3Desktop?.desktopInfo) return {
+      app_version: 'web', backend_ready: true, data_directory_ready: true,
+      model_configured: false, ocr_available: false, update_status: 'offline_build',
+    }
+    return desktopEnvelope<DesktopInfo>(await window.a3Desktop.desktopInfo())
+  },
   async live() {
     return activeTransport().request<HealthStatus>({ method: 'GET', path: '/health/live' })
   },

@@ -3,6 +3,9 @@ export interface HealthStatus {
   reason?: string
 }
 
+export interface DesktopState { version: 1; onboarding_completed: boolean; ai_paused: boolean }
+export interface DesktopInfo { app_version: string; backend_ready: boolean; data_directory_ready: boolean; model_configured: boolean; ocr_available: boolean; update_status: 'offline_build' | 'available' | 'current' | 'error' }
+
 export interface SourceItem {
   title: string
   url: string
