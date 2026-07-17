@@ -180,6 +180,22 @@ test('controller keeps authoritative bounds when Electron reports a transient re
   assert.deepEqual(stored.position, { x: 912, y: 488, width: 288, height: 312 })
 })
 
+test('repeated click-like drag cycles preserve pet dimensions and scale', async () => {
+  const { controller } = await fixture()
+  await controller.prepare()
+  const window = controller.createWindow()
+  const before = window.getBounds()
+
+  for (let index = 0; index < 100; index += 1) {
+    controller.beginDrag({ screenX: 500, screenY: 300 })
+    await controller.moveDrag({ screenX: 500, screenY: 300 })
+    await controller.endDrag()
+  }
+
+  assert.deepEqual(window.getBounds(), before)
+  assert.equal(controller.snapshot().settings.scale, 1)
+})
+
 test('controller broadcasts task and drag states then restores the task state', async () => {
   const { controller } = await fixture()
   await controller.prepare()

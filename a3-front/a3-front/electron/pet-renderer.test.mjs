@@ -3,12 +3,55 @@ import test from 'node:test'
 
 import {
   advanceAnimation,
+  canvasBackingSize,
   createClickResolver,
+  createInteractionController,
   dragDirection,
   frameDuration,
   resolveDisplayState,
   resourceMode,
 } from './pet/pet-renderer.js'
+
+test('repeated interactions retain only one expiry timer', () => {
+  const timers = new Map()
+  const states = []
+  let nextId = 0
+  const controller = createInteractionController({
+    onState: state => states.push(state),
+    durationFor: () => 400,
+    setTimer: callback => {
+      const id = ++nextId
+      timers.set(id, callback)
+      return id
+    },
+    clearTimer: id => timers.delete(id),
+  })
+
+  for (let index = 0; index < 100; index += 1) controller.play('waving')
+
+  assert.equal(timers.size, 1)
+  assert.equal(states.at(-1), 'waving')
+  timers.values().next().value()
+  assert.equal(states.at(-1), null)
+})
+
+test('canvas backing size depends only on logical dimensions and clamped dpr', () => {
+  assert.deepEqual(canvasBackingSize({ width: 192, height: 208 }, 1), {
+    width: 192,
+    height: 208,
+    dpr: 1,
+  })
+  assert.deepEqual(canvasBackingSize({ width: 192, height: 208 }, 2.5), {
+    width: 480,
+    height: 520,
+    dpr: 2.5,
+  })
+  assert.deepEqual(canvasBackingSize({ width: 192, height: 208 }, 9), {
+    width: 576,
+    height: 624,
+    dpr: 3,
+  })
+})
 
 test('animation timing applies speed and advances across multiple frames', () => {
   assert.equal(frameDuration(120, 2), 60)

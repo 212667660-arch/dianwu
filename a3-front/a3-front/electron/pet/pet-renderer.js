@@ -70,6 +70,42 @@ export function createClickResolver({
   }
 }
 
+export function canvasBackingSize(cell, value) {
+  if (!cell || !Number.isFinite(cell.width) || cell.width <= 0 || !Number.isFinite(cell.height) || cell.height <= 0) {
+    throw new TypeError('Canvas cell dimensions are invalid.')
+  }
+  const dpr = Math.min(Math.max(Number(value) || 1, 1), 3)
+  return {
+    width: Math.round(cell.width * dpr),
+    height: Math.round(cell.height * dpr),
+    dpr,
+  }
+}
+
+export function createInteractionController({
+  onState,
+  durationFor,
+  setTimer = (callback, delay) => setTimeout(callback, delay),
+  clearTimer = timer => clearTimeout(timer),
+}) {
+  let timer = null
+  return {
+    play(state) {
+      if (timer !== null) clearTimer(timer)
+      onState(state)
+      timer = setTimer(() => {
+        timer = null
+        onState(null)
+      }, durationFor(state))
+    },
+    cancel() {
+      if (timer !== null) clearTimer(timer)
+      timer = null
+      onState(null)
+    },
+  }
+}
+
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   void startPetRenderer()
 }
@@ -100,8 +136,17 @@ async function startPetRenderer() {
   let lastInteractionAt = Date.now()
   let animationHandle = null
   let lowPowerHandle = null
-  let interactionTimer = null
   let pointer = null
+
+  const interactionController = createInteractionController({
+    onState: state => {
+      interactionState = state
+      setState()
+    },
+    durationFor: state => (
+      payload.pet.animations[state].durations.reduce((sum, value) => sum + value, 0) / settings.speed
+    ),
+  })
 
   const clickResolver = createClickResolver({
     onSingle: () => playInteraction('waving'),
@@ -123,30 +168,22 @@ async function startPetRenderer() {
 
   function playInteraction(state) {
     lastInteractionAt = Date.now()
-    interactionState = state
     audio.playInteraction(state)
-    setState()
-    if (interactionTimer !== null) clearTimeout(interactionTimer)
-    const total = payload.pet.animations[state].durations.reduce((sum, value) => sum + value, 0) / settings.speed
-    interactionTimer = setTimeout(() => {
-      interactionState = null
-      interactionTimer = null
-      setState()
-    }, total)
+    interactionController.play(state)
   }
 
   function drawFrame() {
-    const dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), 3)
     const width = payload.pet.cell.width
     const height = payload.pet.cell.height
-    const targetWidth = Math.round(width * dpr)
-    const targetHeight = Math.round(height * dpr)
-    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
-      canvas.width = targetWidth
-      canvas.height = targetHeight
+    const target = canvasBackingSize(payload.pet.cell, window.devicePixelRatio)
+    if (canvas.width !== target.width || canvas.height !== target.height) {
+      canvas.width = target.width
+      canvas.height = target.height
     }
-    context.setTransform(dpr, 0, 0, dpr, 0, 0)
-    context.clearRect(0, 0, width, height)
+    if (typeof context.resetTransform === 'function') context.resetTransform()
+    else context.setTransform(1, 0, 0, 1, 0, 0)
+    context.clearRect(0, 0, canvas.width, canvas.height)
+    context.setTransform(target.dpr, 0, 0, target.dpr, 0, 0)
     context.imageSmoothingEnabled = true
     context.drawImage(
       atlas,
