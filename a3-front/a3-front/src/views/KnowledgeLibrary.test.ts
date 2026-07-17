@@ -10,7 +10,7 @@ const apiMock = vi.hoisted(() => ({
   deleteKnowledgeCollection: vi.fn(),
   openKnowledgeSource: vi.fn(),
 }))
-const messageMock = vi.hoisted(() => ({ error: vi.fn() }))
+const messageMock = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }))
 const confirmMock = vi.hoisted(() => vi.fn())
 
 const store = vi.hoisted(() => ({
@@ -167,10 +167,11 @@ it('opens a cited desktop preview at the locator carried by the route', async ()
   const wrapper = mount(KnowledgeLibrary, { global: { plugins: [router], stubs: { ElDrawer: { template: '<div><slot /></div>' } } } })
   await flushPromises()
 
-  await wrapper.findAll('[aria-label="打开只读副本 引用章节.md"]')[0].trigger('click')
+  await wrapper.findAll('[aria-label="预览（本地阅读器） 引用章节.md"]')[0].trigger('click')
   await flushPromises()
 
   expect(apiMock.openKnowledgeSource).toHaveBeenCalledWith(10, { type: 'paragraph', start: 4, end: 4 })
+  expect(messageMock.success).toHaveBeenCalledWith('已用本地阅读器打开只读预览。')
 })
 
 it('applies desktop import progress and releases the listener on unmount', async () => {

@@ -5,7 +5,7 @@
       <div class="inspector-mark">{{ document.extension.replace('.','').toUpperCase() }}</div><h2>{{ document.display_name }}</h2><p class="inspector-status">{{ statusText }}</p>
       <dl><div><dt>篇幅</dt><dd>{{ extent }}</dd></div><div><dt>可检索片段</dt><dd>{{ document.chunk_count }} 条</dd></div><div><dt>解析器</dt><dd>{{ document.parser_version || '等待解析' }}</dd></div></dl>
       <div v-if="document.status==='OCR_REQUIRED'" class="ocr-note"><strong>需要本地 OCR</strong><p>这是一份图片型 PDF。安装通过许可校验的本地 OCR 包后即可继续，原文件不会上传。</p></div>
-      <div class="inspector-actions"><button v-if="desktopAvailable&&document.status==='COMPLETED'" type="button" :aria-label="`打开只读副本 ${document.display_name}`" @click="$emit('open',document.id)">打开只读副本</button><button type="button" :aria-label="`重新解析 ${document.display_name}`" @click="$emit('rebuild',document.id)">重新解析</button><button class="danger" type="button" :aria-label="`删除 ${document.display_name}`" @click="$emit('delete',document.id)">删除资料</button></div>
+      <div class="inspector-actions"><button v-if="desktopAvailable&&document.status==='COMPLETED'" type="button" :aria-label="`预览（本地阅读器） ${document.display_name}`" @click="$emit('open',document.id)">预览（本地阅读器）</button><button type="button" :aria-label="`重新解析 ${document.display_name}`" @click="$emit('rebuild',document.id)">重新解析</button><button class="danger" type="button" :aria-label="`删除 ${document.display_name}`" @click="$emit('delete',document.id)">删除资料</button></div>
     </template>
   </aside>
 </template>

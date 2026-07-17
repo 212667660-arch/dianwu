@@ -152,6 +152,7 @@ async function deleteCollection(item: KnowledgeCollection) {
 async function openDocument(id: number) {
   try {
     await backendApi.openKnowledgeSource(id, routedLocator.value || { type: 'paragraph', start: 1, end: 1 })
+    ElMessage.success('已用本地阅读器打开只读预览。')
   } catch (error) {
     ElMessage.error(errorMessage(error))
   }
