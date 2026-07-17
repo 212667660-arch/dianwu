@@ -57,6 +57,9 @@
           <div><strong>本次请求未完成</strong><p>{{ streamError }}</p></div>
           <el-button text type="primary" @click="restoreFailedMessage">重新编辑</el-button>
         </div>
+        <div v-if="routeKnowledgeBindingError" class="stream-error" role="alert" data-testid="route-knowledge-error">
+          <div><strong>教材资料尚未绑定</strong><p>{{ routeKnowledgeBindingError }}</p></div>
+        </div>
         <div v-if="streamInterrupted" class="stream-interruption" role="status">
           <div><strong>连接在回答途中轻轻断开了</strong><p>已经出现的文字会留在这里，不会与另一个模型的内容静默拼接。</p></div>
           <el-button v-if="canContinueWithBackup" text type="primary" data-testid="continue-with-backup" @click="continueWithBackup">使用备用配置继续</el-button>
@@ -88,7 +91,7 @@
             </div>
             <div class="toolbar">
               <el-button v-if="generating" type="danger" plain :icon="Close" @click="cancel">取消</el-button>
-              <el-button data-testid="send" type="primary" :icon="Promotion" :loading="generating" :disabled="!editor.trim() || !backend.modelConfigured" @click="send">发送</el-button>
+              <el-button data-testid="send" type="primary" :icon="Promotion" :loading="generating" :disabled="!editor.trim() || !backend.modelConfigured || routeKnowledgeBindingBusy || Boolean(routeKnowledgeBindingError)" @click="send">发送</el-button>
             </div>
           </div>
         </div>
@@ -146,12 +149,15 @@ const activeBundle = ref<ResourceBundleType | null>(null)
 const resourceProgress = ref<{ completed: number; total: number; currentType: string } | null>(null)
 const retryingArtifacts = ref<Set<string>>(new Set())
 const knowledgeSpaceOpen = ref(false)
+const routeKnowledgeBindingBusy = ref(false)
+const routeKnowledgeBindingError = ref('')
 const bindingIds = ref<number[]>([])
 const bindingPrivacy = ref<'allow_model_context' | 'local_search_only'>('allow_model_context')
 const messageList = ref<HTMLElement>()
 let controller: AbortController | null = null
 let interruptionId = 0
 let activePetTask: PetTaskTicket | null = null
+let routeHydrationVersion = 0
 
 const messages = computed(() => backend.session?.messages || [])
 const displayMessages = computed(() => messages.value.filter(message => !isBundleMessage(message.content)))
@@ -440,27 +446,47 @@ async function cancel() {
 }
 
 watch(() => route.fullPath, async () => {
+  const hydrationVersion = ++routeHydrationVersion
   const rawPrompt = typeof route.query.prompt === 'string' ? route.query.prompt : ''
   const prompt = rawPrompt.slice(0, 1000)
-  if (prompt) editor.value = prompt
-
   const rawCollectionId = typeof route.query.knowledge_collection === 'string'
     ? route.query.knowledge_collection
     : ''
   const collectionId = Number(rawCollectionId)
-  if (Number.isSafeInteger(collectionId) && collectionId > 0) {
-    try {
-      await backend.saveSessionKnowledgeCollections([collectionId], 'allow_model_context')
-    } catch (error) {
-      ElMessage.error(errorMessage(error))
+  routeKnowledgeBindingError.value = ''
+
+  if (!rawCollectionId) {
+    if (prompt) editor.value = prompt
+    if (rawPrompt) {
+      const query = { ...route.query }
+      delete query.prompt
+      await router.replace({ path: route.path, query })
     }
+    return
+  }
+  if (!Number.isSafeInteger(collectionId) || collectionId < 1) {
+    editor.value = ''
+    routeKnowledgeBindingError.value = '教材集合参数无效，请从知识库重新发起。'
+    return
   }
 
-  if (rawPrompt || rawCollectionId) {
+  routeKnowledgeBindingBusy.value = true
+  editor.value = ''
+  try {
+    await backend.saveSessionKnowledgeCollections([collectionId], 'allow_model_context')
+    if (hydrationVersion !== routeHydrationVersion) return
+    if (prompt) editor.value = prompt
+    routeKnowledgeBindingBusy.value = false
     const query = { ...route.query }
     delete query.prompt
     delete query.knowledge_collection
     await router.replace({ path: route.path, query })
+  } catch (error) {
+    if (hydrationVersion !== routeHydrationVersion) return
+    routeKnowledgeBindingError.value = errorMessage(error)
+    ElMessage.error(routeKnowledgeBindingError.value)
+  } finally {
+    if (hydrationVersion === routeHydrationVersion) routeKnowledgeBindingBusy.value = false
   }
 }, { immediate: true })
 watch(() => backend.sessionId, currentSessionId => {
