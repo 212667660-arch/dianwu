@@ -147,6 +147,6 @@ test('rejects batches above five hundred MiB from metadata before hashing', asyn
 
   await assert.rejects(
     () => importer.importPaths(paths),
-    error => error?.code === 'KNOWLEDGE_IMPORT_BATCH_TOO_LARGE',
+    error => error?.code === 'KNOWLEDGE_IMPORT_BATCH_TOO_LARGE' && /500 MiB/.test(error.message),
   )
 })

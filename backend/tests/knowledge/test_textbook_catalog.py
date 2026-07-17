@@ -51,3 +51,8 @@ def test_catalog_item_rejects_unapproved_hosts_and_pep_downloads() -> None:
             )
         )
 
+
+def test_catalog_items_are_immutable() -> None:
+    entry = TextbookCatalogItem.model_validate(item())
+    with pytest.raises(ValidationError):
+        entry.title = "被篡改的标题"

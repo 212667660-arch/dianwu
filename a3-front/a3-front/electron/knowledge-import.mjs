@@ -220,7 +220,7 @@ export function createKnowledgeImporter({ userDataDir }) {
     }
     const totalBytes = sources.reduce((total, source) => total + source.byteSize, 0)
     if (totalBytes > MAX_BATCH_BYTES) {
-      throw importError('KNOWLEDGE_IMPORT_BATCH_TOO_LARGE', '一次导入的文件总量不能超过 500 MB。')
+      throw importError('KNOWLEDGE_IMPORT_BATCH_TOO_LARGE', '一次导入的文件总量不能超过 500 MiB。')
     }
     for (const source of sources) {
       await validateSignature(source.sourcePath, source.signature)

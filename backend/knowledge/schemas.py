@@ -110,6 +110,8 @@ class KnowledgeStatusResponse(StrictKnowledgeModel):
 
 
 class TextbookCatalogItem(StrictKnowledgeModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     source_id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{2,63}$")
     publisher: str = Field(min_length=1, max_length=80)
     title: str = Field(min_length=1, max_length=200)
