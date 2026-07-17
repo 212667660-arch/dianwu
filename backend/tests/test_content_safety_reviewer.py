@@ -32,6 +32,19 @@ categories: CYBER_ABUSE|ILLEGAL_WRONGDOING
 reason_codes: ACTIONABLE_MALWARE
 [协议结束]"""
 
+BARE_ALLOW = """stage: REQUEST
+decision: ALLOW
+risk_level: LOW
+categories:
+reason_codes:"""
+
+MARKED_BARE_ALLOW = """[content-safety/v1]
+stage: REQUEST
+decision: ALLOW
+risk_level: LOW
+categories:
+reason_codes:"""
+
 
 class FakeRouter:
     def __init__(self, candidates: tuple[str, ...], outputs: dict[str, object]) -> None:
@@ -78,10 +91,28 @@ def test_parse_reviewer_output_accepts_only_controlled_protocol():
     assert metadata.reviewer_profile_id == "reviewer"
 
 
+def test_parse_reviewer_output_accepts_strict_bare_protocol_from_model():
+    metadata = parse_reviewer_output(BARE_ALLOW, reviewer_profile_id="reviewer")
+
+    assert metadata.stage == SafetyStage.REQUEST
+    assert metadata.decision == SafetyAction.ALLOW
+    assert metadata.risk_level == RiskLevel.LOW
+    assert metadata.reviewer_profile_id == "reviewer"
+
+
+def test_parse_reviewer_output_accepts_strict_unwrapped_protocol_marker():
+    metadata = parse_reviewer_output(MARKED_BARE_ALLOW, reviewer_profile_id="reviewer")
+
+    assert metadata.stage == SafetyStage.REQUEST
+    assert metadata.decision == SafetyAction.ALLOW
+    assert metadata.risk_level == RiskLevel.LOW
+
+
 @pytest.mark.parametrize(
     "invalid",
     [
         ALLOW + "\nfree explanation",
+        BARE_ALLOW + "\nfree explanation",
         ALLOW.replace("decision: ALLOW", "decision: MAYBE"),
         ALLOW.replace("stage: ARTIFACT", "stage: UNKNOWN"),
         ALLOW.replace("reason_codes: EDUCATIONAL_CONTEXT", "reason_codes: unsafe text"),

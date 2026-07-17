@@ -50,12 +50,24 @@ def _split_controlled(value: str) -> list[str]:
 
 def parse_reviewer_output(raw: str, *, reviewer_profile_id: str) -> SafetyMetadata:
     lines = [line.strip() for line in raw.strip().splitlines()]
-    if len(lines) != 7:
+    if len(lines) == 7:
+        if lines[0] != "[协议 content-safety/v1]" or lines[-1] != "[协议结束]":
+            raise ValueError("invalid safety reviewer envelope")
+        field_lines = lines[1:-1]
+    elif len(lines) == len(_FIELD_ORDER) + 1 and lines[0] == "[content-safety/v1]":
+        # DeepSeek-compatible gateways may preserve the protocol name but
+        # omit the localized envelope labels. The controlled fields remain
+        # mandatory and are still parsed with the same strict checks.
+        field_lines = lines[1:]
+    elif len(lines) == len(_FIELD_ORDER):
+        # Some compatible gateways omit the non-semantic envelope while still
+        # returning the exact five controlled fields. Keep this form strict:
+        # no free text, extra lines, or reordered fields are accepted.
+        field_lines = lines
+    else:
         raise ValueError("invalid safety reviewer line count")
-    if lines[0] != "[协议 content-safety/v1]" or lines[-1] != "[协议结束]":
-        raise ValueError("invalid safety reviewer envelope")
     fields: dict[str, str] = {}
-    for expected, line in zip(_FIELD_ORDER, lines[1:-1], strict=True):
+    for expected, line in zip(_FIELD_ORDER, field_lines, strict=True):
         key, separator, value = line.partition(":")
         if separator != ":" or key.strip() != expected:
             raise ValueError("invalid safety reviewer field")

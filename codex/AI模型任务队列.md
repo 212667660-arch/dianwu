@@ -2,7 +2,7 @@
 
 > 项目：基于大模型的个性化资源生成与学习多智能体系统开发
 > 队列位置：E:\软件杯\codex\AI模型任务队列.md
-> 当前模型批次：Sol（S-029 Windows 系统托盘与可靠退出修复完成）
+> 当前模型批次：Sol（S-030 Reviewer 协议兼容修复完成）
 > 最后审视日期：2026-07-17
 
 ## 一、使用规则
@@ -82,6 +82,7 @@
 | S-027 | P0 | 完成 | 对照 `2026-07-16-deepseek-write.md` 核对五类资源架构、代码与可优化项 | S-022 当前实现；S-026 保持暂停 | 已确认独立管线、五类 specialist、v2 协议和组件骨架存在，但桌面端未接入、会话状态不恢复、取消/进度/重试未闭环、知识与来源未传入、bundle/artifact 持久化断层、类型门槛和渲染安全不足；证据与优化顺序见本轮对话 |
 | S-028 | P1 | 完成 | 生成可像普通 Windows APP 一样双击安装和启动的最新桌面发布包 | S-026 最终修复与桌面打包验收 | 已生成包含最新后端的 NSIS 安装程序、unpacked 便携版及 blockmap；安装包路径、哈希、生命周期与签名状态见 S-028-WINDOWS-INSTALLER |
 | S-029 | P0 | 完成 | 修复桌面端无系统托盘且主窗口关闭后缺少可靠退出入口 | S-028 最新 Windows 发布包、用户截图复现 | 已完成 Windows 托盘图标、单/双击恢复、右键完整退出、关闭隐藏、托盘失败退出降级、单实例恢复、进程清理回归与最新安装包验收；证据见 S-029-COMPLETE |
+| S-030 | P0 | 完成 | 修复 DeepSeek Reviewer 返回受控字段但省略本地化协议封套时被误判为审核不可用 | S-026 内容安全 Reviewer、用户真实桌面截图与运行日志 | 已保留 fail-closed，严格兼容规范封套、`[content-safety/v1]` 加五字段和纯五字段三种受控形式；自由文本、额外行、乱序字段与非法枚举继续拒绝；证据见 S-030-COMPLETE |
 | T-033 | P0 | 完成 | 实现多 API 配置、高可用切换、模型选择与推理强度控制 | S-017 | 版本 2 加密多配置、原子热应用与回滚、3 次/2 配置预算、Retry-After/熔断、普通与流式故障边界、全局/学习空间模型和思考强度选择、兼容迁移、真实桌面 5/5 连接及完整打包回归 |
 | T-035 | P0 | 完成 | 实现本地知识库与安全文件导入 | S-018 | 已完成文件选择/拖放、七格式与限额校验、隔离解析 worker、SQLite 元数据/FTS/可选语义索引、可追溯引用、学习助手绑定与隐私模式、删除/重建、恶意文件/性能/打包测试及 Windows 桌面安装包验收 |
 | T-036 | P1 | 完成 | 实现桌宠形象包、用户上传、进度事件与语音鼓励 | S-019 | 已完成角色包目录选择、固定文件/atlas 校验、原子替换、失败保留旧角色、恢复墨团、热重载、动作音效和本地语音鼓励；全面素材/许可证、逐帧视觉与主观音色 QA 保留后续 |
@@ -313,6 +314,7 @@ S-016 已完成：本仓库提交身份已设置为 `Wei kb <212667660@qq.com>`�
 | 2026-07-17 | S-029-DESIGN | Sol | a3-front/a3-front/docs/superpowers/specs/2026-07-17-system-tray-lifecycle-design.md、当前 Electron 主进程、用户托盘截图、codex/AI模型任务队列.md | 根因确认：主进程没有创建 `Tray`，主窗口消失后缺少恢复与完整退出入口。采用关闭隐藏到托盘、单击恢复、右键完整退出、托盘失败时关闭即退出的生命周期；托盘菜单完全位于主进程并复用既有 `before-quit` 资源清理。 |
 | 2026-07-17 | S-029-PLAN | Sol | a3-front/a3-front/docs/superpowers/plans/2026-07-17-system-tray-lifecycle-plan.md、codex/AI模型任务队列.md | 按 TDD 拆分为可测试托盘控制器、主进程关闭/恢复/退出接线与图标、Windows 重新打包验收；明确托盘缺失时关闭即退出、测试模式日志和零残留门槛。 |
 | 2026-07-17 | S-029-COMPLETE | Sol | a3-front/a3-front/electron/tray-lifecycle.mjs、tray-lifecycle.test.mjs、main.mjs、runtime.test.mjs、assets/tray-icon.png、package.json、release/、系统托盘设计与计划、codex/AI模型任务队列.md | 修复根因：原主进程未创建 `Tray`，主窗口消失后没有恢复与完整退出入口。新增 32×32 本地墨团托盘图标；关闭主窗口隐藏到托盘，单/双击恢复并聚焦，右键菜单可完整退出；托盘创建失败时关闭主窗口退化为 `app.quit()`，第二实例恢复已有窗口，退出统一销毁托盘并复用既有后端/桌宠/知识任务清理。TDD 定向 25/25 通过；完整 Electron/Node 148 passed、Vitest 112 passed；本轮 `npm run desktop:dist` 成功，`build:desktop` 与 NSIS 打包均通过。最新 unpacked 包确认 `tray ready`、backend ready/stop、test-mode exit 日志 4/4，托盘图标已进入 `app.asar`，退出码 0、残留进程 0。最新安装包 172,461,959 bytes，SHA-256 `60665AAC2CB68D026CCC47C5B647C4D07BC807C6001CE182A420A8CB8AB61D99`；托盘图标 SHA-256 `923A5CF238786D8EEB217DB80ABE84297F2DB99DFCE0C8848125ED50B46F7CED`。安装包仍未签名且应用主图标仍为默认 Electron 图标，属于非功能性发布待办。 |
+| 2026-07-17 | S-030-COMPLETE | Sol | backend/services/content_safety/reviewer.py、backend/tests/test_content_safety_reviewer.py、a3-front/a3-front/desktop-backend/、a3-front/a3-front/release/win-unpacked/、codex/AI模型任务队列.md | 用户真实桌面日志确认 DeepSeek 请求返回 HTTP 200 后仍出现 `SAFETY_REVIEW_UNAVAILABLE`；同一加密模型配置最小复现取得实际返回 `[content-safety/v1]` 加五个严格字段，但缺少中文首尾封套，旧解析器因固定 7 行误判失败。按 TDD 新增裸五字段和单协议标记变体，解析器仍要求精确行数、字段顺序、受控枚举与原因码，额外自由文本继续拒绝。真实 Reviewer 返回已由新解析器得到 `REQUEST/ALLOW/LOW`。内容安全聚焦 51 passed；完整后端 502 passed、7 skipped；compileall 通过。PyInstaller 后端已重建并复制到 `desktop-backend`，`npm run desktop:pack` 成功生成可直接双击的最新 unpacked 桌面版。 |
 | 2026-07-17 | S-022-TASK4 | Sol | backend/services/resource_bundle/pipeline.py、backend/tests/test_resource_bundle_pipeline.py、codex/AI模型任务队列.md | 完成资源计划、进度、单产物和最终 bundle 事件；取消会中断正在运行的模型调用，失败只暴露稳定错误码并在 finally 清理取消注册。定向验证 11 passed；五类资源回归 110 passed。 |
 | 2026-07-17 | S-022-TASK5 | Sol | backend/services/resource_bundle/service.py、backend/services/resource_bundle/pipeline.py、backend/services/orchestrator.py、backend/routers/resource.py、backend/services/db.py、backend/tests/test_resource_bundle_service.py、backend/tests/test_resource_bundle_pipeline.py、backend/tests/test_orchestrator.py、backend/tests/test_resource_bundle_api.py、codex/AI模型任务队列.md | 新增统一 ResourceBundleService，接入画像、学习状态、知识库和公开来源，隔离 v1 缓存，成功/失败均恢复 PROFILED；HTTP 与 SSE 共用服务，SSE 转发真实 Pipeline 事件，取消按 generation_id 联动 bundle。定向 16 passed；资源、编排与流式回归 126 passed；compileall 通过。 |
 | 2026-07-17 | S-022-TASK6 | Sol | backend/models/schemas.py、backend/routers/chat.py、backend/routers/resource.py、backend/routers/sessions.py、backend/services/orchestrator.py、backend/services/resource_bundle/service.py、backend/tests/test_resource_bundle_service.py、backend/tests/test_resource_bundle_orchestrator_integration.py、codex/AI模型任务队列.md | 完成严格 ChatRequest/BundleResponse/RetryArtifactRequest；普通 chat 返回 typed bundle，SSE 逐产物并恢复 PROFILED，会话历史返回 owned resource_bundles，失败产物可在原 bundle 内独立重试且不留下临时 bundle。定向 27 passed；完整后端 403 passed、7 skipped；compileall 通过。 |
