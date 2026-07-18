@@ -2,7 +2,7 @@
 
 > 项目：基于大模型的个性化资源生成与学习多智能体系统开发
 > 队列位置：E:\软件杯\codex\AI模型任务队列.md
-> 当前模型批次：Sol（S-038 墨团应用图标实施中）
+> 当前模型批次：Sol（全部优化与发布验收完成，含墨团应用图标）
 > 最后审视日期：2026-07-18
 
 ## 一、使用规则
@@ -90,7 +90,7 @@
 | S-035 | P1 | 完成 | 完成首次启动、桌面诊断、日志导出、版本展示与墨团设置增强 | S-031、现有托盘/桌宠/生命周期 | 首次启动向导、托盘主窗口/墨团/暂停/退出、诊断报告、日志导出、置顶/音量/多屏边界；证据见 S-035-COMPLETE |
 | S-036 | P1 | 完成 | 完成可信学习交互与比赛一键演示、离线降级和前后效果对比 | S-033、现有安全引用/掌握度/Agent 工作台 | 教材/模型补充区分、证据不足重检、页码范围、答案复核、内置演示数据与一键演示；证据见 S-036-COMPLETE |
 | S-037 | P0 | 完成 | 对全部前端、后端、Electron 和最终桌面包执行发布级验收 | S-033、S-034、S-035、S-036 | 全量测试、构建、PyInstaller、desktop pack、生命周期、真实 OCR/导入和零残留进程证据；完整证据见 S-037-RELEASE-ACCEPTANCE |
-| S-038 | P1 | 进行中 | 将 Windows 主程序、安装器、快捷方式和主窗口图标统一为墨团形象 | S-037、现有墨团 spritesheet 与托盘图标 | 透明 512px 主图、多尺寸 ICO、Electron Builder/NSIS/BrowserWindow 接入、最终安装包图标与生命周期验收 |
+| S-038 | P1 | 完成 | 将 Windows 主程序、安装器、快捷方式和主窗口图标统一为墨团形象 | S-037、现有墨团 spritesheet 与托盘图标 | 透明 512px 主图、多尺寸 ICO、Electron Builder/NSIS/BrowserWindow 接入、最终安装包图标与生命周期验收；证据见 S-038-COMPLETE |
 | T-033 | P0 | 完成 | 实现多 API 配置、高可用切换、模型选择与推理强度控制 | S-017 | 版本 2 加密多配置、原子热应用与回滚、3 次/2 配置预算、Retry-After/熔断、普通与流式故障边界、全局/学习空间模型和思考强度选择、兼容迁移、真实桌面 5/5 连接及完整打包回归 |
 | T-035 | P0 | 完成 | 实现本地知识库与安全文件导入 | S-018 | 已完成文件选择/拖放、七格式与限额校验、隔离解析 worker、SQLite 元数据/FTS/可选语义索引、可追溯引用、学习助手绑定与隐私模式、删除/重建、恶意文件/性能/打包测试及 Windows 桌面安装包验收 |
 | T-036 | P1 | 完成 | 实现桌宠形象包、用户上传、进度事件与语音鼓励 | S-019 | 已完成角色包目录选择、固定文件/atlas 校验、原子替换、失败保留旧角色、恢复墨团、热重载、动作音效和本地语音鼓励；全面素材/许可证、逐帧视觉与主观音色 QA 保留后续 |
@@ -233,6 +233,7 @@ S-016 已完成：本仓库提交身份已设置为 `Wei kb <212667660@qq.com>`�
 
 | 日期 | 任务 ID | 模型 | 修改文件 | 验证结果 |
 | --- | --- | --- | --- | --- |
+| 2026-07-18 | S-038-COMPLETE | Sol | a3-front/a3-front/electron/assets/app-icon.png、app-icon.ico、electron/app-icon.test.mjs、electron/main.mjs、package.json、docs/superpowers/specs/2026-07-18-motuan-application-icon-design.md、docs/superpowers/plans/2026-07-18-motuan-application-icon-plan.md、release/、codex/AI模型任务队列.md | 从项目内置墨团 idle 首帧生成透明 512×512 RGBA 主图和 16/24/32/48/64/128/256px 多尺寸 ICO；Windows EXE、NSIS 安装器/卸载器、桌面与开始菜单快捷方式、主 BrowserWindow 均使用墨团图标，托盘保留小尺寸墨团图标。TDD RED 4 项按预期失败后 GREEN 4/4；隔离后端 559 passed、7 skipped，桌面全量 Electron/Node 168 passed、Vitest 135 passed；`desktop:pack` 与 `desktop:dist` 成功。定位并解决 app-builder 因缺少稳定 winCodeSign-2.6.0 缓存而反复访问 GitHub 超时的问题，离线 rcedit 探针 0.76 秒通过。最终安装器和主程序提取图标 SHA-256 同为 `5BE6D483382A44436DC679CCE1220E95C1B1E96C7DFDEAE38259D4A1C73C4283`，与 Electron 默认图标不同；源 PNG SHA-256 `B9333A5BEC6695595291661FEFB5D489C9D95B91785F8124CC3DDBA7CC7174A7`，ICO SHA-256 `AF98BD025A1DEFB40147DD25464DB8EC0A85AE8EA38EFA048CB301924D087670`。最终 `智学协作台 Setup 1.0.0.exe` 为 228,386,105 bytes，SHA-256 `095F171A5E3FE4537642A993CCCA50DBDD2495CD49E2FF5C4B3E46FF5CB9B96A`；unpacked EXE 版本 1.0.0、SHA-256 `F6A447E907C3BB8A5C9FE85CCD4E67C510FA37153F0EB5D4134562A9752E68F1`。隔离桌面启动退出码 0、生命周期标记 4/4、数据库创建成功、残留进程 0；`app.asar` 包含图标测试与两种图标资源。安装包仍未代码签名。 |
 | 2026-07-16 | S-019 / T-036 第二阶段 | Sol | a3-front/a3-front/electron/pet-audio.test.mjs、pet-character-import.mjs 及测试、pet-config.mjs、pet-controller.mjs、pet/pet-audio.js、pet-renderer.js、main.mjs、preload.cjs、ipc-contract.mjs、runtime.test.mjs、src/api/、src/components/pet/PetSettingsCard.vue 及测试、README.md、src/api/README.md、codex/AI模型任务队列.md | 交付受控角色包导入/恢复和独立声音控制：链接/大小/清单/atlas 像素验证、staging 原子替换、失败保留旧角色、热重载、Web Audio 动作音效、系统本地语音、默认静音语音和 30 秒冷却；审查补齐同名自定义角色恢复、异步音效取消和结束后音频挂起。真实 unpacked 加载带 BOM 自定义角色，验证音效 1.0 与语音 0.25 独立保存、`zh-CN` 鼓励、恢复墨团和窗口重建；Electron/Node 138 passed、Vitest 86 passed，atlas 错误 0，桌面构建/打包和隔离启动退出码 0；临时数据与进程已清理。全面素材/许可证、逐帧视觉与主观音色 QA 保留。 |
 | 2026-07-16 | S-019 / T-036 第一阶段 | Sol | a3-front/a3-front/electron/pet-*、electron/pet/、electron/pets/motuan/、tools/pet/、src/components/pet/、src/pet/、electron/main.mjs、preload.cjs、ipc-contract.mjs、src/api/、DeskPanel.vue、AppLayout.vue、SmartTutor.vue 及测试；README.md、src/api/README.md、codex/AI模型任务队列.md | 交付原创“墨团”透明置顶桌宠 MVP：严格 8×9 atlas 清单、非法自定义回退、拖动/位置、多屏/DPI、九状态、任务联动、点击/双击、显示/隐藏/缩放/速度及资源节流。上游 Apache-2.0 validator 验证 1536×1872 RGBA WebP、透明残留 0、错误 0；完整 `npm test` 为 Electron 121 passed、Vitest 84 passed，修复真实 Windows 缩放后立即拖动的瞬态 bounds 回归并新增控制器测试；`build:desktop`、`desktop:pack` 通过。unpacked 同时加载主界面/学习伙伴，canvas 非透明像素 25,043，DPI 1.5 backing 288×312；显示隐藏、1.25×/1.5×设置、恢复后立即拖动、双击事件和 running/review/waiting/failed/idle 固定 IPC 均通过，测试进程和临时设置已清理。完整视觉/许可证 QA、逐帧状态核对、导入 UI 与语音留后续。 |
 | 2026-07-16 | T-033 Task 13 / T-033 完成 | Sol | backend/errors.py、services/llm_service.py、model_resilience.py、model_runtime.py、model_settings.py 及测试；README.md、backend/API示例.md、a3-front/a3-front/src/api/README.md、codex/AI模型任务队列.md | 旧接口兼容测试转接统一运行时；新增有界 Retry-After、同配置一次等待重试、截止时间切备用和熔断冷却；认证/权限失败后主配置进入 needs_attention，避免重复无效调用。故障矩阵覆盖连接/超时、408/429/502/503/504、401/403/404、流边界、half-open、取消与尝试预算。隔离后端 281 passed/7 skipped，Electron 104 passed、Vitest 75 passed，桌面构建、后端七格式打包和启动检查通过；unpacked 测试启动无残留，最终真实加密配置 5/5 成功，P50 1519 ms、P95 2105 ms；密钥与回复正文未输出。 |
