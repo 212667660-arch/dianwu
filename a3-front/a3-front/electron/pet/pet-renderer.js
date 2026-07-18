@@ -113,18 +113,24 @@ export function createInteractionController({
   clearTimer = timer => clearTimeout(timer),
 }) {
   let timer = null
+  let activeState = null
   return {
     play(state) {
+      if (timer !== null && activeState === state) return false
       if (timer !== null) clearTimer(timer)
+      activeState = state
       onState(state)
       timer = setTimer(() => {
         timer = null
+        activeState = null
         onState(null)
       }, durationFor(state))
+      return true
     },
     cancel() {
       if (timer !== null) clearTimer(timer)
       timer = null
+      activeState = null
       onState(null)
     },
   }

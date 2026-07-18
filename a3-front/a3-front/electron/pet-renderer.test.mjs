@@ -36,6 +36,32 @@ test('repeated interactions retain only one expiry timer', () => {
   assert.equal(states.at(-1), null)
 })
 
+test('repeated identical interactions cannot extend the current animation lifetime', () => {
+  const timers = new Map()
+  let nextId = 0
+  let clearCount = 0
+  const controller = createInteractionController({
+    onState: () => {},
+    durationFor: () => 400,
+    setTimer: callback => {
+      const id = ++nextId
+      timers.set(id, callback)
+      return id
+    },
+    clearTimer: id => {
+      clearCount += 1
+      timers.delete(id)
+    },
+  })
+
+  controller.play('jumping')
+  for (let index = 0; index < 100; index += 1) controller.play('jumping')
+
+  assert.equal(nextId, 1)
+  assert.equal(clearCount, 0)
+  assert.equal(timers.size, 1)
+})
+
 test('canvas backing size depends only on logical dimensions and clamped dpr', () => {
   assert.deepEqual(canvasBackingSize({ width: 192, height: 208 }, 1), {
     width: 192,
