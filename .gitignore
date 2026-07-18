@@ -31,6 +31,10 @@ backend/evaluation/live-evaluation-history/
 **/dist/
 **/build/
 **/release/
+!scripts/release/
+!scripts/release/**
+!front/a3-front/scripts/release/
+!front/a3-front/scripts/release/**
 **/desktop-backend/
 **/desktop-backend.backup-*/
 **/coverage/
