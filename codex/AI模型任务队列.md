@@ -2,7 +2,7 @@
 
 > 项目：基于大模型的个性化资源生成与学习多智能体系统开发
 > 队列位置：E:\软件杯\codex\AI模型任务队列.md
-> 当前模型批次：Sol（INBOX-010 本地改动审查、验证与 GitHub 同步中；S-022 保持进行中）
+> 当前模型批次：Sol（S-022 五类资源端到端修复实施中；完成后自动转入 S-026）
 > 最后审视日期：2026-07-18
 
 ## 一、使用规则
@@ -150,7 +150,7 @@
 | INBOX-007 | Luna/Terra | 完成 | 盘点 A3 前端并准备续作任务 | 已分流至 L-010；后续实施为 T-026、T-027，Electron 接入待用户确认后解锁 T-028。 |
 | INBOX-008 | Sol | 完成 | 检查前后端接口是否存在问题 | S-013 已完成：当前学习主流程接口匹配且回归通过；发现安装版模型配置闭环缺失与错误信封不一致，分别登记为 S-014、T-029。 |
 | INBOX-009 | Sol | 完成 | 编写开题报告 part 2“整体解决方案设计”300—600 字文案 | 已形成 583 字可直接粘贴文本，覆盖整体概述、五层架构、核心 Agent 与五类资源、学习闭环创新、60 分质量门槛、量化价值、落地可行性与推广场景；PowerShell 字数与关键词检查通过。 |
-| INBOX-010 | Sol | 进行中 | 审查、验证并同步当前本地修改至 GitHub | P0；依赖：本地改动审查、相关自动化测试及远端分支状态确认；验收：无阻塞性审查问题，测试通过，提交并推送当前分支。 |
+| INBOX-010 | Sol | 完成 | 审查、验证并同步当前本地修改至 GitHub | P0；已修复协议实现未跟上测试、规划来源白名单越界、测试库重复运行污染和快捷测试环境假设；后端、前端与桌面构建通过，提交并推送 `codex/s022-five-resource-bundle`，`origin` 已更新到迁移后的 `212667660-arch/dianwu`。 |
 
 ## 八、当前执行顺序
 
@@ -224,6 +224,7 @@ S-016 已完成：本仓库提交身份已设置为 `Wei kb <212667660@qq.com>`�
 
 | 日期 | 任务 ID | 模型 | 修改文件 | 验证结果 |
 | --- | --- | --- | --- | --- |
+| 2026-07-18 | INBOX-010 | Sol | `.gitignore`、`README.md`、`backend/protocols/v2/models.py`、`backend/services/resource_bundle/planner.py`、`pipeline.py`、`backend/quick_test.ps1`、资源协议/规划器/管线/快捷入口/模型偏好测试、`front/a3-front/`（由 `a3-front/a3-front/` 重命名）、新增五类资源实施与复审文档、`codex/AI模型任务队列.md` | 审查发现 13 项新增测试对应实现未完成，补齐严格难度/模式/协议版本和目录不变量、逐行规划解析、服务端来源白名单交集、失败 bundle 完整目录；修复固定 session 测试污染和 `.venv` 可移植性。`backend/quick_test.ps1` 最终为 384 passed、7 skipped；`npm test` 为 Electron/Node 138 passed、Vitest 98 passed；`npm run build:desktop` 成功；`git diff --check`、高置信密钥扫描通过，53.29 MiB `desktop-backend.backup-s020` 保持忽略。代码提交 `9806f78`，合并远端 `main` 提交 `92017a1` 后生成 `1a3b5a8`，已推送 `origin/codex/s022-five-resource-bundle`；远端更新为 `https://github.com/212667660-arch/dianwu.git`。 |
 | 2026-07-16 | S-019 / T-036 第二阶段 | Sol | a3-front/a3-front/electron/pet-audio.test.mjs、pet-character-import.mjs 及测试、pet-config.mjs、pet-controller.mjs、pet/pet-audio.js、pet-renderer.js、main.mjs、preload.cjs、ipc-contract.mjs、runtime.test.mjs、src/api/、src/components/pet/PetSettingsCard.vue 及测试、README.md、src/api/README.md、codex/AI模型任务队列.md | 交付受控角色包导入/恢复和独立声音控制：链接/大小/清单/atlas 像素验证、staging 原子替换、失败保留旧角色、热重载、Web Audio 动作音效、系统本地语音、默认静音语音和 30 秒冷却；审查补齐同名自定义角色恢复、异步音效取消和结束后音频挂起。真实 unpacked 加载带 BOM 自定义角色，验证音效 1.0 与语音 0.25 独立保存、`zh-CN` 鼓励、恢复墨团和窗口重建；Electron/Node 138 passed、Vitest 86 passed，atlas 错误 0，桌面构建/打包和隔离启动退出码 0；临时数据与进程已清理。全面素材/许可证、逐帧视觉与主观音色 QA 保留。 |
 | 2026-07-16 | S-019 / T-036 第一阶段 | Sol | a3-front/a3-front/electron/pet-*、electron/pet/、electron/pets/motuan/、tools/pet/、src/components/pet/、src/pet/、electron/main.mjs、preload.cjs、ipc-contract.mjs、src/api/、DeskPanel.vue、AppLayout.vue、SmartTutor.vue 及测试；README.md、src/api/README.md、codex/AI模型任务队列.md | 交付原创“墨团”透明置顶桌宠 MVP：严格 8×9 atlas 清单、非法自定义回退、拖动/位置、多屏/DPI、九状态、任务联动、点击/双击、显示/隐藏/缩放/速度及资源节流。上游 Apache-2.0 validator 验证 1536×1872 RGBA WebP、透明残留 0、错误 0；完整 `npm test` 为 Electron 121 passed、Vitest 84 passed，修复真实 Windows 缩放后立即拖动的瞬态 bounds 回归并新增控制器测试；`build:desktop`、`desktop:pack` 通过。unpacked 同时加载主界面/学习伙伴，canvas 非透明像素 25,043，DPI 1.5 backing 288×312；显示隐藏、1.25×/1.5×设置、恢复后立即拖动、双击事件和 running/review/waiting/failed/idle 固定 IPC 均通过，测试进程和临时设置已清理。完整视觉/许可证 QA、逐帧状态核对、导入 UI 与语音留后续。 |
 | 2026-07-16 | T-033 Task 13 / T-033 完成 | Sol | backend/errors.py、services/llm_service.py、model_resilience.py、model_runtime.py、model_settings.py 及测试；README.md、backend/API示例.md、a3-front/a3-front/src/api/README.md、codex/AI模型任务队列.md | 旧接口兼容测试转接统一运行时；新增有界 Retry-After、同配置一次等待重试、截止时间切备用和熔断冷却；认证/权限失败后主配置进入 needs_attention，避免重复无效调用。故障矩阵覆盖连接/超时、408/429/502/503/504、401/403/404、流边界、half-open、取消与尝试预算。隔离后端 281 passed/7 skipped，Electron 104 passed、Vitest 75 passed，桌面构建、后端七格式打包和启动检查通过；unpacked 测试启动无残留，最终真实加密配置 5/5 成功，P50 1519 ms、P95 2105 ms；密钥与回复正文未输出。 |
