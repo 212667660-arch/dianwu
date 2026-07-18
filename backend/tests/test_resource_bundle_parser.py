@@ -74,6 +74,37 @@ class TestBundleJsonRoundTrip:
         with pytest.raises(ProtocolValidationError):
             parse_bundle_from_json('{"bundle_id": "x"}')
 
+    def test_type_mismatch_is_rejected_during_parsing(self):
+        data = {
+            "bundle_id": "b-invalid",
+            "protocol_version": "learning-resource-bundle/v2",
+            "topic": "一次函数",
+            "profile_version": 1,
+            "learning_state_version": "v1",
+            "mode": "bundle",
+            "status": "COMPLETED",
+            "requested_types": ["course_explanation", "mind_map"],
+            "artifacts": [
+                {
+                    "artifact_id": "a1",
+                    "type": "course_explanation",
+                    "title": "讲解",
+                    "status": "SUCCEEDED",
+                    "body": "内容",
+                    "quality_score": 80,
+                    "quality_issues": [],
+                }
+            ],
+            "aggregate_quality": 80.0,
+            "created_at": "2026-07-16T10:00:00Z",
+        }
+
+        with pytest.raises(ProtocolValidationError) as exc_info:
+            parse_bundle_from_json(json.dumps(data))
+
+        assert exc_info.value.code == "BUNDLE_VALIDATION_ERROR"
+        assert "requested_types" in str(exc_info.value)
+
 
 class TestBundleValidation:
     def test_valid_bundle_passes(self):
@@ -90,7 +121,7 @@ class TestBundleValidation:
         validate_bundle(bundle)  # should not raise
 
     def test_bundle_missing_requested_type(self):
-        bundle = ResourceBundle(
+        bundle = ResourceBundle.model_construct(
             bundle_id="b1", protocol_version="learning-resource-bundle/v2",
             topic="test", profile_version=1, learning_state_version="v1",
             mode="bundle", status=BundleStatus.COMPLETED,

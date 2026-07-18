@@ -33,7 +33,7 @@
 | `backend/evaluation/` | 固定样例和效果评分工具 |
 | `backend/knowledge/` | 本地对象解析、切片、FTS、可选 OCR/语义包与引用上下文 |
 | `backend/tests/` | 离线单元测试与接口测试 |
-| `a3-front/a3-front/` | Vue/Electron 桌面端、暖色三栏工作台与知识库界面 |
+| `front/a3-front/` | Vue/Electron 桌面端、暖色三栏工作台与知识库界面 |
 | `codex/architecture/` | 架构设计与复审材料 |
 
 ## 本地启动
@@ -104,7 +104,7 @@ MODEL_NAME=deepseek-v4-pro
 桌面端会自行启动打包后的本地后端；开发与解压运行命令如下：
 
 ```powershell
-cd E:\软件杯\a3-front\a3-front
+cd E:\软件杯\front\a3-front
 npm install
 npm run desktop:dev
 
@@ -113,7 +113,7 @@ npm run desktop:pack
 .\release\win-unpacked\智学协作台.exe
 ```
 
-`desktop:dev` 和 `desktop:pack` 需要 `a3-front/a3-front/desktop-backend/api.exe` 已存在。模型配置、知识库、桌宠设置与学习数据均写入 Electron userData，不写入安装目录。
+`desktop:dev` 和 `desktop:pack` 需要 `front/a3-front/desktop-backend/api.exe` 已存在。模型配置、知识库、桌宠设置与学习数据均写入 Electron userData，不写入安装目录。
 
 ### 4. 运行测试
 
@@ -124,7 +124,7 @@ npm run desktop:pack
 
 当前离线测试覆盖诊断状态机、协议解析、错误响应、会话接口、流式事件、取消、七格式知识解析、恶意文件隔离、检索性能和评测工具。真实模型联调需要有效的 `MODEL_API_KEY`，不会在离线测试中自动发起。
 
-也可以直接双击运行 `backend\quick_test.bat`，自动完成语法检查和全部后端测试；双击 `backend\quick_package_test.bat` 可额外重建 `api.exe` 并执行启动自检。两个入口会优先使用项目内的 `backend\competition` Python 环境。
+也可以直接双击运行 `backend\quick_test.bat`，自动完成语法检查和全部后端测试；双击 `backend\quick_package_test.bat` 可额外重建 `api.exe` 并执行启动自检。两个入口会优先使用项目根目录的 `.venv`，缺失时再使用 `backend\competition` Python 环境。
 
 ## 核心流程
 
@@ -165,7 +165,7 @@ Electron 启动时会同时创建独立的透明、无边框、置顶桌宠窗�
 - `pet.json`
 - `spritesheet.webp`
 
-主进程会拒绝链接、超限文件、非法清单和不合规格的精灵图，验证通过后再原子替换当前角色；失败不会覆盖原角色。导入成功立即热重载，不必重启应用；点击“恢复墨团”可删除当前自定义角色并回到内置角色。renderer 不接收用户选择的目录或本地路径。兼容规格固定为单格 192×208、8 列×9 行、总尺寸 1536×1872；未使用格必须完全透明，已使用格不能空白或带近乎整格不透明的背景。动画行依次为 `idle`、`running-right`、`running-left`、`waving`、`jumping`、`failed`、`waiting`、`running`、`review`。内置范例位于 `a3-front/a3-front/electron/pets/motuan/`，可用 `tools/pet/generate_motuan.py` 重新生成。
+主进程会拒绝链接、超限文件、非法清单和不合规格的精灵图，验证通过后再原子替换当前角色；失败不会覆盖原角色。导入成功立即热重载，不必重启应用；点击“恢复墨团”可删除当前自定义角色并回到内置角色。renderer 不接收用户选择的目录或本地路径。兼容规格固定为单格 192×208、8 列×9 行、总尺寸 1536×1872；未使用格必须完全透明，已使用格不能空白或带近乎整格不透明的背景。动画行依次为 `idle`、`running-right`、`running-left`、`waving`、`jumping`、`failed`、`waiting`、`running`、`review`。内置范例位于 `front/a3-front/electron/pets/motuan/`，可用 `tools/pet/generate_motuan.py` 重新生成。
 
 Web 浏览器模式只显示说明，不打开系统目录选择器，也不尝试调用桌面或声音能力。
 

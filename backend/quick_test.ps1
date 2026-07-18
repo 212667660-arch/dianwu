@@ -1,6 +1,7 @@
 param(
     [switch]$Package,
-    [switch]$Pause
+    [switch]$Pause,
+    [switch]$PrintPython
 )
 
 $ErrorActionPreference = "Stop"
@@ -9,8 +10,8 @@ $projectRoot = Split-Path -Parent $backendDir
 
 function Find-Python {
     $candidates = @(
-        (Join-Path $backendDir "competition\Scripts\python.exe"),
-        (Join-Path $projectRoot ".venv\Scripts\python.exe")
+        (Join-Path $projectRoot ".venv\Scripts\python.exe"),
+        (Join-Path $backendDir "competition\Scripts\python.exe")
     )
     foreach ($candidate in $candidates) {
         if (Test-Path -LiteralPath $candidate) {
@@ -40,6 +41,10 @@ $python = $null
 $locationChanged = $false
 try {
     $python = Find-Python
+    if ($PrintPython) {
+        Write-Output $python
+        exit 0
+    }
     Write-Host "A3 backend quick test" -ForegroundColor Green
     Write-Host "Python: $python"
     Push-Location $projectRoot

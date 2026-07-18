@@ -103,6 +103,60 @@ class TestPipelineSingleMode:
         )
         assert result.bundle.status == BundleStatus.FAILED
 
+    @pytest.mark.asyncio
+    async def test_bundle_plan_failure_preserves_requested_catalog(self):
+        gateway = ScriptedGateway(completions=["invalid output"])
+        pipeline = BundlePipeline(gateway=gateway)
+
+        result = await pipeline.run(
+            bundle_id="test-bundle-plan-fail",
+            mode="bundle",
+            single_type=None,
+            profile_text="画像",
+            learning_context="",
+            knowledge_context="",
+            user_request="生成",
+            source_allowlist=[],
+            subject_category_hint="math",
+            profile_version=1,
+            learning_state_version="v1",
+        )
+
+        assert result.bundle.status == BundleStatus.FAILED
+        assert [artifact.type for artifact in result.bundle.artifacts] == list(ArtifactType)
+
+    @pytest.mark.asyncio
+    async def test_forged_planner_source_is_not_sent_to_specialist(self):
+        plan_with_forged_source = PLAN_OUT.replace(
+            "来源白名单:",
+            "来源白名单: 资料1|资料99",
+        )
+        gateway = ScriptedGateway(
+            completions=[plan_with_forged_source, READING_OUT],
+        )
+        pipeline = BundlePipeline(gateway=gateway)
+
+        await pipeline.run(
+            bundle_id="test-source-intersection",
+            mode="single",
+            single_type=ArtifactType.EXTENDED_READING,
+            profile_text="画像",
+            learning_context="",
+            knowledge_context="",
+            user_request="生成",
+            source_allowlist=["资料1"],
+            subject_category_hint="math",
+            profile_version=1,
+            learning_state_version="v1",
+        )
+
+        specialist_messages = gateway.calls[1]["messages"]
+        specialist_prompt = "\n".join(
+            message["content"] for message in specialist_messages
+        )
+        assert "资料1" in specialist_prompt
+        assert "资料99" not in specialist_prompt
+
 
 class TestPipelineBundleMode:
     @pytest.mark.asyncio

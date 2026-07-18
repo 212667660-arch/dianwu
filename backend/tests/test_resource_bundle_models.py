@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
+from backend.protocols.v2 import models as protocol_models
 from backend.protocols.v2.models import (
     ArtifactStatus,
     ArtifactType,
@@ -67,6 +68,15 @@ class TestResourceBrief:
         for cat in valid:
             sc = SubjectCategory(cat)
             assert sc.value == cat
+
+    def test_target_difficulty_is_strict(self):
+        target_difficulty = protocol_models.TargetDifficulty
+        assert target_difficulty("基础") == target_difficulty.BASIC
+        assert target_difficulty("提高") == target_difficulty.INTERMEDIATE
+        assert target_difficulty("挑战") == target_difficulty.CHALLENGE
+        assert str(target_difficulty.BASIC) == "基础"
+        with pytest.raises(ValueError):
+            target_difficulty("任意")
 
 
 class TestResourceArtifact:
@@ -133,6 +143,39 @@ class TestResourceArtifact:
 
 
 class TestResourceBundle:
+    @staticmethod
+    def _artifact(
+        artifact_id: str,
+        artifact_type: ArtifactType,
+    ) -> ResourceArtifact:
+        return ResourceArtifact(
+            artifact_id=artifact_id,
+            type=artifact_type,
+            title="资源",
+            status=ArtifactStatus.SUCCEEDED,
+            body="内容",
+            quality_score=80,
+            quality_issues=[],
+        )
+
+    @classmethod
+    def _bundle_data(cls) -> dict:
+        return {
+            "bundle_id": "b-strict",
+            "protocol_version": "learning-resource-bundle/v2",
+            "topic": "一次函数",
+            "profile_version": 1,
+            "learning_state_version": "v1",
+            "mode": "bundle",
+            "status": BundleStatus.COMPLETED,
+            "requested_types": [ArtifactType.COURSE_EXPLANATION],
+            "artifacts": [
+                cls._artifact("a1", ArtifactType.COURSE_EXPLANATION),
+            ],
+            "aggregate_quality": 80.0,
+            "created_at": "2026-07-16T10:00:00Z",
+        }
+
     def test_completed_bundle(self):
         artifacts = [
             ResourceArtifact(
@@ -218,3 +261,47 @@ class TestResourceBundle:
                 aggregate_quality=0.0,
                 created_at="2026-07-16T10:00:00Z",
             )
+
+    def test_protocol_version_is_fixed_to_v2(self):
+        data = self._bundle_data()
+        data["protocol_version"] = "learning-resource-bundle/v1"
+
+        with pytest.raises(ValidationError):
+            ResourceBundle(**data)
+
+    def test_resource_mode_is_strict(self):
+        resource_mode = protocol_models.ResourceMode
+        assert resource_mode("bundle") == resource_mode.BUNDLE
+        assert resource_mode("single") == resource_mode.SINGLE
+        with pytest.raises(ValueError):
+            resource_mode("batch")
+
+    def test_requested_types_must_be_unique(self):
+        data = self._bundle_data()
+        data["requested_types"] = [
+            ArtifactType.COURSE_EXPLANATION,
+            ArtifactType.COURSE_EXPLANATION,
+        ]
+
+        with pytest.raises(ValidationError):
+            ResourceBundle(**data)
+
+    def test_artifact_types_must_be_unique(self):
+        data = self._bundle_data()
+        data["artifacts"] = [
+            self._artifact("a1", ArtifactType.COURSE_EXPLANATION),
+            self._artifact("a2", ArtifactType.COURSE_EXPLANATION),
+        ]
+
+        with pytest.raises(ValidationError):
+            ResourceBundle(**data)
+
+    def test_requested_and_artifact_type_sets_must_match_exactly(self):
+        data = self._bundle_data()
+        data["requested_types"] = [
+            ArtifactType.COURSE_EXPLANATION,
+            ArtifactType.MIND_MAP,
+        ]
+
+        with pytest.raises(ValidationError):
+            ResourceBundle(**data)

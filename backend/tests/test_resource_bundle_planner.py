@@ -40,11 +40,43 @@ class TestParsePlanOutput:
 来源白名单: 资料1|资料2
 学科类别: math
 [协议结束]"""
-        brief = parse_plan_output(raw)
+        brief = parse_plan_output(raw, source_allowlist=["资料1", "资料2"])
         assert brief.topic == "一次函数"
         assert brief.learning_objectives == ["理解斜率概念", "掌握截距计算"]
         assert brief.source_allowlist == ["资料1", "资料2"]
         assert brief.subject_category == SubjectCategory.MATH
+
+    def test_empty_optional_lines_stay_empty(self):
+        raw = """[协议 resource-plan/v2]
+主题：一次函数
+学习目标：理解斜率
+目标难度：基础
+薄弱知识点：
+风格约束：
+来源白名单：
+学科类别：math
+[协议结束]"""
+
+        brief = parse_plan_output(raw, source_allowlist=["资料1"])
+
+        assert brief.weak_knowledge_points == []
+        assert brief.style_constraints == ""
+        assert brief.source_allowlist == []
+
+    def test_model_sources_are_intersected_with_server_allowlist(self):
+        raw = """[协议 resource-plan/v2]
+主题: 一次函数
+学习目标: 理解斜率
+目标难度: 基础
+薄弱知识点:
+风格约束:
+来源白名单: 资料1|资料99|资料1
+学科类别: math
+[协议结束]"""
+
+        brief = parse_plan_output(raw, source_allowlist=["资料1", "资料2"])
+
+        assert brief.source_allowlist == ["资料1"]
 
     def test_missing_topic_raises(self):
         raw = """[协议 resource-plan/v2]
@@ -53,11 +85,11 @@ class TestParsePlanOutput:
 学科类别: math
 [协议结束]"""
         with pytest.raises(ProtocolValidationError):
-            parse_plan_output(raw)
+            parse_plan_output(raw, source_allowlist=[])
 
     def test_empty_output_rejected(self):
         with pytest.raises(ProtocolValidationError):
-            parse_plan_output("")
+            parse_plan_output("", source_allowlist=[])
 
 
 class TestValidateBrief:

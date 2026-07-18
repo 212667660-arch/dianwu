@@ -7,7 +7,7 @@ Vue 3 + TypeScript + Pinia + Element Plus 构建的 A3 学习多智能体系统�
 先在项目根目录启动后端 `127.0.0.1:8000`，再执行：
 
 ```powershell
-cd E:\软件杯\a3-front\a3-front
+cd E:\软件杯\front\a3-front
 npm install
 npm run dev
 ```
@@ -44,7 +44,7 @@ npm run build
 桌面端源码和发布产物均在本目录：`electron/` 保存主进程与 preload，`release/` 保存解压验证产物或安装包。界面以 HanaAgent/openhanako 的三栏工作区布局为参考，保留 A3 的学习诊断、资源和复习流程。
 
 ```powershell
-cd E:\软件杯\a3-front\a3-front
+cd E:\软件杯\front\a3-front
 npm run desktop:dev
 ```
 

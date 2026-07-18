@@ -1,9 +1,9 @@
 ﻿from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ArtifactType(str, Enum):
@@ -18,6 +18,11 @@ class ArtifactStatus(str, Enum):
     SUCCEEDED = "SUCCEEDED"
     FAILED = "FAILED"
     CANCELLED = "CANCELLED"
+
+
+class ResourceMode(str, Enum):
+    BUNDLE = "bundle"
+    SINGLE = "single"
 
 
 class BundleStatus(str, Enum):
@@ -41,10 +46,19 @@ class SubjectCategory(str, Enum):
     OTHER = "other"
 
 
+class TargetDifficulty(str, Enum):
+    BASIC = "基础"
+    INTERMEDIATE = "提高"
+    CHALLENGE = "挑战"
+
+    def __str__(self) -> str:
+        return self.value
+
+
 class ResourceBrief(BaseModel):
     topic: str = Field(min_length=1, max_length=200)
     learning_objectives: list[str] = Field(min_length=1, max_length=10)
-    target_difficulty: str = Field(min_length=1, max_length=20)
+    target_difficulty: TargetDifficulty
     weak_knowledge_points: list[str] = Field(default_factory=list, max_length=20)
     style_constraints: str = Field(default="", max_length=500)
     source_allowlist: list[str] = Field(default_factory=list, max_length=50)
@@ -75,11 +89,11 @@ class ResourceArtifact(BaseModel):
 
 class ResourceBundle(BaseModel):
     bundle_id: str = Field(min_length=1, max_length=64)
-    protocol_version: str = Field(default="learning-resource-bundle/v2")
+    protocol_version: Literal["learning-resource-bundle/v2"] = "learning-resource-bundle/v2"
     topic: str = Field(min_length=1, max_length=200)
     profile_version: int = Field(ge=1)
     learning_state_version: str = Field(min_length=1, max_length=128)
-    mode: str
+    mode: ResourceMode
     status: BundleStatus
     requested_types: list[ArtifactType] = Field(min_length=1, max_length=5)
     artifacts: list[ResourceArtifact] = Field(min_length=1, max_length=5)
@@ -88,9 +102,13 @@ class ResourceBundle(BaseModel):
     knowledge_sources: list[dict[str, Any]] = Field(default_factory=list)
     public_sources: list[dict[str, Any]] = Field(default_factory=list)
 
-    @field_validator("mode")
-    @classmethod
-    def validate_mode(cls, value: str) -> str:
-        if value not in {"bundle", "single"}:
-            raise ValueError("mode must be ''bundle'' or ''single''")
-        return value
+    @model_validator(mode="after")
+    def validate_catalog(self) -> "ResourceBundle":
+        if len(self.requested_types) != len(set(self.requested_types)):
+            raise ValueError("requested_types must be unique")
+        artifact_types = [artifact.type for artifact in self.artifacts]
+        if len(artifact_types) != len(set(artifact_types)):
+            raise ValueError("artifact types must be unique")
+        if set(artifact_types) != set(self.requested_types):
+            raise ValueError("artifact types must exactly match requested_types")
+        return self

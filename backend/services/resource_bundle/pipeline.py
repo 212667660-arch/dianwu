@@ -41,14 +41,17 @@ def _make_failed_bundle(
         mode=mode,
         status=BundleStatus.FAILED,
         requested_types=requested_types,
-        artifacts=[ResourceArtifact(
-            artifact_id=f"{bundle_id}-placeholder",
-            type=requested_types[0] if requested_types else ArtifactType.COURSE_EXPLANATION,
-            title="规划失败",
-            status=ArtifactStatus.FAILED,
-            error_code="PLAN_FAILED",
-            quality_score=0,
-        )],
+        artifacts=[
+            ResourceArtifact(
+                artifact_id=f"{bundle_id}-{artifact_type.value}",
+                type=artifact_type,
+                title="规划失败",
+                status=ArtifactStatus.FAILED,
+                error_code="PLAN_FAILED",
+                quality_score=0,
+            )
+            for artifact_type in requested_types
+        ],
         aggregate_quality=0.0,
         created_at=datetime.now(timezone.utc).isoformat(),
     )
@@ -74,7 +77,7 @@ class BundlePipeline:
         )
         try:
             plan_raw = await self._gateway.complete(plan_messages, temperature=0.3)
-            brief = parse_plan_output(plan_raw)
+            brief = parse_plan_output(plan_raw, source_allowlist=source_allowlist)
         except Exception as exc:
             cleanup_cancellation(bundle_id)
             return PipelineResult(
