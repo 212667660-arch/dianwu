@@ -53,7 +53,17 @@
           <div class="message-meta">{{ activePhase }} Agent <span v-if="generating" class="typing">正在组织思绪…</span></div>
           <pre>{{ streamText || '让我想一想…' }}</pre>
         </div>
-        <div v-if="streamError" class="stream-error" role="alert">
+        <div v-if="streamError && isLearningDiagnosisError" class="stream-error diagnosis-help" data-testid="learning-diagnosis-help" role="alert">
+          <div>
+            <strong>需要先完成学习诊断</strong>
+            <p>学习诊断不是电脑故障检测，而是画像 Agent 通过几轮对话了解你的学习目标、当前基础和薄弱点。</p>
+            <p>{{ diagnosisCompleted ? '当前画像已经完成，可以重新尝试刚才的请求。' : '请先继续回答学习助手的问题，画像完成后即可生成练习和学习资源。' }}</p>
+          </div>
+          <el-button data-testid="continue-learning-diagnosis" text type="primary" @click="recoverLearningDiagnosis">
+            {{ diagnosisCompleted ? '重新尝试刚才请求' : '继续学习诊断' }}
+          </el-button>
+        </div>
+        <div v-else-if="streamError" class="stream-error" role="alert">
           <div><strong>本次请求未完成</strong><p>{{ streamError }}</p></div>
           <el-button text type="primary" @click="restoreFailedMessage">重新编辑</el-button>
         </div>
@@ -152,6 +162,7 @@ const activePhase = ref('诊断')
 const streamText = ref('')
 const pendingUser = ref('')
 const streamError = ref('')
+const streamErrorCode = ref('')
 const failedMessage = ref('')
 const failoverNotice = ref('')
 const streamInterrupted = ref(false)
@@ -194,6 +205,8 @@ const visibleActiveBundle = computed(() => {
     : activeBundle.value
 })
 const canGenerateResources = computed(() => ['PROFILED', 'GENERATING'].includes(backend.session?.state || ''))
+const isLearningDiagnosisError = computed(() => ['RESOURCE_NOT_READY', 'PROFILE_MISSING'].includes(streamErrorCode.value))
+const diagnosisCompleted = computed(() => backend.session?.state === 'PROFILED')
 const selectedScopePageCount = computed(() => backend.knowledgeDocuments.find(item => item.id === scopeDocumentId.value)?.page_count || null)
 const phaseLabel = computed(() => generating.value ? `${activePhase.value}中` : backend.session?.state || '等待开始')
 const starters = ['我想学习一次函数，请先了解我的基础。', '我正在准备英语考试，希望制定复习计划。', '根据我的薄弱点生成一份笔记和分层练习。']
@@ -264,6 +277,7 @@ function handleEvent(event: StreamEvent) {
     if (bundle) activeBundle.value = bundle
   }
   if (event.event === 'error') {
+    streamErrorCode.value = event.code || event.error_code || ''
     streamError.value = event.message || event.code || '生成失败，请检查后重试。'
     ElMessage.error(streamError.value)
   }
@@ -275,7 +289,21 @@ function handleEvent(event: StreamEvent) {
   scrollBottom()
 }
 
-function restoreFailedMessage() { editor.value = failedMessage.value; streamError.value = ''; streamText.value = '' }
+function restoreFailedMessage() {
+  editor.value = failedMessage.value
+  streamError.value = ''
+  streamErrorCode.value = ''
+  streamText.value = ''
+}
+
+function recoverLearningDiagnosis() {
+  streamError.value = ''
+  streamErrorCode.value = ''
+  streamText.value = ''
+  editor.value = diagnosisCompleted.value
+    ? failedMessage.value
+    : '我想继续完成学习诊断，请根据我的学习目标、当前基础和薄弱点继续提问。'
+}
 
 async function send() {
   const message = editor.value.trim()
@@ -287,6 +315,7 @@ async function send() {
   editor.value = ''
   streamText.value = ''
   streamError.value = ''
+  streamErrorCode.value = ''
   failoverNotice.value = ''
   streamInterrupted.value = false
   canContinueWithBackup.value = false
@@ -329,6 +358,7 @@ async function send() {
   } catch (error) {
     if (isCancellationError(error)) petTask.complete('waiting')
     else {
+      streamErrorCode.value = error instanceof DesktopApiError ? error.code : ''
       streamError.value = errorMessage(error)
       failedMessage.value = message
       pendingUser.value = ''
@@ -558,6 +588,7 @@ watch(() => backend.sessionId, currentSessionId => {
   resourceProgress.value = null
   retryingArtifacts.value = new Set()
   streamError.value = ''
+  streamErrorCode.value = ''
   failedMessage.value = ''
   failoverNotice.value = ''
   streamInterrupted.value = false
@@ -610,6 +641,8 @@ onBeforeUnmount(() => { controller?.abort(); activePetTask?.complete('idle'); ac
 .stream-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 16px; padding: 12px 14px; color: #7d2734; background: #fff0f2; border-left: 4px solid var(--danger); border-radius: 8px; }
 .stream-error strong { font-size: 13px; }
 .stream-error p { margin: 4px 0 0; font-size: 12px; line-height: 1.55; }
+.diagnosis-help { color: #755f3d; background: #fff6e7; border-left-color: #d5a568; }
+.diagnosis-help p + p { margin-top: 5px; }
 .stream-interruption { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 16px; padding: 12px 14px; color: #755f3d; background: #fff6e7; border-left: 4px solid #d5a568; border-radius: 8px; }
 .stream-interruption strong { font-size: 13px; }.stream-interruption p { margin: 4px 0 0; font-size: 11px; line-height: 1.55; }
 .retained-interruption pre { border-style: dashed; background: #fffaf0; }

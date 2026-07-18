@@ -245,6 +245,48 @@ describe('SmartTutor failure recovery', () => {
     expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('请帮助我学习一次函数')
   })
 
+  it('explains learning diagnosis and prepares a continuation while diagnosis is incomplete', async () => {
+    backendStore.session = { state: 'DIAGNOSING', messages: [], resource_bundles: [] } as any
+    apiMock.streamChat.mockImplementationOnce(async (_sessionId, _message, onEvent) => {
+      onEvent({ event: 'error', code: 'RESOURCE_NOT_READY', message: '会话尚未完成诊断，请先继续诊断。' })
+    })
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/tutor', component: SmartTutor }] })
+    await router.push('/tutor')
+    await router.isReady()
+    const wrapper = mount(SmartTutor, { global: { plugins: [router], stubs } })
+
+    await wrapper.get('textarea').setValue('生成一次函数练习')
+    await wrapper.get('[data-testid="send"]').trigger('click')
+    await flushPromises()
+
+    const help = wrapper.get('[data-testid="learning-diagnosis-help"]')
+    expect(help.text()).toContain('学习诊断')
+    expect(help.text()).toContain('学习目标、当前基础和薄弱点')
+    expect(wrapper.get('[data-testid="continue-learning-diagnosis"]').text()).toContain('继续学习诊断')
+
+    await wrapper.get('[data-testid="continue-learning-diagnosis"]').trigger('click')
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toContain('继续完成学习诊断')
+  })
+
+  it('restores the failed resource request when diagnosis has since completed', async () => {
+    backendStore.session = { state: 'PROFILED', messages: [], resource_bundles: [] } as any
+    apiMock.streamChat.mockImplementationOnce(async (_sessionId, _message, onEvent) => {
+      onEvent({ event: 'error', code: 'RESOURCE_NOT_READY', message: '会话尚未完成诊断，请先继续诊断。' })
+    })
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/tutor', component: SmartTutor }] })
+    await router.push('/tutor')
+    await router.isReady()
+    const wrapper = mount(SmartTutor, { global: { plugins: [router], stubs } })
+
+    await wrapper.get('textarea').setValue('生成一次函数练习')
+    await wrapper.get('[data-testid="send"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="continue-learning-diagnosis"]').text()).toContain('重新尝试刚才请求')
+    await wrapper.get('[data-testid="continue-learning-diagnosis"]').trigger('click')
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('生成一次函数练习')
+  })
+
   it('treats desktop stream cancellation as cancellation and releases the generation', async () => {
     apiMock.cancelGeneration.mockResolvedValue({ cancelled: true })
     apiMock.streamChat.mockImplementation(async (_sessionId, _message, onEvent, signal) => {
