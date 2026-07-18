@@ -244,6 +244,56 @@ Assert-Equal $validated.Count 2 'Assert-A3SignatureRecords must preserve record 
 Assert-Equal $validated[0].Path $valid.Path 'Assert-A3SignatureRecords must preserve first record.'
 Assert-Equal $validated[1].Path $second.Path 'Assert-A3SignatureRecords must preserve second record.'
 
+$missingHashMap = @{ $valid.Path = ('A' * 64) }
+Assert-ThrowsCode {
+    Assert-A3SignatureRecords -Records @($valid, $second) -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256ByPath $missingHashMap
+} 'A3_HASH_MAP_MISMATCH' | Out-Null
+
+$extraHashMap = @{
+    $valid.Path = ('A' * 64)
+    $second.Path = ('B' * 64)
+    'C:\release\extra.exe' = ('C' * 64)
+}
+Assert-ThrowsCode {
+    Assert-A3SignatureRecords -Records @($valid, $second) -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256ByPath $extraHashMap
+} 'A3_HASH_MAP_MISMATCH' | Out-Null
+
+$duplicateRecordPath = Copy-Record $valid
+$duplicateRecordPath.Path = $valid.Path.ToUpperInvariant()
+Assert-ThrowsCode {
+    Assert-A3SignatureRecords -Records @($valid, $duplicateRecordPath) -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256ByPath $missingHashMap
+} 'A3_HASH_MAP_MISMATCH' | Out-Null
+
+$duplicateCaseMap = [Collections.Specialized.OrderedDictionary]::new([StringComparer]::Ordinal)
+$duplicateCaseMap.Add($valid.Path, ('A' * 64))
+$duplicateCaseMap.Add($valid.Path.ToUpperInvariant(), ('A' * 64))
+$duplicateCaseMap.Add($second.Path, ('B' * 64))
+Assert-ThrowsCode {
+    Assert-A3SignatureRecords -Records @($valid, $second) -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256ByPath $duplicateCaseMap
+} 'A3_HASH_MAP_MISMATCH' | Out-Null
+
+$invalidHashMap = @{
+    $valid.Path = 'not-a-sha256'
+    $second.Path = ('B' * 64)
+}
+Assert-ThrowsCode {
+    Assert-A3SignatureRecords -Records @($valid, $second) -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256ByPath $invalidHashMap
+} 'A3_SIGNATURE_RECORD_INVALID' | Out-Null
+
+$relativeRecord = Copy-Record $valid
+$relativeRecord.Path = '.\release\canonical.exe'
+$relativeRecord.Sha256 = ('C' * 64)
+$normalizedMapPath = [IO.Path]::GetFullPath((Join-Path (Get-Location).Path 'release\folder\..\canonical.exe')).ToUpperInvariant()
+$normalizedMismatchMap = @{ $normalizedMapPath = ('D' * 64) }
+Assert-ThrowsCode {
+    Assert-A3SignatureRecords -Records @($relativeRecord) -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256ByPath $normalizedMismatchMap
+} 'A3_HASH_MISMATCH' | Out-Null
+
+$normalizedSuccessMap = @{ $normalizedMapPath = ('C' * 64) }
+$normalizedRecords = @(Assert-A3SignatureRecords -Records @($relativeRecord) -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256ByPath $normalizedSuccessMap)
+Assert-Equal $normalizedRecords.Count 1 'Canonical hash-map matching must preserve the record.'
+Assert-Equal $normalizedRecords[0].Path $relativeRecord.Path 'Canonical hash-map matching must preserve the original path text.'
+
 $badSecond = Copy-Record $second
 $badSecond.Subject = 'CN=Other Publisher'
 Assert-ThrowsCode {
@@ -276,21 +326,37 @@ try {
     $originalProgramFilesX86 = [Environment]::GetEnvironmentVariable('ProgramFiles(x86)', 'Process')
     $originalPath = [Environment]::GetEnvironmentVariable('Path', 'Process')
     try {
-        [Environment]::SetEnvironmentVariable('ProgramFiles(x86)', $temporaryDirectory, 'Process')
-        [Environment]::SetEnvironmentVariable('Path', $temporaryDirectory, 'Process')
+        $programFilesX86 = Join-Path $temporaryDirectory 'Program Files (x86)'
+        $olderSignTool = Join-Path $programFilesX86 'Windows Kits\10\bin\10.0.22000.0\x64\signtool.exe'
+        $newerSignTool = Join-Path $programFilesX86 'Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe'
+        $pathHijackDirectory = Join-Path $temporaryDirectory 'path-hijack'
+        $pathHijackSignTool = Join-Path $pathHijackDirectory 'signtool.exe'
+        $outsideSignTool = Join-Path $temporaryDirectory 'outside-sdk\signtool.exe'
+        foreach ($path in @($olderSignTool, $newerSignTool, $pathHijackSignTool, $outsideSignTool)) {
+            New-Item -ItemType Directory -Path (Split-Path -Parent $path) -Force | Out-Null
+            [System.IO.File]::WriteAllBytes($path, [byte[]](0))
+        }
+
+        [Environment]::SetEnvironmentVariable('ProgramFiles(x86)', $programFilesX86, 'Process')
+        [Environment]::SetEnvironmentVariable('Path', $pathHijackDirectory, 'Process')
         Assert-ThrowsCode {
             Get-A3SignatureRecord -LiteralPath $unsignedFile
         } 'A3_SIGNATURE_INVALID' | Out-Null
+
+        $automaticallyResolved = Find-A3SignTool
+        Assert-Equal $automaticallyResolved ([IO.Path]::GetFullPath($newerSignTool)) 'Find-A3SignTool must ignore PATH and select the newest approved SDK version.'
+
+        Assert-ThrowsCode {
+            Find-A3SignTool -ExplicitPath $outsideSignTool
+        } 'A3_SIGNTOOL_NOT_APPROVED' | Out-Null
+
+        $explicitlyResolved = Find-A3SignTool -ExplicitPath $olderSignTool
+        Assert-Equal $explicitlyResolved ([IO.Path]::GetFullPath($olderSignTool)) 'Find-A3SignTool must accept an explicit canonical SDK x64 path.'
     }
     finally {
         [Environment]::SetEnvironmentVariable('ProgramFiles(x86)', $originalProgramFilesX86, 'Process')
         [Environment]::SetEnvironmentVariable('Path', $originalPath, 'Process')
     }
-
-    $fakeSignTool = Join-Path $temporaryDirectory 'signtool.exe'
-    [System.IO.File]::WriteAllBytes($fakeSignTool, [byte[]](0))
-    $resolvedSignTool = Find-A3SignTool -ExplicitPath $fakeSignTool
-    Assert-Equal $resolvedSignTool ([System.IO.Path]::GetFullPath($fakeSignTool)) 'Find-A3SignTool must accept an explicit existing signtool.exe.'
 }
 finally {
     Remove-Item -LiteralPath $temporaryDirectory -Recurse -Force

@@ -199,6 +199,20 @@ function Assert-A3SignatureRecord {
     }
 }
 
+function ConvertTo-A3CanonicalWindowsPath {
+    param([Parameter(Mandatory)] [string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        throw (New-A3SignatureError 'A3_HASH_MAP_MISMATCH' 'Signature record and expected-hash paths must match one-to-one.')
+    }
+    try {
+        return [IO.Path]::GetFullPath($Path).ToUpperInvariant()
+    }
+    catch {
+        throw (New-A3SignatureError 'A3_HASH_MAP_MISMATCH' 'Signature record and expected-hash paths must match one-to-one.')
+    }
+}
+
 function Assert-A3SignatureRecords {
     [CmdletBinding()]
     param(
@@ -207,65 +221,140 @@ function Assert-A3SignatureRecords {
         [System.Collections.IDictionary]$ExpectedSha256ByPath
     )
 
-    $validated = [System.Collections.Generic.List[pscustomobject]]::new()
+    $recordEntries = [System.Collections.Generic.List[pscustomobject]]::new()
+    $recordPaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     foreach ($record in $Records) {
         if ($record -isnot [pscustomobject]) {
             throw (New-A3SignatureError 'A3_SIGNATURE_RECORD_INVALID' 'Every signature record must be a PSCustomObject.')
         }
 
         $recordPath = Get-A3RecordString -Record $record -Name 'Path'
-        if ($null -ne $ExpectedSha256ByPath -and $ExpectedSha256ByPath.Contains($recordPath)) {
-            Assert-A3SignatureRecord -Record $record -ExpectedPublisher $ExpectedPublisher -ExpectedSha256 ([string]$ExpectedSha256ByPath[$recordPath])
+        $canonicalPath = ConvertTo-A3CanonicalWindowsPath -Path $recordPath
+        if (-not $recordPaths.Add($canonicalPath)) {
+            throw (New-A3SignatureError 'A3_HASH_MAP_MISMATCH' 'Signature record and expected-hash paths must match one-to-one.')
         }
-        else {
-            Assert-A3SignatureRecord -Record $record -ExpectedPublisher $ExpectedPublisher
-        }
-        $validated.Add($record)
+        $recordEntries.Add([pscustomobject]@{
+            Record = $record
+            CanonicalPath = $canonicalPath
+        })
     }
 
+    $validated = [System.Collections.Generic.List[pscustomobject]]::new()
+    if ($PSBoundParameters.ContainsKey('ExpectedSha256ByPath')) {
+        if ($null -eq $ExpectedSha256ByPath) {
+            throw (New-A3SignatureError 'A3_HASH_MAP_MISMATCH' 'Signature record and expected-hash paths must match one-to-one.')
+        }
+
+        $expectedHashes = [System.Collections.Generic.Dictionary[string, string]]::new([StringComparer]::OrdinalIgnoreCase)
+        foreach ($mapPath in $ExpectedSha256ByPath.Keys) {
+            if ($mapPath -isnot [string]) {
+                throw (New-A3SignatureError 'A3_HASH_MAP_MISMATCH' 'Signature record and expected-hash paths must match one-to-one.')
+            }
+            $canonicalMapPath = ConvertTo-A3CanonicalWindowsPath -Path $mapPath
+            if ($expectedHashes.ContainsKey($canonicalMapPath)) {
+                throw (New-A3SignatureError 'A3_HASH_MAP_MISMATCH' 'Signature record and expected-hash paths must match one-to-one.')
+            }
+
+            $expectedHash = $ExpectedSha256ByPath[$mapPath]
+            if ($expectedHash -isnot [string] -or $expectedHash -notmatch '^[A-Fa-f0-9]{64}$') {
+                throw (New-A3SignatureError 'A3_SIGNATURE_RECORD_INVALID' 'The expected SHA-256 value is invalid.')
+            }
+            $expectedHashes.Add($canonicalMapPath, $expectedHash.ToUpperInvariant())
+        }
+
+        if ($expectedHashes.Count -ne $recordEntries.Count) {
+            throw (New-A3SignatureError 'A3_HASH_MAP_MISMATCH' 'Signature record and expected-hash paths must match one-to-one.')
+        }
+        foreach ($entry in $recordEntries) {
+            if (-not $expectedHashes.ContainsKey($entry.CanonicalPath)) {
+                throw (New-A3SignatureError 'A3_HASH_MAP_MISMATCH' 'Signature record and expected-hash paths must match one-to-one.')
+            }
+        }
+
+        foreach ($entry in $recordEntries) {
+            Assert-A3SignatureRecord -Record $entry.Record -ExpectedPublisher $ExpectedPublisher -ExpectedSha256 $expectedHashes[$entry.CanonicalPath]
+            $validated.Add($entry.Record)
+        }
+    }
+    else {
+        foreach ($entry in $recordEntries) {
+            Assert-A3SignatureRecord -Record $entry.Record -ExpectedPublisher $ExpectedPublisher
+            $validated.Add($entry.Record)
+        }
+    }
     return $validated.ToArray()
+}
+
+function Get-A3ApprovedSignToolInfo {
+    param(
+        [Parameter(Mandatory)] [string]$Path,
+        [Parameter(Mandatory)] [string]$SdkBinRoot
+    )
+
+    $resolved = Resolve-Path -LiteralPath $Path -ErrorAction SilentlyContinue
+    if ($null -eq $resolved -or -not (Test-Path -LiteralPath $resolved.Path -PathType Leaf)) {
+        return $null
+    }
+
+    $rootPath = [IO.Path]::GetFullPath($SdkBinRoot).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+    $resolvedPath = [IO.Path]::GetFullPath($resolved.Path)
+    if (-not $resolvedPath.StartsWith($rootPath, [StringComparison]::OrdinalIgnoreCase)) {
+        return $null
+    }
+
+    $relativePath = $resolvedPath.Substring($rootPath.Length)
+    $parts = @($relativePath -split '[\\/]')
+    if ($parts.Count -ne 3 -or $parts[1] -ine 'x64' -or $parts[2] -ine 'signtool.exe') {
+        return $null
+    }
+
+    $version = $null
+    if (-not [version]::TryParse($parts[0], [ref]$version)) {
+        return $null
+    }
+
+    return [pscustomobject]@{
+        Path = $resolvedPath
+        Version = $version
+    }
 }
 
 function Find-A3SignTool {
     [CmdletBinding()]
     param([Alias('SignToolPath')] [string]$ExplicitPath)
 
-    if (-not [string]::IsNullOrWhiteSpace($ExplicitPath)) {
-        $explicit = Resolve-Path -LiteralPath $ExplicitPath -ErrorAction SilentlyContinue
-        if ($null -ne $explicit -and
-            (Test-Path -LiteralPath $explicit.Path -PathType Leaf) -and
-            ([IO.Path]::GetFileName($explicit.Path) -ieq 'signtool.exe')) {
-            return [IO.Path]::GetFullPath($explicit.Path)
-        }
-    }
-
-    $command = Get-Command 'signtool.exe' -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace($command.Source) -and
-        (Test-Path -LiteralPath $command.Source -PathType Leaf)) {
-        return [IO.Path]::GetFullPath($command.Source)
-    }
-
     $programFilesX86 = ${env:ProgramFiles(x86)}
-    if (-not [string]::IsNullOrWhiteSpace($programFilesX86)) {
-        $windowsKitBin = Join-Path $programFilesX86 'Windows Kits\10\bin'
-        if (Test-Path -LiteralPath $windowsKitBin -PathType Container) {
-            $candidates = @(
-                Get-ChildItem -Path (Join-Path $windowsKitBin '*\x64\signtool.exe') -File -ErrorAction SilentlyContinue |
-                    ForEach-Object {
-                        $versionText = Split-Path -Leaf (Split-Path -Parent (Split-Path -Parent $_.FullName))
-                        $version = $null
-                        if ([version]::TryParse($versionText, [ref]$version)) {
-                            [pscustomobject]@{
-                                Path = $_.FullName
-                                Version = $version
-                            }
-                        }
-                    } |
-                    Sort-Object -Property @{ Expression = 'Version'; Descending = $true }, @{ Expression = 'Path'; Descending = $true }
-            )
-            if ($candidates.Count -gt 0) {
-                return [IO.Path]::GetFullPath($candidates[0].Path)
-            }
+    if ([string]::IsNullOrWhiteSpace($programFilesX86)) {
+        if ($PSBoundParameters.ContainsKey('ExplicitPath')) {
+            throw (New-A3SignatureError 'A3_SIGNTOOL_NOT_APPROVED' 'The explicit signtool path is outside the approved Windows SDK location.')
+        }
+        throw (New-A3SignatureError 'A3_SIGNTOOL_NOT_FOUND' 'Windows SDK signtool.exe was not found in an approved location.')
+    }
+
+    $windowsKitBin = Join-Path $programFilesX86 'Windows Kits\10\bin'
+    if ($PSBoundParameters.ContainsKey('ExplicitPath')) {
+        $approved = Get-A3ApprovedSignToolInfo -Path $ExplicitPath -SdkBinRoot $windowsKitBin
+        if ($null -eq $approved) {
+            throw (New-A3SignatureError 'A3_SIGNTOOL_NOT_APPROVED' 'The explicit signtool path is outside the approved Windows SDK location.')
+        }
+        return $approved.Path
+    }
+
+    if (Test-Path -LiteralPath $windowsKitBin -PathType Container) {
+        $candidates = @(
+            Get-ChildItem -LiteralPath $windowsKitBin -Directory -ErrorAction SilentlyContinue |
+                ForEach-Object {
+                    $version = $null
+                    if ([version]::TryParse($_.Name, [ref]$version)) {
+                        $candidatePath = Join-Path $_.FullName 'x64\signtool.exe'
+                        Get-A3ApprovedSignToolInfo -Path $candidatePath -SdkBinRoot $windowsKitBin
+                    }
+                } |
+                Where-Object { $null -ne $_ } |
+                Sort-Object -Property @{ Expression = 'Version'; Descending = $true }, @{ Expression = 'Path'; Descending = $true }
+        )
+        if ($candidates.Count -gt 0) {
+            return $candidates[0].Path
         }
     }
 
@@ -295,7 +384,12 @@ function Get-A3SignatureRecord {
         throw (New-A3SignatureError 'A3_SIGNATURE_INVALID' "Invalid Authenticode signature for $resolvedPath.")
     }
 
-    $signTool = Find-A3SignTool -ExplicitPath $SignToolPath
+    if ($PSBoundParameters.ContainsKey('SignToolPath')) {
+        $signTool = Find-A3SignTool -ExplicitPath $SignToolPath
+    }
+    else {
+        $signTool = Find-A3SignTool
+    }
     $arguments = @('verify', '/pa', '/all', '/v', $resolvedPath)
     try {
         $signToolOutput = @(& $signTool @arguments 2>&1)
