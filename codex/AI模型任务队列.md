@@ -2,7 +2,7 @@
 
 > 项目：基于大模型的个性化资源生成与学习多智能体系统开发
 > 队列位置：E:\软件杯\codex\AI模型任务队列.md
-> 当前模型批次：Sol（S-042 Windows 可信代码签名实施进行中）
+> 当前模型批次：Sol（S-042 Task 2 验签核心安全加固检查点，待重启后恢复）
 > 最后审视日期：2026-07-18
 
 ## 一、使用规则
@@ -88,7 +88,7 @@
 | S-039 | P0 | 完成 | 修复用户验收缺陷并完成托盘切换、墨团固定基础大小与手动拉伸 | S-037、S-038、用户四张真实桌面截图 | 单一答案入口与无遮挡提交、收藏局部更新无闪烁且并发安全、学习诊断说明、主窗口/墨团托盘显示收起切换、墨团 192×208 基础尺寸与 1–3 倍等比例四角拉伸、点击不改变大小、`.test-venv` 专用测试环境、完整回归与真实桌面验收；证据见 S-039-COMPLETE |
 | S-040 | P0 | 完成 | 收敛最新功能分支、任务队列与 GitHub 远端状态 | S-039、`codex/s022-five-resource-bundle` 旧同步分支、`origin/main` | 已以 `codex/s022-s026-remediation` 为唯一功能基线完成目录、文档、测试、队列、`origin/main` 和 GitHub 远端收敛；证据见 S-040-COMPLETE |
 | S-041 | P0 | 完成 | 设计 Windows 代码签名与默认中文、可下载语言包总体架构 | S-040、现有 Windows 发布包、桌面设置与安全边界 | 已确定 Azure Trusted Signing 受保护发布链、签名顺序/验证，以及内置 zh-CN、公开 Releases、Ed25519 数据包、原子安装/回滚和 content locale 契约；证据见 S-041-DESIGN |
-| S-042 | P0 | 进行中 | 实现 Windows 可信代码签名与签名发布验收 | S-041；真实签名最终验收依赖 Azure Trusted Signing 资源就绪 | 实施计划已完成；待按计划实现签名配置、凭据不落盘、api.exe/主程序/elevate/卸载器/安装器签名、时间戳、签名验证和最终安装包 |
+| S-042 | P0 | 进行中 | 实现 Windows 可信代码签名与签名发布验收 | S-041；真实签名最终验收依赖 Azure Trusted Signing 资源就绪 | Task 1 已完成并双重审查通过；Task 2 基础验签核心已提交，SDK 路径信任、批量 hash 一一对应和验签前后双哈希 TOCTOU 加固保存在可恢复 stash；待重启后继续 |
 | S-043 | P0 | 就绪 | 实现默认中文、其他语言可下载的语言包系统 | S-041 | 实施计划已完成；待实现内置 zh-CN、可信语言包目录/下载/校验/原子安装/回滚、设置切换、首批语言、前端/Electron/桌宠本地化和桌面验收 |
 | T-033 | P0 | 完成 | 实现多 API 配置、高可用切换、模型选择与推理强度控制 | S-017 | 版本 2 加密多配置、原子热应用与回滚、3 次/2 配置预算、Retry-After/熔断、普通与流式故障边界、全局/学习空间模型和思考强度选择、兼容迁移、真实桌面 5/5 连接及完整打包回归 |
 | T-035 | P0 | 完成 | 实现本地知识库与安全文件导入 | S-018 | 已完成文件选择/拖放、七格式与限额校验、隔离解析 worker、SQLite 元数据/FTS/可选语义索引、可追溯引用、学习助手绑定与隐私模式、删除/重建、恶意文件/性能/打包测试及 Windows 桌面安装包验收 |
@@ -164,7 +164,7 @@
 
 ## 八、当前执行顺序
 
-Sol 当前执行 S-042：两份独立实施计划已完成并通过规格覆盖、占位符、类型/命名一致性和路径审查；下一步按签名计划以 TDD 接入 Azure Trusted Signing 的 fail-closed 配置、受保护 workflow、签名验证和资源准备文档。在 Azure 资源未创建时完成全部可离线验证实现并保持真实签名发布阻塞，随后连续执行 S-043。
+Sol 当前执行 S-042 Task 2。重启恢复位置：worktree `E:\软件杯\.worktrees\s022-s026-remediation`，分支 `codex/s041-signing-i18n-design`，已完成 HEAD `66043e67cfbbe4be294090fd041d0f3059d40e19`。未完成安全加固已保存为 stash commit `0e8c9775e1e159f26f911b5a3db7384a8b96c5e0`（消息 `WIP S-042 Task 2 fail-closed hardening before restart`）；恢复时先应用该 stash，再继续 batch hash 一一对应与验签前后双哈希 TDD，完成 Task 2 规格/质量复审后进入 Task 3。不得删除或覆盖 `.tmp/`、`dist-s033/`、`dist-s033-diag/`、`dist-s033-fixed/`。
 
 ### 历史执行轨迹（仅供追溯，不代表当前状态）
 
@@ -343,3 +343,4 @@ S-016 已完成：本仓库提交身份已设置为 `Wei kb <212667660@qq.com>`�
 | 2026-07-18 | S-040-COMPLETE | Sol | `.gitignore`、`README.md`、`backend/quick_test.ps1`、`backend/tests/test_quick_test_entrypoint.py`、`backend/tests/test_model_preferences.py`、`front/a3-front/`（由外层 `a3-front/` 完整迁移）、两份 S-022 参考文档、仓库收敛计划、`codex/AI模型任务队列.md` | 以 S-039 最新实现为唯一功能基线，182 个前端文件完整迁移且旧索引为 0；拒绝移入旧提交 `9806f78` 的协议/资源管线回退，该提交不是当前 HEAD 祖先。实现提交 `88a2fb0`，合并 `origin/main` 为 `ae5fd1c`；合并后后端 560 passed、7 skipped，Electron/Node 180 passed，Vitest 151 passed，`compileall` 与 `npm run build:desktop` 通过，两阶段审查最终无遗留问题。分支 `codex/s022-s026-remediation` 已推送至 `https://github.com/212667660-arch/dianwu.git`，首轮本地/上游/远端哈希均为 `ae5fd1c`、ahead/behind `0/0`。GitHub Push Protection 识别到历史内容安全测试中的 Slack/Stripe 假值，经用户授权按测试假值放行，未关闭仓库保护。生成目录未跟踪；Windows 安装包仍未代码签名。 |
 | 2026-07-18 | S-041-DESIGN | Sol | `front/a3-front/docs/superpowers/specs/2026-07-18-windows-trusted-signing-design.md`、`front/a3-front/docs/superpowers/specs/2026-07-18-downloadable-language-packs-design.md`、`codex/AI模型任务队列.md` | 完成现有 electron-builder/PyInstaller/NSIS 签名缺口与约 44 个 Vue/Electron 中文硬编码文件审计；确定 Azure Trusted Signing、受保护 `windows-signing` Environment、主程序/api.exe/elevate/卸载器/安装器全链验证，以及内置 zh-CN、首批 en-US/zh-TW、独立公开语言包仓库、Ed25519/RFC 8785、受控下载、离线导入、原子激活/回滚、密钥轮换和 UI/content locale 联动。规格经 placeholder、内部一致性、范围和歧义自审，`git diff --check` 通过。 |
 | 2026-07-18 | S-042-S-043-PLANS | Sol | `front/a3-front/docs/superpowers/plans/2026-07-18-windows-trusted-signing-plan.md`、`front/a3-front/docs/superpowers/plans/2026-07-18-downloadable-language-packs-plan.md`、`codex/AI模型任务队列.md` | 将两个独立子系统拆成 9 个签名任务/47 个 TDD 步骤与 17 个语言任务/89 个 TDD 步骤，锁定精确文件、稳定错误码、测试命令、提交边界、Azure 外部验收门、公开语言包仓库和密钥不落盘流程。计划逐项对照规格完成覆盖审查，placeholder 扫描为 0、尾随空白为 0，类型/方法名和路径契约已收敛。 |
+| 2026-07-18 | S-042-RESTART-CHECKPOINT | Sol | `.gitignore`、`front/a3-front/.gitignore`、`front/a3-front/electron-builder.signed.cjs`、`front/a3-front/scripts/release/`、`front/a3-front/electron/signed-release-config.test.mjs`、`scripts/release/A3.SignatureVerification.psm1`、`scripts/release/tests/signature-verification.test.ps1`、`front/a3-front/package.json`、`codex/AI模型任务队列.md` | Task 1 在提交 `3fd9c801` 与安全修复 `6b5cf575` 后通过规格/质量双审：缺配置在构建前 fail closed，Azure endpoint/GUID/资源名/发布者校验收紧，秘密不进入配置对象，源脚本解禁不覆盖 `.env/.pem/.key/.p12/.pfx` 忽略；完整回归 Node 192、Vitest 151。Task 2 基础提交 `e8be968` 与时间戳修复 `66043e67` 已通过规格复审，真实 Microsoft Edge + Windows SDK signtool 验签成功；质量审查要求继续收紧 SDK signtool 信任、batch hash 一一对应和 TOCTOU。中断前已完成 SDK PATH 劫持 RED/GREEN，未完成改动安全保存为 stash commit `0e8c9775e1e159f26f911b5a3db7384a8b96c5e0`；工作树仅保留既有生成目录未跟踪。 |
