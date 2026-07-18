@@ -11,7 +11,7 @@
     "build": "vue-tsc -b && vite build",
     "build:desktop": "vue-tsc -b && vite build --base=./",
     "preview": "vite preview",
-    "test": "node --test electron/runtime.test.mjs electron/desktop-state.test.mjs electron/desktop-diagnostics.test.mjs electron/tray-lifecycle.test.mjs electron/backend-lifecycle.test.mjs electron/ipc-contract.test.mjs electron/backend-proxy.test.mjs electron/model-config.test.mjs electron/model-profile-vault.test.mjs electron/model-config-controller.test.mjs electron/model-profile-controller.test.mjs electron/knowledge-import.test.mjs electron/knowledge-controller.test.mjs electron/pet-config.test.mjs electron/pet-controller.test.mjs electron/pet-renderer.test.mjs electron/pet-audio.test.mjs electron/pet-character-import.test.mjs && vitest run",
+    "test": "node --test electron/app-icon.test.mjs electron/runtime.test.mjs electron/desktop-state.test.mjs electron/desktop-diagnostics.test.mjs electron/tray-lifecycle.test.mjs electron/backend-lifecycle.test.mjs electron/ipc-contract.test.mjs electron/backend-proxy.test.mjs electron/model-config.test.mjs electron/model-profile-vault.test.mjs electron/model-config-controller.test.mjs electron/model-profile-controller.test.mjs electron/knowledge-import.test.mjs electron/knowledge-controller.test.mjs electron/pet-config.test.mjs electron/pet-controller.test.mjs electron/pet-renderer.test.mjs electron/pet-audio.test.mjs electron/pet-character-import.test.mjs && vitest run",
     "desktop:dev": "npm run build:desktop && electron .",
     "desktop:pack": "npm run build:desktop && electron-builder --dir",
     "desktop:dist": "npm run build:desktop && electron-builder --win nsis"
@@ -63,14 +63,18 @@
       }
     ],
     "win": {
+      "icon": "electron/assets/app-icon.ico",
       "target": [
         "nsis"
       ],
-      "signAndEditExecutable": false
+      "signAndEditExecutable": true
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "electron/assets/app-icon.ico",
+      "installerHeaderIcon": "electron/assets/app-icon.ico",
+      "uninstallerIcon": "electron/assets/app-icon.ico"
     }
   }
 }
