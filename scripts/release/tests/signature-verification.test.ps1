@@ -453,14 +453,12 @@ finally {
 $temporaryDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ("a3-signtool-test-{0}" -f [guid]::NewGuid())
 New-Item -ItemType Directory -Path $temporaryDirectory | Out-Null
 try {
-    $unsignedFile = Join-Path $temporaryDirectory 'unsigned.ps1'
-    [System.IO.File]::WriteAllText($unsignedFile, "Write-Output 'unsigned'", [Text.UTF8Encoding]::new($false))
     $originalProgramFilesX86 = [Environment]::GetEnvironmentVariable('ProgramFiles(x86)', 'Process')
     $originalPath = [Environment]::GetEnvironmentVariable('Path', 'Process')
     try {
-        $programFilesX86 = Join-Path $temporaryDirectory 'Program Files (x86)'
-        $olderSignTool = Join-Path $programFilesX86 'Windows Kits\10\bin\10.0.22000.0\x64\signtool.exe'
-        $newerSignTool = Join-Path $programFilesX86 'Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe'
+        $sdkRoot = Join-Path $temporaryDirectory 'Windows Kits\10'
+        $olderSignTool = Join-Path $sdkRoot 'bin\10.0.22000.0\x64\signtool.exe'
+        $newerSignTool = Join-Path $sdkRoot 'bin\10.0.26100.0\x64\signtool.exe'
         $pathHijackDirectory = Join-Path $temporaryDirectory 'path-hijack'
         $pathHijackSignTool = Join-Path $pathHijackDirectory 'signtool.exe'
         $outsideSignTool = Join-Path $temporaryDirectory 'outside-sdk\signtool.exe'
@@ -469,21 +467,73 @@ try {
             [System.IO.File]::WriteAllBytes($path, [byte[]](0))
         }
 
-        [Environment]::SetEnvironmentVariable('ProgramFiles(x86)', $programFilesX86, 'Process')
+        $sdkRootProvider = {
+            return $sdkRoot
+        }.GetNewClosure()
+        $maliciousProgramFilesX86 = Join-Path $temporaryDirectory 'malicious-program-files-x86'
+        [Environment]::SetEnvironmentVariable('ProgramFiles(x86)', $maliciousProgramFilesX86, 'Process')
         [Environment]::SetEnvironmentVariable('Path', $pathHijackDirectory, 'Process')
-        Assert-ThrowsCode {
-            Get-A3SignatureRecord -LiteralPath $unsignedFile
-        } 'A3_SIGNATURE_INVALID' | Out-Null
 
-        $automaticallyResolved = Find-A3SignTool
-        Assert-Equal $automaticallyResolved ([IO.Path]::GetFullPath($newerSignTool)) 'Find-A3SignTool must ignore PATH and select the newest approved SDK version.'
+        $automaticallyResolved = & $module {
+            param($SdkRootProvider)
+            Find-A3SignToolCore -SdkRootProvider $SdkRootProvider
+        } $sdkRootProvider
+        Assert-Equal $automaticallyResolved ([IO.Path]::GetFullPath($newerSignTool)) 'SDK-root discovery must ignore PATH and select the newest approved SDK version.'
 
         Assert-ThrowsCode {
-            Find-A3SignTool -ExplicitPath $outsideSignTool
+            & $module {
+                param($SdkRootProvider, [string]$ExplicitPath)
+                Find-A3SignToolCore -SdkRootProvider $SdkRootProvider -ExplicitPath $ExplicitPath
+            } $sdkRootProvider $outsideSignTool
         } 'A3_SIGNTOOL_NOT_APPROVED' | Out-Null
 
-        $explicitlyResolved = Find-A3SignTool -ExplicitPath $olderSignTool
-        Assert-Equal $explicitlyResolved ([IO.Path]::GetFullPath($olderSignTool)) 'Find-A3SignTool must accept an explicit canonical SDK x64 path.'
+        $explicitlyResolved = & $module {
+            param($SdkRootProvider, [string]$ExplicitPath)
+            Find-A3SignToolCore -SdkRootProvider $SdkRootProvider -ExplicitPath $ExplicitPath
+        } $sdkRootProvider $olderSignTool
+        Assert-Equal $explicitlyResolved ([IO.Path]::GetFullPath($olderSignTool)) 'SDK-root discovery must accept an explicit canonical SDK x64 path.'
+
+        foreach ($invalidSdkRootProvider in @(
+            { return $null }
+            { return 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE' }
+            { throw 'registry read failed' }
+        )) {
+            Assert-ThrowsCode {
+                & $module {
+                    param($SdkRootProvider)
+                    Find-A3SignToolCore -SdkRootProvider $SdkRootProvider
+                } $invalidSdkRootProvider
+            } 'A3_WINDOWS_SDK_ROOT_INVALID' | Out-Null
+        }
+
+        $realReparseRoot = Join-Path $temporaryDirectory 'real-sdk-root'
+        $reparseSdkRoot = Join-Path $temporaryDirectory 'reparse-sdk-root'
+        New-Item -ItemType Directory -Path $realReparseRoot | Out-Null
+        New-Item -ItemType Junction -Path $reparseSdkRoot -Target $realReparseRoot | Out-Null
+        $reparseSdkRootProvider = {
+            return $reparseSdkRoot
+        }.GetNewClosure()
+        Assert-ThrowsCode {
+            & $module {
+                param($SdkRootProvider)
+                Find-A3SignToolCore -SdkRootProvider $SdkRootProvider
+            } $reparseSdkRootProvider
+        } 'A3_WINDOWS_SDK_ROOT_INVALID' | Out-Null
+
+        $realSdkParent = Join-Path $temporaryDirectory 'real-sdk-parent'
+        $realNestedSdkRoot = Join-Path $realSdkParent 'sdk-root'
+        $reparseSdkParent = Join-Path $temporaryDirectory 'reparse-sdk-parent'
+        New-Item -ItemType Directory -Path $realNestedSdkRoot -Force | Out-Null
+        New-Item -ItemType Junction -Path $reparseSdkParent -Target $realSdkParent | Out-Null
+        $nestedSdkRootThroughReparseProvider = {
+            return (Join-Path $reparseSdkParent 'sdk-root')
+        }.GetNewClosure()
+        Assert-ThrowsCode {
+            & $module {
+                param($SdkRootProvider)
+                Find-A3SignToolCore -SdkRootProvider $SdkRootProvider
+            } $nestedSdkRootThroughReparseProvider
+        } 'A3_WINDOWS_SDK_ROOT_INVALID' | Out-Null
     }
     finally {
         [Environment]::SetEnvironmentVariable('ProgramFiles(x86)', $originalProgramFilesX86, 'Process')
@@ -584,6 +634,89 @@ finally {
     Remove-Item -LiteralPath $lockTestDirectory -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+$junctionTestDirectory = Join-Path ([IO.Path]::GetTempPath()) ("a3-signature-junction-{0}" -f [guid]::NewGuid())
+New-Item -ItemType Directory -Path $junctionTestDirectory | Out-Null
+try {
+    $junctionTargetA = Join-Path $junctionTestDirectory 'target-a'
+    $junctionTargetB = Join-Path $junctionTestDirectory 'target-b'
+    $junctionPath = Join-Path $junctionTestDirectory 'current'
+    New-Item -ItemType Directory -Path $junctionTargetA | Out-Null
+    New-Item -ItemType Directory -Path $junctionTargetB | Out-Null
+    $junctionBytesA = [byte[]](1..32)
+    $junctionBytesB = [byte[]](33..64)
+    $junctionTargetPathA = Join-Path $junctionTargetA 'artifact.exe'
+    $junctionTargetPathB = Join-Path $junctionTargetB 'artifact.exe'
+    [IO.File]::WriteAllBytes($junctionTargetPathA, $junctionBytesA)
+    [IO.File]::WriteAllBytes($junctionTargetPathB, $junctionBytesB)
+    New-Item -ItemType Junction -Path $junctionPath -Target $junctionTargetA | Out-Null
+    $junctionArtifactPath = Join-Path $junctionPath 'artifact.exe'
+    $junctionHashA = (Get-FileHash -LiteralPath $junctionTargetPathA -Algorithm SHA256).Hash
+    $junctionState = [pscustomobject]@{
+        Rebound = $false
+        SignaturePath = $null
+        NativePath = $null
+        NativeObservedHash = $null
+    }
+    $junctionSignature = [pscustomobject]@{
+        Status = 'Valid'
+        SignerCertificate = [pscustomobject]@{
+            Subject = 'CN=A3 Learning Project'
+            NotBefore = [datetime]'2026-07-01T00:00:00Z'
+            NotAfter = [datetime]'2027-07-01T00:00:00Z'
+        }
+        TimeStamperCertificate = [pscustomobject]@{
+            Subject = 'CN=A3 Test Timestamp Authority'
+        }
+    }
+    $junctionSignatureProvider = {
+        param([string]$LiteralPath)
+        $junctionState.SignaturePath = $LiteralPath
+        return $junctionSignature
+    }.GetNewClosure()
+    $junctionHashProvider = {
+        param([IO.Stream]$ArtifactStream)
+        return Get-TestStreamSha256 -ArtifactStream $ArtifactStream
+    }
+    $junctionNativeProvider = {
+        param([string]$FilePath, [string[]]$Arguments)
+        [IO.Directory]::Delete($junctionPath)
+        New-Item -ItemType Junction -Path $junctionPath -Target $junctionTargetB | Out-Null
+        $junctionState.Rebound = $true
+        $junctionState.NativePath = $Arguments[-1]
+        $junctionState.NativeObservedHash = (Get-FileHash -LiteralPath $Arguments[-1] -Algorithm SHA256).Hash
+        return [pscustomobject]@{
+            ExitCode = 0
+            Output = @(
+                "Hash of file (sha256): $('D' * 64)"
+                "The signature is timestamped: $signToolTimestampText"
+                "Successfully verified: $($Arguments[-1])"
+            )
+        }
+    }.GetNewClosure()
+
+    Assert-ThrowsCode {
+        & $module {
+            param($LiteralPath, $SignToolPath, $SignatureProvider, $HashProvider, $NativeProcessProvider)
+            Get-A3SignatureRecordCore `
+                -LiteralPath $LiteralPath `
+                -SignToolPath $SignToolPath `
+                -SignatureProvider $SignatureProvider `
+                -HashProvider $HashProvider `
+                -NativeProcessProvider $NativeProcessProvider
+        } $junctionArtifactPath 'C:\approved-sdk\signtool.exe' $junctionSignatureProvider $junctionHashProvider $junctionNativeProvider
+    } 'A3_ARTIFACT_IDENTITY_CHANGED' | Out-Null
+    if (-not $junctionState.Rebound) {
+        throw 'The junction reproduction must rebind after the artifact handle is opened.'
+    }
+    if ($junctionState.SignaturePath -eq $junctionArtifactPath -or $junctionState.NativePath -eq $junctionArtifactPath) {
+        throw 'External signature verification must use the locked handle final path, not the rebindable logical path.'
+    }
+    Assert-Equal $junctionState.NativeObservedHash $junctionHashA 'The native verifier path must remain bound to target A after the junction points to target B.'
+}
+finally {
+    Remove-Item -LiteralPath $junctionTestDirectory -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 $coreTestDirectory = Join-Path ([IO.Path]::GetTempPath()) ("a3-signature-core-{0}" -f [guid]::NewGuid())
 New-Item -ItemType Directory -Path $coreTestDirectory | Out-Null
 $corePath = Join-Path $coreTestDirectory 'a3-app.exe'
@@ -664,6 +797,76 @@ $constantHashProvider = {
     param([IO.Stream]$ArtifactStream)
     return $rawHashA
 }.GetNewClosure()
+
+$signatureWithoutStatus = [pscustomobject]@{
+    SignerCertificate = $validSignature.SignerCertificate
+    TimeStamperCertificate = $validSignature.TimeStamperCertificate
+}
+$signatureWithoutStatusProvider = {
+    param([string]$LiteralPath)
+    return $signatureWithoutStatus
+}.GetNewClosure()
+Assert-ThrowsCode {
+    & $module {
+        param($LiteralPath, $SignToolPath, $SignatureProvider, $HashProvider, $NativeProcessProvider)
+        Get-A3SignatureRecordCore `
+            -LiteralPath $LiteralPath `
+            -SignToolPath $SignToolPath `
+            -SignatureProvider $SignatureProvider `
+            -HashProvider $HashProvider `
+            -NativeProcessProvider $NativeProcessProvider
+    } $corePath 'C:\approved-sdk\signtool.exe' $signatureWithoutStatusProvider $constantHashProvider $nativeProcessProvider
+} 'A3_SIGNATURE_INVALID' | Out-Null
+
+$signatureWithoutSigner = [pscustomobject]@{
+    Status = 'Valid'
+    TimeStamperCertificate = $validSignature.TimeStamperCertificate
+}
+$signatureWithoutSignerProvider = {
+    param([string]$LiteralPath)
+    return $signatureWithoutSigner
+}.GetNewClosure()
+Assert-ThrowsCode {
+    & $module {
+        param($LiteralPath, $SignToolPath, $SignatureProvider, $HashProvider, $NativeProcessProvider)
+        Get-A3SignatureRecordCore `
+            -LiteralPath $LiteralPath `
+            -SignToolPath $SignToolPath `
+            -SignatureProvider $SignatureProvider `
+            -HashProvider $HashProvider `
+            -NativeProcessProvider $NativeProcessProvider
+    } $corePath 'C:\approved-sdk\signtool.exe' $signatureWithoutSignerProvider $constantHashProvider $nativeProcessProvider
+} 'A3_SIGNATURE_INVALID' | Out-Null
+
+foreach ($missingCertificateDate in @('NotBefore', 'NotAfter')) {
+    $incompleteCertificate = [ordered]@{
+        Subject = 'CN=A3 Learning Project'
+        NotBefore = [datetime]'2026-07-01T00:00:00Z'
+        NotAfter = [datetime]'2027-07-01T00:00:00Z'
+    }
+    $incompleteCertificate.Remove($missingCertificateDate)
+    $signatureWithoutDate = [pscustomobject]@{
+        Status = 'Valid'
+        SignerCertificate = [pscustomobject]$incompleteCertificate
+        TimeStamperCertificate = $validSignature.TimeStamperCertificate
+    }
+    $signatureWithoutDateProvider = {
+        param([string]$LiteralPath)
+        return $signatureWithoutDate
+    }.GetNewClosure()
+    Assert-ThrowsCode {
+        & $module {
+            param($LiteralPath, $SignToolPath, $SignatureProvider, $HashProvider, $NativeProcessProvider)
+            Get-A3SignatureRecordCore `
+                -LiteralPath $LiteralPath `
+                -SignToolPath $SignToolPath `
+                -SignatureProvider $SignatureProvider `
+                -HashProvider $HashProvider `
+                -NativeProcessProvider $NativeProcessProvider
+        } $corePath 'C:\approved-sdk\signtool.exe' $signatureWithoutDateProvider $constantHashProvider $nativeProcessProvider
+    } 'A3_SIGNATURE_RECORD_INVALID' | Out-Null
+}
+
 $nonzeroNativeProcessProvider = {
     param([string]$FilePath, [string[]]$Arguments)
     return [pscustomobject]@{

@@ -1,5 +1,46 @@
 Set-StrictMode -Version Latest
 
+if ($null -eq ('A3.SignatureNativeMethods' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+
+namespace A3 {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct ByHandleFileInformation {
+        public uint FileAttributes;
+        public System.Runtime.InteropServices.ComTypes.FILETIME CreationTime;
+        public System.Runtime.InteropServices.ComTypes.FILETIME LastAccessTime;
+        public System.Runtime.InteropServices.ComTypes.FILETIME LastWriteTime;
+        public uint VolumeSerialNumber;
+        public uint FileSizeHigh;
+        public uint FileSizeLow;
+        public uint NumberOfLinks;
+        public uint FileIndexHigh;
+        public uint FileIndexLow;
+    }
+
+    public static class SignatureNativeMethods {
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        public static extern uint GetFinalPathNameByHandle(
+            IntPtr fileHandle,
+            StringBuilder filePath,
+            uint filePathLength,
+            uint flags
+        );
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool GetFileInformationByHandle(
+            IntPtr fileHandle,
+            out ByHandleFileInformation fileInformation
+        );
+    }
+}
+'@
+}
+
 function New-A3SignatureError {
     [CmdletBinding()]
     param(
@@ -358,13 +399,18 @@ function Get-A3ApprovedSignToolInfo {
         [Parameter(Mandatory)] [string]$SdkBinRoot
     )
 
-    $resolved = Resolve-Path -LiteralPath $Path -ErrorAction SilentlyContinue
-    if ($null -eq $resolved -or -not (Test-Path -LiteralPath $resolved.Path -PathType Leaf)) {
+    try {
+        $rootPath = (Resolve-A3FileSystemPath -Path $SdkBinRoot).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+        $resolvedPath = Resolve-A3FileSystemPath -Path $Path
+    }
+    catch {
+        return $null
+    }
+    if (-not (Test-Path -LiteralPath $resolvedPath -PathType Leaf) -or
+        (Test-A3PathChainContainsReparsePoint -RootPath $SdkBinRoot -Path $Path)) {
         return $null
     }
 
-    $rootPath = [IO.Path]::GetFullPath($SdkBinRoot).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
-    $resolvedPath = [IO.Path]::GetFullPath($resolved.Path)
     if (-not $resolvedPath.StartsWith($rootPath, [StringComparison]::OrdinalIgnoreCase)) {
         return $null
     }
@@ -386,19 +432,125 @@ function Get-A3ApprovedSignToolInfo {
     }
 }
 
-function Find-A3SignTool {
-    [CmdletBinding()]
-    param([Alias('SignToolPath')] [string]$ExplicitPath)
+function Test-A3PathChainContainsReparsePoint {
+    param(
+        [Parameter(Mandatory)] [string]$RootPath,
+        [Parameter(Mandatory)] [string]$Path
+    )
 
-    $programFilesX86 = ${env:ProgramFiles(x86)}
-    if ([string]::IsNullOrWhiteSpace($programFilesX86)) {
-        if ($PSBoundParameters.ContainsKey('ExplicitPath')) {
-            throw (New-A3SignatureError 'A3_SIGNTOOL_NOT_APPROVED' 'The explicit signtool path is outside the approved Windows SDK location.')
+    try {
+        $rootFullPath = [IO.Path]::GetFullPath($RootPath).TrimEnd('\', '/')
+        $pathFullPath = [IO.Path]::GetFullPath($Path)
+        if ($pathFullPath -ine $rootFullPath -and
+            -not $pathFullPath.StartsWith($rootFullPath + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+            return $true
         }
-        throw (New-A3SignatureError 'A3_SIGNTOOL_NOT_FOUND' 'Windows SDK signtool.exe was not found in an approved location.')
+
+        $currentPath = $rootFullPath
+        $pathsToCheck = [Collections.Generic.List[string]]::new()
+        $pathsToCheck.Add($currentPath)
+        if ($pathFullPath -ine $rootFullPath) {
+            $relativePath = $pathFullPath.Substring($rootFullPath.Length).TrimStart('\', '/')
+            foreach ($part in @($relativePath -split '[\\/]')) {
+                $currentPath = Join-Path $currentPath $part
+                $pathsToCheck.Add($currentPath)
+            }
+        }
+
+        foreach ($pathToCheck in $pathsToCheck) {
+            if (Test-Path -LiteralPath $pathToCheck) {
+                $attributes = [IO.File]::GetAttributes($pathToCheck)
+                if (($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                    return $true
+                }
+            }
+        }
+        return $false
+    }
+    catch {
+        return $true
+    }
+}
+
+function Get-A3WindowsSdkRootFromRegistry {
+    foreach ($registryView in @(
+        [Microsoft.Win32.RegistryView]::Registry64
+        [Microsoft.Win32.RegistryView]::Registry32
+    )) {
+        $baseKey = $null
+        $installedRootsKey = $null
+        try {
+            $baseKey = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
+                [Microsoft.Win32.RegistryHive]::LocalMachine,
+                $registryView
+            )
+            $installedRootsKey = $baseKey.OpenSubKey('SOFTWARE\Microsoft\Windows Kits\Installed Roots', $false)
+            if ($null -ne $installedRootsKey) {
+                $kitsRoot10 = $installedRootsKey.GetValue('KitsRoot10', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+                if ($kitsRoot10 -is [string] -and -not [string]::IsNullOrWhiteSpace($kitsRoot10)) {
+                    return $kitsRoot10
+                }
+            }
+        }
+        catch {
+            continue
+        }
+        finally {
+            if ($null -ne $installedRootsKey) {
+                $installedRootsKey.Dispose()
+            }
+            if ($null -ne $baseKey) {
+                $baseKey.Dispose()
+            }
+        }
     }
 
-    $windowsKitBin = Join-Path $programFilesX86 'Windows Kits\10\bin'
+    throw (New-A3SignatureError 'A3_WINDOWS_SDK_ROOT_INVALID' 'The Windows SDK root could not be obtained from the installed-roots registry.')
+}
+
+function Resolve-A3WindowsSdkRoot {
+    param([Parameter(Mandatory)] [scriptblock]$SdkRootProvider)
+
+    try {
+        $providedRoot = & $SdkRootProvider
+        if ($providedRoot -isnot [string] -or [string]::IsNullOrWhiteSpace($providedRoot)) {
+            throw [InvalidOperationException]::new('Missing SDK root.')
+        }
+        $sdkRoot = Resolve-A3FileSystemPath -Path $providedRoot
+        if (-not (Test-Path -LiteralPath $sdkRoot -PathType Container)) {
+            throw [InvalidOperationException]::new('Missing SDK root.')
+        }
+        $attributes = [IO.File]::GetAttributes($sdkRoot)
+        if (($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw [InvalidOperationException]::new('Reparse SDK root.')
+        }
+        $pathRoot = [IO.Path]::GetPathRoot($sdkRoot)
+        if ([string]::IsNullOrWhiteSpace($pathRoot) -or
+            (Test-A3PathChainContainsReparsePoint -RootPath $pathRoot -Path $sdkRoot)) {
+            throw [InvalidOperationException]::new('Reparse SDK root chain.')
+        }
+        return $sdkRoot
+    }
+    catch {
+        throw (New-A3SignatureError 'A3_WINDOWS_SDK_ROOT_INVALID' 'The Windows SDK root is missing or invalid.')
+    }
+}
+
+function Find-A3SignToolCore {
+    param(
+        [Parameter(Mandatory)] [scriptblock]$SdkRootProvider,
+        [string]$ExplicitPath
+    )
+
+    $sdkRoot = Resolve-A3WindowsSdkRoot -SdkRootProvider $SdkRootProvider
+    $windowsKitBin = Join-Path $sdkRoot 'bin'
+    if (Test-Path -LiteralPath $windowsKitBin -PathType Container) {
+        $binAttributes = [IO.File]::GetAttributes($windowsKitBin)
+        if (($binAttributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw (New-A3SignatureError 'A3_WINDOWS_SDK_ROOT_INVALID' 'The Windows SDK root is missing or invalid.')
+        }
+    }
+
     if ($PSBoundParameters.ContainsKey('ExplicitPath')) {
         $approved = Get-A3ApprovedSignToolInfo -Path $ExplicitPath -SdkBinRoot $windowsKitBin
         if ($null -eq $approved) {
@@ -428,6 +580,17 @@ function Find-A3SignTool {
     throw (New-A3SignatureError 'A3_SIGNTOOL_NOT_FOUND' 'Windows SDK signtool.exe was not found in an approved location.')
 }
 
+function Find-A3SignTool {
+    [CmdletBinding()]
+    param([Alias('SignToolPath')] [string]$ExplicitPath)
+
+    $sdkRootProvider = { Get-A3WindowsSdkRootFromRegistry }
+    if ($PSBoundParameters.ContainsKey('ExplicitPath')) {
+        return Find-A3SignToolCore -SdkRootProvider $sdkRootProvider -ExplicitPath $ExplicitPath
+    }
+    return Find-A3SignToolCore -SdkRootProvider $sdkRootProvider
+}
+
 function Invoke-A3RawSha256Provider {
     param(
         [Parameter(Mandatory)] [string]$LiteralPath,
@@ -447,6 +610,85 @@ function Invoke-A3RawSha256Provider {
         throw (New-A3SignatureError 'A3_SIGNATURE_RECORD_INVALID' "The SHA-256 digest could not be read for $LiteralPath.")
     }
     return $sha256.ToUpperInvariant()
+}
+
+function Get-A3ArtifactIdentity {
+    param(
+        [Parameter(Mandatory)] [string]$SafePath,
+        [Parameter(Mandatory)] [IO.FileStream]$ArtifactStream
+    )
+
+    $information = New-Object A3.ByHandleFileInformation
+    if (-not [A3.SignatureNativeMethods]::GetFileInformationByHandle(
+        $ArtifactStream.SafeFileHandle.DangerousGetHandle(),
+        [ref]$information
+    )) {
+        throw (New-A3SignatureError 'A3_ARTIFACT_IDENTITY_CHANGED' "The signed artifact identity could not be established: $SafePath.")
+    }
+
+    return [pscustomobject]@{
+        VolumeSerialNumber = $information.VolumeSerialNumber
+        FileIndexHigh = $information.FileIndexHigh
+        FileIndexLow = $information.FileIndexLow
+    }
+}
+
+function Get-A3FinalPathFromArtifactHandle {
+    param(
+        [Parameter(Mandatory)] [string]$SafePath,
+        [Parameter(Mandatory)] [IO.FileStream]$ArtifactStream
+    )
+
+    $capacity = 32768
+    $builder = [Text.StringBuilder]::new($capacity)
+    $length = [A3.SignatureNativeMethods]::GetFinalPathNameByHandle(
+        $ArtifactStream.SafeFileHandle.DangerousGetHandle(),
+        $builder,
+        [uint32]$capacity,
+        [uint32]0
+    )
+    if ($length -eq 0 -or $length -ge $capacity) {
+        throw (New-A3SignatureError 'A3_ARTIFACT_IDENTITY_CHANGED' "The signed artifact final path could not be established: $SafePath.")
+    }
+
+    try {
+        return Resolve-A3FileSystemPath -Path $builder.ToString()
+    }
+    catch {
+        throw (New-A3SignatureError 'A3_ARTIFACT_IDENTITY_CHANGED' "The signed artifact final path could not be established: $SafePath.")
+    }
+}
+
+function Assert-A3ArtifactPathIdentity {
+    param(
+        [Parameter(Mandatory)] [string]$LiteralPath,
+        [Parameter(Mandatory)] [pscustomobject]$ExpectedIdentity
+    )
+
+    $pathStream = $null
+    try {
+        $pathStream = [IO.File]::Open(
+            $LiteralPath,
+            [IO.FileMode]::Open,
+            [IO.FileAccess]::Read,
+            [IO.FileShare]::Read
+        )
+        $actualIdentity = Get-A3ArtifactIdentity -SafePath $LiteralPath -ArtifactStream $pathStream
+    }
+    catch {
+        throw (New-A3SignatureError 'A3_ARTIFACT_IDENTITY_CHANGED' "The signed artifact path no longer identifies the locked file: $LiteralPath.")
+    }
+    finally {
+        if ($null -ne $pathStream) {
+            $pathStream.Dispose()
+        }
+    }
+
+    if ($actualIdentity.VolumeSerialNumber -ne $ExpectedIdentity.VolumeSerialNumber -or
+        $actualIdentity.FileIndexHigh -ne $ExpectedIdentity.FileIndexHigh -or
+        $actualIdentity.FileIndexLow -ne $ExpectedIdentity.FileIndexLow) {
+        throw (New-A3SignatureError 'A3_ARTIFACT_IDENTITY_CHANGED' "The signed artifact path no longer identifies the locked file: $LiteralPath.")
+    }
 }
 
 function Get-A3SignatureRecordCore {
@@ -471,22 +713,37 @@ function Get-A3SignatureRecordCore {
     }
 
     try {
+        $lockedIdentity = Get-A3ArtifactIdentity -SafePath $LiteralPath -ArtifactStream $artifactStream
+        $verificationPath = Get-A3FinalPathFromArtifactHandle -SafePath $LiteralPath -ArtifactStream $artifactStream
+        Assert-A3ArtifactPathIdentity -LiteralPath $LiteralPath -ExpectedIdentity $lockedIdentity
+
         $sha256BeforeVerification = Invoke-A3RawSha256Provider `
             -LiteralPath $LiteralPath `
             -ArtifactStream $artifactStream `
             -HashProvider $HashProvider
+        Assert-A3ArtifactPathIdentity -LiteralPath $LiteralPath -ExpectedIdentity $lockedIdentity
 
         try {
-            $signature = & $SignatureProvider $LiteralPath
+            $signature = & $SignatureProvider $verificationPath
         }
         catch {
             throw (New-A3SignatureError 'A3_SIGNATURE_INVALID' "Authenticode verification failed for $LiteralPath.")
         }
-        if ($null -eq $signature -or $signature.Status.ToString() -cne 'Valid' -or $null -eq $signature.SignerCertificate) {
+        if ($null -eq $signature) {
             throw (New-A3SignatureError 'A3_SIGNATURE_INVALID' "Invalid Authenticode signature for $LiteralPath.")
         }
+        $statusProperty = $signature.PSObject.Properties['Status']
+        $signerProperty = $signature.PSObject.Properties['SignerCertificate']
+        if ($null -eq $statusProperty -or $null -eq $statusProperty.Value -or
+            $statusProperty.Value.ToString() -cne 'Valid' -or
+            $null -eq $signerProperty -or $null -eq $signerProperty.Value) {
+            throw (New-A3SignatureError 'A3_SIGNATURE_INVALID' "Invalid Authenticode signature for $LiteralPath.")
+        }
+        $signatureStatus = $statusProperty.Value.ToString()
+        $certificate = $signerProperty.Value
+        Assert-A3ArtifactPathIdentity -LiteralPath $LiteralPath -ExpectedIdentity $lockedIdentity
 
-        $arguments = @('verify', '/pa', '/all', '/v', $LiteralPath)
+        $arguments = @('verify', '/pa', '/all', '/v', $verificationPath)
         try {
             $nativeResult = & $NativeProcessProvider $SignToolPath $arguments
         }
@@ -499,9 +756,11 @@ function Get-A3SignatureRecordCore {
             $nativeResult.ExitCode -ne 0) {
             throw (New-A3SignatureError 'A3_SIGNATURE_INVALID' "Windows signature verification failed for $LiteralPath.")
         }
+        Assert-A3ArtifactPathIdentity -LiteralPath $LiteralPath -ExpectedIdentity $lockedIdentity
 
         $outputText = @($nativeResult.Output | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
-        if ($null -eq $signature.TimeStamperCertificate) {
+        $timestampCertificateProperty = $signature.PSObject.Properties['TimeStamperCertificate']
+        if ($null -eq $timestampCertificateProperty -or $null -eq $timestampCertificateProperty.Value) {
             throw (New-A3SignatureError 'A3_TIMESTAMP_MISSING' "Missing trusted timestamp for $LiteralPath.")
         }
 
@@ -510,17 +769,31 @@ function Get-A3SignatureRecordCore {
             -LiteralPath $LiteralPath `
             -ArtifactStream $artifactStream `
             -HashProvider $HashProvider
+        Assert-A3ArtifactPathIdentity -LiteralPath $LiteralPath -ExpectedIdentity $lockedIdentity
         if ($sha256BeforeVerification -cne $sha256AfterVerification) {
             throw (New-A3SignatureError 'A3_HASH_MISMATCH' "SHA-256 changed during signature verification for $LiteralPath.")
         }
 
-        $certificate = $signature.SignerCertificate
-        $notBefore = ([DateTimeOffset]$certificate.NotBefore).ToUniversalTime()
-        $notAfter = ([DateTimeOffset]$certificate.NotAfter).ToUniversalTime()
+        $subjectProperty = $certificate.PSObject.Properties['Subject']
+        $notBeforeProperty = $certificate.PSObject.Properties['NotBefore']
+        $notAfterProperty = $certificate.PSObject.Properties['NotAfter']
+        if ($null -eq $subjectProperty -or $subjectProperty.Value -isnot [string] -or
+            [string]::IsNullOrWhiteSpace($subjectProperty.Value) -or
+            $null -eq $notBeforeProperty -or $null -eq $notBeforeProperty.Value -or
+            $null -eq $notAfterProperty -or $null -eq $notAfterProperty.Value) {
+            throw (New-A3SignatureError 'A3_SIGNATURE_RECORD_INVALID' "The signer certificate metadata is invalid for $LiteralPath.")
+        }
+        try {
+            $notBefore = ([DateTimeOffset]$notBeforeProperty.Value).ToUniversalTime()
+            $notAfter = ([DateTimeOffset]$notAfterProperty.Value).ToUniversalTime()
+        }
+        catch {
+            throw (New-A3SignatureError 'A3_SIGNATURE_RECORD_INVALID' "The signer certificate metadata is invalid for $LiteralPath.")
+        }
         return [pscustomobject][ordered]@{
             Path = $LiteralPath
-            Status = $signature.Status.ToString()
-            Subject = [string]$certificate.Subject
+            Status = $signatureStatus
+            Subject = [string]$subjectProperty.Value
             FileDigestAlgorithm = $parsedSignToolOutput.FileDigestAlgorithm
             TimestampUtc = $parsedSignToolOutput.TimestampUtc
             CertificateNotBeforeUtc = ConvertTo-A3CanonicalUtcText -Value $notBefore
