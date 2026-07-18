@@ -2,7 +2,7 @@
 
 > 项目：基于大模型的个性化资源生成与学习多智能体系统开发
 > 队列位置：E:\软件杯\codex\AI模型任务队列.md
-> 当前模型批次：Sol（S-040 最新分支、任务队列与 GitHub 收敛进行中）
+> 当前模型批次：Sol（S-040 已完成，当前批次无就绪任务）
 > 最后审视日期：2026-07-18
 
 ## 一、使用规则
@@ -86,7 +86,7 @@
 | S-037 | P0 | 完成 | 对全部前端、后端、Electron 和最终桌面包执行发布级验收 | S-033、S-034、S-035、S-036 | 全量测试、构建、PyInstaller、desktop pack、生命周期、真实 OCR/导入和零残留进程证据；完整证据见 S-037-RELEASE-ACCEPTANCE |
 | S-038 | P1 | 完成 | 将 Windows 主程序、安装器、快捷方式和主窗口图标统一为墨团形象 | S-037、现有墨团 spritesheet 与托盘图标 | 透明 512px 主图、多尺寸 ICO、Electron Builder/NSIS/BrowserWindow 接入、最终安装包图标与生命周期验收；证据见 S-038-COMPLETE |
 | S-039 | P0 | 完成 | 修复用户验收缺陷并完成托盘切换、墨团固定基础大小与手动拉伸 | S-037、S-038、用户四张真实桌面截图 | 单一答案入口与无遮挡提交、收藏局部更新无闪烁且并发安全、学习诊断说明、主窗口/墨团托盘显示收起切换、墨团 192×208 基础尺寸与 1–3 倍等比例四角拉伸、点击不改变大小、`.test-venv` 专用测试环境、完整回归与真实桌面验收；证据见 S-039-COMPLETE |
-| S-040 | P0 | 进行中 | 收敛最新功能分支、任务队列与 GitHub 远端状态 | S-039、`codex/s022-five-resource-bundle` 旧同步分支、`origin/main` | 以 `codex/s022-s026-remediation` 为唯一功能基线，筛选旧分支非回退改动，统一前端目录与文档路径，修正队列结构，完成全量验证并推送最新分支 |
+| S-040 | P0 | 完成 | 收敛最新功能分支、任务队列与 GitHub 远端状态 | S-039、`codex/s022-five-resource-bundle` 旧同步分支、`origin/main` | 已以 `codex/s022-s026-remediation` 为唯一功能基线完成目录、文档、测试、队列、`origin/main` 和 GitHub 远端收敛；证据见 S-040-COMPLETE |
 | T-033 | P0 | 完成 | 实现多 API 配置、高可用切换、模型选择与推理强度控制 | S-017 | 版本 2 加密多配置、原子热应用与回滚、3 次/2 配置预算、Retry-After/熔断、普通与流式故障边界、全局/学习空间模型和思考强度选择、兼容迁移、真实桌面 5/5 连接及完整打包回归 |
 | T-035 | P0 | 完成 | 实现本地知识库与安全文件导入 | S-018 | 已完成文件选择/拖放、七格式与限额校验、隔离解析 worker、SQLite 元数据/FTS/可选语义索引、可追溯引用、学习助手绑定与隐私模式、删除/重建、恶意文件/性能/打包测试及 Windows 桌面安装包验收 |
 | T-036 | P1 | 完成 | 实现桌宠形象包、用户上传、进度事件与语音鼓励 | S-019 | 已完成角色包目录选择、固定文件/atlas 校验、原子替换、失败保留旧角色、恢复墨团、热重载、动作音效和本地语音鼓励；全面素材/许可证、逐帧视觉与主观音色 QA 保留后续 |
@@ -160,7 +160,7 @@
 
 ## 八、当前执行顺序
 
-Sol 当前执行 S-040：以 `codex/s022-s026-remediation` 为唯一功能基线，完成前端外层目录迁移、队列与文档修正、全量回归、`origin/main` 集成和 GitHub 最新分支推送。完成前不得把旧同步分支的协议、内容安全、OCR、知识库或 Electron 生产实现移入最新基线。
+Sol 已完成 S-040：最新功能基线、任务队列、`front/a3-front` 目录布局与 GitHub 分支状态已经一致。当前 Sol 队列无进行中或就绪任务，等待用户新增任务。
 
 ### 历史执行轨迹（仅供追溯，不代表当前状态）
 
@@ -336,3 +336,4 @@ S-016 已完成：本仓库提交身份已设置为 `Wei kb <212667660@qq.com>`�
 | 2026-07-18 | S-036-COMPLETE | Sol | backend/knowledge/chunking.py、search.py、context.py、models/schemas.py、routers/chat.py、routers/demo.py、demo/、services/orchestrator.py、resource_bundle/answer_reviewer.py、pipeline.py、service.py、resource_db.py、database.py 及测试；a3-front/a3-front/electron/ipc-contract.mjs、src/api、stores/backend.ts、views/SmartTutor.vue、Dashboard.vue、AgentWorkspace.vue、components/learning/ResourceCard.vue 及测试；.gitignore、codex/AI模型任务队列.md | 完成闭区间页码范围和单文档检索、500 页上限、精确/扩大范围模式；PDF page 块不再跨页合并，引用页码与原文保持一致。资源响应持久化 `grounded/insufficient/unavailable`、检索范围和“重新检索/扩大范围”动作；SmartTutor 可选择教材与页码并点击引用跳转。课程提示明确分隔“教材内容/模型补充知识”；独立 `answer-reviewer/v1` 校验教材引用归属、公式定界符、数值代入和结果检查，最多一次受控重写，仍失败显示人工核对警告，前端展示复核状态。新增原创 CC0 一次函数演示教材、隔离幂等 seed/reset/status API、一键演示、5 个 Agent 步骤、真实答题驱动掌握度 25%→45.36% 对比，以及按实际模型状态展示离线降级。最终验证：后端 558 passed、7 skipped；Electron/Node 164 passed；Vitest 135 passed；compileall、`npm run build:desktop`、vue-tsc 与 `git diff --check` 通过。 |
 | 2026-07-18 | S-037-RELEASE-ACCEPTANCE | Sol | backend、a3-front/a3-front、a3-front/a3-front/desktop-backend、a3-front/a3-front/release/、codex/AI模型任务队列.md | 发布级总验收完成。隔离数据全量后端 559 passed、7 skipped；Electron/Node 164 passed；Vitest 135 passed；compileall、`vue-tsc -b`、`npm run build:desktop`、`git diff --check` 通过。PyInstaller 打包 API `api.exe` 为 23,096,808 bytes、2,488 个文件，SHA-256 `054B1BCD916FAAF399D2373662D8D1C36955501B10E9213F6E2FA5731F167288`，OCR 诊断 available=true、RapidOCR 1.2.3；桌面包内后端文件数和哈希逐项一致。打包 API 强制无模型环境实测 `mode=offline`、5 个 Agent、掌握度 0.25→0.4536、seed/status/reset 正常、残留进程 0。浏览器可见验收确认 CC0-1.0 项目原创数据、真实离线降级、5 个 Agent 状态、25%→45% 对比、历史演示资源、教材/模型补充分区及答案复核通过，控制台无 warning/error。`desktop:pack`、`desktop:dist` 成功；最终安装包 `a3-front/a3-front/release/智学协作台 Setup 1.0.0.exe` 为 227,986,813 bytes，版本 1.0.0，SHA-256 `13228D02C59FA966A3479493EE4E086E0C0476AB0B1CC8CA837B44EC805D8E8E`；NSIS 首次安装默认创建桌面和开始菜单快捷方式。`app.asar` 含最新 Dashboard、SmartTutor、AgentWorkspace 资源。unpacked 隔离启动退出码 0，tray/backend ready/backend stop/test-mode exit 标记 4/4，数据库创建成功，端口与残留进程均为 0。安装包当前未签名且应用主图标仍为 Electron 默认图标，属于非功能性品牌发布事项。 |
 | 2026-07-18 | S-039-COMPLETE | Sol | a3-front/a3-front/electron、a3-front/a3-front/src/views/KnowledgeLibrary.vue、src/views/KnowledgeLibrary.test.ts、src/stores/backend.ts、src/components/pet/PetSettingsCard.vue、backend/requirements-test.txt、专用 `.test-venv`、托盘/墨团设计与计划、release/、codex/AI模型任务队列.md | 完成用户验收缺陷修复：练习页只保留一个答案入口且提交按钮无遮挡；学习诊断说明与恢复入口完善；收藏采用局部乐观更新并通过独立失效边界、待选集合状态和完整筛选查询解决旧响应覆盖、后发读取丢失、失败误取消、集合/筛选/仅收藏成员竞态，顶部筛选栏不再闪烁。主窗口托盘单击实现前台最小化、后台/隐藏/最小化恢复聚焦，墨团托盘显示/隐藏切换。墨团固定 192×208 基础/最小尺寸，支持 1–3 倍四角等比例拉伸；点击不改变大小，连续点击/双击不延长动画，竖向拖动不误触，小屏幕约束保持比例，位置/尺寸/设置串行原子持久化并迁移旧异常尺寸。专用 `.test-venv` 使用 pytest 8.3.5、pytest-asyncio 0.25.3；后端 559 passed、7 skipped，Electron/Node 180 passed，Vitest 151 passed，`desktop:dist` 成功，最终复审 Critical/Important/Minor 均为 0。最新 unpacked 隔离启动退出码 0、生命周期标记 4/4、数据库创建成功、残留进程 0。安装器 `智学协作台 Setup 1.0.0.exe` 为 228,386,365 bytes，SHA-256 `A27AAA2B1AE5F351B3853781880CF73D5FCD66D6E0E4B583344981E0F6E96C2D`；unpacked 主程序为 186,358,272 bytes，SHA-256 `15745EB54EDC1E602B3173146FAAF4893A12321665477F316B63F28D22E75396`；二者版本 1.0.0，均未签名。 |
+| 2026-07-18 | S-040-COMPLETE | Sol | `.gitignore`、`README.md`、`backend/quick_test.ps1`、`backend/tests/test_quick_test_entrypoint.py`、`backend/tests/test_model_preferences.py`、`front/a3-front/`（由外层 `a3-front/` 完整迁移）、两份 S-022 参考文档、仓库收敛计划、`codex/AI模型任务队列.md` | 以 S-039 最新实现为唯一功能基线，182 个前端文件完整迁移且旧索引为 0；拒绝移入旧提交 `9806f78` 的协议/资源管线回退，该提交不是当前 HEAD 祖先。实现提交 `88a2fb0`，合并 `origin/main` 为 `ae5fd1c`；合并后后端 560 passed、7 skipped，Electron/Node 180 passed，Vitest 151 passed，`compileall` 与 `npm run build:desktop` 通过，两阶段审查最终无遗留问题。分支 `codex/s022-s026-remediation` 已推送至 `https://github.com/212667660-arch/dianwu.git`，首轮本地/上游/远端哈希均为 `ae5fd1c`、ahead/behind `0/0`。GitHub Push Protection 识别到历史内容安全测试中的 Slack/Stripe 假值，经用户授权按测试假值放行，未关闭仓库保护。生成目录未跟踪；Windows 安装包仍未代码签名。 |

@@ -129,18 +129,18 @@ Run `git diff --check`, high-confidence secret scanning, ignored generated-outpu
 **Files:**
 - Modify: `codex/AI模型任务队列.md`
 
-- [ ] **Step 1: Commit the verified implementation**
+- [x] **Step 1: Commit the verified implementation**
 
 Commit the reviewed directory, documentation, queue, and test corrections so the working tree is clean before integration.
 
-- [ ] **Step 2: Integrate `origin/main` without rewriting history**
+- [x] **Step 2: Integrate `origin/main` without rewriting history**
 
 Merge `origin/main` into `codex/s022-s026-remediation`, preserve the remote README title change, and resolve only genuine path conflicts.
 
-- [ ] **Step 3: Push and verify implementation remote identity**
+- [x] **Step 3: Push and verify implementation remote identity**
 
 Push `codex/s022-s026-remediation` to `https://github.com/212667660-arch/dianwu.git` without force and without deleting the stale branch. Confirm local HEAD, upstream HEAD, and `git ls-remote` hashes are identical and ahead/behind is `0 0`.
 
-- [ ] **Step 4: Mark S-040 complete with exact evidence**
+- [x] **Step 4: Mark S-040 complete with exact evidence**
 
 Record modified files, exact test counts, build result, implementation and merge commit hashes, branch name, remote URL, remote verification, and known non-blocking signing limitation. Set the current batch to no ready tasks, commit and push the completion record, then verify final remote identity again.
