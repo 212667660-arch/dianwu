@@ -244,6 +244,70 @@ Assert-Equal $validated.Count 2 'Assert-A3SignatureRecords must preserve record 
 Assert-Equal $validated[0].Path $valid.Path 'Assert-A3SignatureRecords must preserve first record.'
 Assert-Equal $validated[1].Path $second.Path 'Assert-A3SignatureRecords must preserve second record.'
 
+$missingHashMap = @{ $valid.Path = ('A' * 64) }
+Assert-ThrowsCode {
+    Assert-A3SignatureRecords -Records @($valid, $second) -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256ByPath $missingHashMap
+} 'A3_HASH_MAP_MISMATCH' | Out-Null
+
+$extraHashMap = @{
+    $valid.Path = ('A' * 64)
+    $second.Path = ('B' * 64)
+    'C:\release\extra.exe' = ('C' * 64)
+}
+Assert-ThrowsCode {
+    Assert-A3SignatureRecords -Records @($valid, $second) -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256ByPath $extraHashMap
+} 'A3_HASH_MAP_MISMATCH' | Out-Null
+
+$duplicateRecordPath = Copy-Record $valid
+$duplicateRecordPath.Path = $valid.Path.ToUpperInvariant()
+Assert-ThrowsCode {
+    Assert-A3SignatureRecords -Records @($valid, $duplicateRecordPath) -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256ByPath $missingHashMap
+} 'A3_HASH_MAP_MISMATCH' | Out-Null
+
+$normalizedDuplicateRecordPath = Copy-Record $valid
+$normalizedDuplicateRecordPath.Path = 'C:\release\folder\..\a3-app.exe'
+Assert-ThrowsCode {
+    Assert-A3SignatureRecords -Records @($valid, $normalizedDuplicateRecordPath) -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256ByPath $missingHashMap
+} 'A3_HASH_MAP_MISMATCH' | Out-Null
+
+$duplicateCaseMap = [Collections.Specialized.OrderedDictionary]::new([StringComparer]::Ordinal)
+$duplicateCaseMap.Add($valid.Path, ('A' * 64))
+$duplicateCaseMap.Add($valid.Path.ToUpperInvariant(), ('A' * 64))
+$duplicateCaseMap.Add($second.Path, ('B' * 64))
+Assert-ThrowsCode {
+    Assert-A3SignatureRecords -Records @($valid, $second) -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256ByPath $duplicateCaseMap
+} 'A3_HASH_MAP_MISMATCH' | Out-Null
+
+$duplicateNormalizedMap = [Collections.Specialized.OrderedDictionary]::new([StringComparer]::Ordinal)
+$duplicateNormalizedMap.Add($valid.Path, ('A' * 64))
+$duplicateNormalizedMap.Add('C:\release\folder\..\a3-app.exe', ('A' * 64))
+$duplicateNormalizedMap.Add($second.Path, ('B' * 64))
+Assert-ThrowsCode {
+    Assert-A3SignatureRecords -Records @($valid, $second) -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256ByPath $duplicateNormalizedMap
+} 'A3_HASH_MAP_MISMATCH' | Out-Null
+
+$invalidHashMap = @{
+    $valid.Path = 'not-a-sha256'
+    $second.Path = ('B' * 64)
+}
+Assert-ThrowsCode {
+    Assert-A3SignatureRecords -Records @($valid, $second) -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256ByPath $invalidHashMap
+} 'A3_SIGNATURE_RECORD_INVALID' | Out-Null
+
+$relativeRecord = Copy-Record $valid
+$relativeRecord.Path = '.\release\canonical.exe'
+$relativeRecord.Sha256 = ('C' * 64)
+$normalizedMapPath = [IO.Path]::GetFullPath((Join-Path (Get-Location).Path 'release\folder\..\canonical.exe')).ToUpperInvariant()
+$normalizedMismatchMap = @{ $normalizedMapPath = ('D' * 64) }
+Assert-ThrowsCode {
+    Assert-A3SignatureRecords -Records @($relativeRecord) -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256ByPath $normalizedMismatchMap
+} 'A3_HASH_MISMATCH' | Out-Null
+
+$normalizedSuccessMap = @{ $normalizedMapPath = ('C' * 64) }
+$normalizedRecords = @(Assert-A3SignatureRecords -Records @($relativeRecord) -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256ByPath $normalizedSuccessMap)
+Assert-Equal $normalizedRecords.Count 1 'Canonical hash-map matching must preserve the record.'
+Assert-Equal $normalizedRecords[0].Path $relativeRecord.Path 'Canonical hash-map matching must preserve the original path text.'
+
 $badSecond = Copy-Record $second
 $badSecond.Subject = 'CN=Other Publisher'
 Assert-ThrowsCode {
@@ -276,21 +340,37 @@ try {
     $originalProgramFilesX86 = [Environment]::GetEnvironmentVariable('ProgramFiles(x86)', 'Process')
     $originalPath = [Environment]::GetEnvironmentVariable('Path', 'Process')
     try {
-        [Environment]::SetEnvironmentVariable('ProgramFiles(x86)', $temporaryDirectory, 'Process')
-        [Environment]::SetEnvironmentVariable('Path', $temporaryDirectory, 'Process')
+        $programFilesX86 = Join-Path $temporaryDirectory 'Program Files (x86)'
+        $olderSignTool = Join-Path $programFilesX86 'Windows Kits\10\bin\10.0.22000.0\x64\signtool.exe'
+        $newerSignTool = Join-Path $programFilesX86 'Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe'
+        $pathHijackDirectory = Join-Path $temporaryDirectory 'path-hijack'
+        $pathHijackSignTool = Join-Path $pathHijackDirectory 'signtool.exe'
+        $outsideSignTool = Join-Path $temporaryDirectory 'outside-sdk\signtool.exe'
+        foreach ($path in @($olderSignTool, $newerSignTool, $pathHijackSignTool, $outsideSignTool)) {
+            New-Item -ItemType Directory -Path (Split-Path -Parent $path) -Force | Out-Null
+            [System.IO.File]::WriteAllBytes($path, [byte[]](0))
+        }
+
+        [Environment]::SetEnvironmentVariable('ProgramFiles(x86)', $programFilesX86, 'Process')
+        [Environment]::SetEnvironmentVariable('Path', $pathHijackDirectory, 'Process')
         Assert-ThrowsCode {
             Get-A3SignatureRecord -LiteralPath $unsignedFile
         } 'A3_SIGNATURE_INVALID' | Out-Null
+
+        $automaticallyResolved = Find-A3SignTool
+        Assert-Equal $automaticallyResolved ([IO.Path]::GetFullPath($newerSignTool)) 'Find-A3SignTool must ignore PATH and select the newest approved SDK version.'
+
+        Assert-ThrowsCode {
+            Find-A3SignTool -ExplicitPath $outsideSignTool
+        } 'A3_SIGNTOOL_NOT_APPROVED' | Out-Null
+
+        $explicitlyResolved = Find-A3SignTool -ExplicitPath $olderSignTool
+        Assert-Equal $explicitlyResolved ([IO.Path]::GetFullPath($olderSignTool)) 'Find-A3SignTool must accept an explicit canonical SDK x64 path.'
     }
     finally {
         [Environment]::SetEnvironmentVariable('ProgramFiles(x86)', $originalProgramFilesX86, 'Process')
         [Environment]::SetEnvironmentVariable('Path', $originalPath, 'Process')
     }
-
-    $fakeSignTool = Join-Path $temporaryDirectory 'signtool.exe'
-    [System.IO.File]::WriteAllBytes($fakeSignTool, [byte[]](0))
-    $resolvedSignTool = Find-A3SignTool -ExplicitPath $fakeSignTool
-    Assert-Equal $resolvedSignTool ([System.IO.Path]::GetFullPath($fakeSignTool)) 'Find-A3SignTool must accept an explicit existing signtool.exe.'
 }
 finally {
     Remove-Item -LiteralPath $temporaryDirectory -Recurse -Force
@@ -299,5 +379,145 @@ finally {
 Assert-ThrowsCode {
     Get-A3SignatureRecord -LiteralPath 'C:\definitely-missing\a3-app.exe'
 } 'A3_ARTIFACT_MISSING' | Out-Null
+
+$corePath = 'C:\release\a3-app.exe'
+$rawHashA = ('A' * 64)
+$rawHashB = ('B' * 64)
+$authenticodeDigest = ('D' * 64)
+$validSignature = [pscustomobject]@{
+    Status = 'Valid'
+    SignerCertificate = [pscustomobject]@{
+        Subject = 'CN=A3 Learning Project'
+        NotBefore = [datetime]'2026-07-01T00:00:00Z'
+        NotAfter = [datetime]'2027-07-01T00:00:00Z'
+    }
+    TimeStamperCertificate = [pscustomobject]@{
+        Subject = 'CN=A3 Test Timestamp Authority'
+    }
+}
+$signatureProvider = {
+    param([string]$LiteralPath)
+    return $validSignature
+}.GetNewClosure()
+$nativeProcessProvider = {
+    param([string]$FilePath, [string[]]$Arguments)
+    return [pscustomobject]@{
+        ExitCode = 0
+        Output = @(
+            "Hash of file (sha256): $authenticodeDigest"
+            "The signature is timestamped: $signToolTimestampText"
+            "Successfully verified: $corePath"
+        )
+    }
+}.GetNewClosure()
+
+$changingHashes = [Collections.Generic.Queue[string]]::new()
+$changingHashes.Enqueue($rawHashA)
+$changingHashes.Enqueue($rawHashB)
+$changingHashProvider = {
+    param([string]$LiteralPath)
+    return $changingHashes.Dequeue()
+}.GetNewClosure()
+Assert-ThrowsCode {
+    & $module {
+        param($LiteralPath, $SignToolPath, $SignatureProvider, $HashProvider, $NativeProcessProvider)
+        Get-A3SignatureRecordCore `
+            -LiteralPath $LiteralPath `
+            -SignToolPath $SignToolPath `
+            -SignatureProvider $SignatureProvider `
+            -HashProvider $HashProvider `
+            -NativeProcessProvider $NativeProcessProvider
+    } $corePath 'C:\approved-sdk\signtool.exe' $signatureProvider $changingHashProvider $nativeProcessProvider
+} 'A3_HASH_MISMATCH' | Out-Null
+
+$stableHashes = [Collections.Generic.Queue[string]]::new()
+$stableHashes.Enqueue($rawHashA)
+$stableHashes.Enqueue($rawHashA)
+$stableHashProvider = {
+    param([string]$LiteralPath)
+    return $stableHashes.Dequeue()
+}.GetNewClosure()
+$stableRecord = & $module {
+    param($LiteralPath, $SignToolPath, $SignatureProvider, $HashProvider, $NativeProcessProvider)
+    Get-A3SignatureRecordCore `
+        -LiteralPath $LiteralPath `
+        -SignToolPath $SignToolPath `
+        -SignatureProvider $SignatureProvider `
+        -HashProvider $HashProvider `
+        -NativeProcessProvider $NativeProcessProvider
+} $corePath 'C:\approved-sdk\signtool.exe' $signatureProvider $stableHashProvider $nativeProcessProvider
+Assert-Equal $stableRecord.Status 'Valid' 'The injectable core must preserve the valid Authenticode status.'
+Assert-Equal $stableRecord.FileDigestAlgorithm 'SHA256' 'The injectable core must require signtool SHA-256 output.'
+Assert-Equal $stableRecord.Sha256 $rawHashA 'The safe record must bind to the stable raw file hash.'
+if ($null -ne $stableRecord.PSObject.Properties['ReportedSha256']) {
+    throw 'The signtool Authenticode digest must remain internal to verification.'
+}
+
+$constantHashProvider = {
+    param([string]$LiteralPath)
+    return $rawHashA
+}.GetNewClosure()
+$nonzeroNativeProcessProvider = {
+    param([string]$FilePath, [string[]]$Arguments)
+    return [pscustomobject]@{
+        ExitCode = 1
+        Output = @('SignTool Error: verification failed.')
+    }
+}
+Assert-ThrowsCode {
+    & $module {
+        param($LiteralPath, $SignToolPath, $SignatureProvider, $HashProvider, $NativeProcessProvider)
+        Get-A3SignatureRecordCore `
+            -LiteralPath $LiteralPath `
+            -SignToolPath $SignToolPath `
+            -SignatureProvider $SignatureProvider `
+            -HashProvider $HashProvider `
+            -NativeProcessProvider $NativeProcessProvider
+    } $corePath 'C:\approved-sdk\signtool.exe' $signatureProvider $constantHashProvider $nonzeroNativeProcessProvider
+} 'A3_SIGNATURE_INVALID' | Out-Null
+
+$missingSha256MarkerProvider = {
+    param([string]$FilePath, [string[]]$Arguments)
+    return [pscustomobject]@{
+        ExitCode = 0
+        Output = @(
+            "The signature is timestamped: $signToolTimestampText"
+            "Successfully verified: $corePath"
+        )
+    }
+}.GetNewClosure()
+Assert-ThrowsCode {
+    & $module {
+        param($LiteralPath, $SignToolPath, $SignatureProvider, $HashProvider, $NativeProcessProvider)
+        Get-A3SignatureRecordCore `
+            -LiteralPath $LiteralPath `
+            -SignToolPath $SignToolPath `
+            -SignatureProvider $SignatureProvider `
+            -HashProvider $HashProvider `
+            -NativeProcessProvider $NativeProcessProvider
+    } $corePath 'C:\approved-sdk\signtool.exe' $signatureProvider $constantHashProvider $missingSha256MarkerProvider
+} 'A3_DIGEST_NOT_SHA256' | Out-Null
+
+$missingTimestampLineProvider = {
+    param([string]$FilePath, [string[]]$Arguments)
+    return [pscustomobject]@{
+        ExitCode = 0
+        Output = @(
+            "Hash of file (sha256): $authenticodeDigest"
+            "Successfully verified: $corePath"
+        )
+    }
+}.GetNewClosure()
+Assert-ThrowsCode {
+    & $module {
+        param($LiteralPath, $SignToolPath, $SignatureProvider, $HashProvider, $NativeProcessProvider)
+        Get-A3SignatureRecordCore `
+            -LiteralPath $LiteralPath `
+            -SignToolPath $SignToolPath `
+            -SignatureProvider $SignatureProvider `
+            -HashProvider $HashProvider `
+            -NativeProcessProvider $NativeProcessProvider
+    } $corePath 'C:\approved-sdk\signtool.exe' $signatureProvider $constantHashProvider $missingTimestampLineProvider
+} 'A3_TIMESTAMP_MISSING' | Out-Null
 
 Write-Host 'signature-verification.test.ps1 passed'
