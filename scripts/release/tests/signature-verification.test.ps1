@@ -56,6 +56,18 @@ function New-TestRecord {
     }
 }
 
+function Get-TestStreamSha256 {
+    param([Parameter(Mandatory)] [IO.Stream]$ArtifactStream)
+
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+        return -join @($sha256.ComputeHash($ArtifactStream) | ForEach-Object { $_.ToString('X2') })
+    }
+    finally {
+        $sha256.Dispose()
+    }
+}
+
 $expectedExports = @(
     'Assert-A3SignatureRecord'
     'Assert-A3SignatureRecords'
@@ -134,6 +146,35 @@ Successfully verified: C:\release\a3-app.exe
     Assert-Equal $parsedSignToolOutput.FileDigestAlgorithm 'SHA256' 'Signtool output must contain the SHA-256 marker.'
     Assert-Equal $parsedSignToolOutput.ReportedSha256 $signToolHash 'Signtool output must parse the reported SHA-256 value.'
 }
+
+$multipleSignatureOutput = @"
+Signature Index: 0 (Primary Signature)
+Hash of file (sha1): $('A' * 40)
+The signature is timestamped: Wed Jul 08 18:30:00 2026
+Signature Index: 1
+Hash of file (sha256): $signToolHash
+The signature is timestamped: $signToolTimestampText
+Successfully verified: C:\release\a3-app.exe
+"@
+Assert-ThrowsCode {
+    & $module {
+        param([string]$OutputText)
+        ConvertFrom-A3SignToolVerificationOutput -OutputText $OutputText
+    } $multipleSignatureOutput
+} 'A3_MULTIPLE_SIGNATURES_UNSUPPORTED' | Out-Null
+
+$singleIndexedSignatureOutput = @"
+Signature Index: 0 (Primary Signature)
+Hash of file (sha256): $signToolHash
+The signature is timestamped: $signToolTimestampText
+Successfully verified: C:\release\a3-app.exe
+"@
+$singleIndexedResult = & $module {
+    param([string]$OutputText)
+    ConvertFrom-A3SignToolVerificationOutput -OutputText $OutputText
+} $singleIndexedSignatureOutput
+Assert-Equal $singleIndexedResult.FileDigestAlgorithm 'SHA256' 'A single indexed SHA-256 signature block must remain supported.'
+Assert-Equal $singleIndexedResult.ReportedSha256 $signToolHash 'A single indexed block must parse its own SHA-256 digest.'
 
 foreach ($status in @('NotSigned', 'HashMismatch')) {
     $record = Copy-Record $valid
@@ -308,6 +349,83 @@ $normalizedRecords = @(Assert-A3SignatureRecords -Records @($relativeRecord) -Ex
 Assert-Equal $normalizedRecords.Count 1 'Canonical hash-map matching must preserve the record.'
 Assert-Equal $normalizedRecords[0].Path $relativeRecord.Path 'Canonical hash-map matching must preserve the original path text.'
 
+$canonicalDosPath = & $module {
+    param([string]$Path)
+    ConvertTo-A3CanonicalWindowsPath -Path $Path
+} 'C:\path\file.exe'
+$canonicalExtendedDosPath = & $module {
+    param([string]$Path)
+    ConvertTo-A3CanonicalWindowsPath -Path $Path
+} '\\?\C:\path\file.exe'
+Assert-Equal $canonicalExtendedDosPath $canonicalDosPath 'Extended DOS paths must canonicalize to the same batch key as normal DOS paths.'
+
+$canonicalUncPath = & $module {
+    param([string]$Path)
+    ConvertTo-A3CanonicalWindowsPath -Path $Path
+} '\\server\share\file.exe'
+$canonicalExtendedUncPath = & $module {
+    param([string]$Path)
+    ConvertTo-A3CanonicalWindowsPath -Path $Path
+} '\\?\UNC\server\share\file.exe'
+Assert-Equal $canonicalExtendedUncPath $canonicalUncPath 'Extended UNC paths must canonicalize to the same batch key as normal UNC paths.'
+
+$dosAliasMap = [Collections.Specialized.OrderedDictionary]::new([StringComparer]::Ordinal)
+$dosAliasMap.Add('C:\path\file.exe', ('A' * 64))
+$dosAliasMap.Add('\\?\C:\path\file.exe', ('A' * 64))
+$dosAliasRecord = Copy-Record $valid
+$dosAliasRecord.Path = 'C:\path\file.exe'
+Assert-ThrowsCode {
+    Assert-A3SignatureRecords -Records @($dosAliasRecord) -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256ByPath $dosAliasMap
+} 'A3_HASH_MAP_MISMATCH' | Out-Null
+
+$uncAliasMap = [Collections.Specialized.OrderedDictionary]::new([StringComparer]::Ordinal)
+$uncAliasMap.Add('\\server\share\file.exe', ('A' * 64))
+$uncAliasMap.Add('\\?\UNC\server\share\file.exe', ('A' * 64))
+$uncAliasRecord = Copy-Record $valid
+$uncAliasRecord.Path = '\\server\share\file.exe'
+Assert-ThrowsCode {
+    Assert-A3SignatureRecords -Records @($uncAliasRecord) -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256ByPath $uncAliasMap
+} 'A3_HASH_MAP_MISMATCH' | Out-Null
+
+foreach ($invalidProviderPath in @(
+    'Registry::HKEY_CURRENT_USER\Software'
+    'Variable:test'
+    '\\.\PhysicalDrive0'
+    '\\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy1\file.exe'
+)) {
+    $pathError = Assert-ThrowsCode {
+        & $module {
+            param([string]$Path)
+            ConvertTo-A3CanonicalWindowsPath -Path $Path
+        } $invalidProviderPath
+    } 'A3_PATH_INVALID'
+    if ($pathError.Message -match 'ProviderInvocationException|GetUnresolvedProviderPath|at System') {
+        throw 'Path normalization errors must not expose provider or stack details.'
+    }
+}
+
+foreach ($hashLineEnding in @("`n", "`r`n")) {
+    $hashWithLineEnding = ('A' * 64) + $hashLineEnding
+    Assert-ThrowsCode {
+        Assert-A3SignatureRecord -Record $valid -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256 $hashWithLineEnding
+    } 'A3_SIGNATURE_RECORD_INVALID' | Out-Null
+
+    $recordWithHashLineEnding = Copy-Record $valid
+    $recordWithHashLineEnding.Sha256 = $hashWithLineEnding
+    Assert-ThrowsCode {
+        Assert-A3SignatureRecord -Record $recordWithHashLineEnding -ExpectedPublisher 'CN=A3 Learning Project'
+    } 'A3_SIGNATURE_RECORD_INVALID' | Out-Null
+
+    $mapWithHashLineEnding = @{ $valid.Path = $hashWithLineEnding }
+    Assert-ThrowsCode {
+        Assert-A3SignatureRecords -Records @($valid) -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256ByPath $mapWithHashLineEnding
+    } 'A3_SIGNATURE_RECORD_INVALID' | Out-Null
+}
+
+Assert-ThrowsCode {
+    Get-A3SignatureRecord -LiteralPath 'Registry::HKEY_CURRENT_USER\Software'
+} 'A3_PATH_INVALID' | Out-Null
+
 $badSecond = Copy-Record $second
 $badSecond.Subject = 'CN=Other Publisher'
 Assert-ThrowsCode {
@@ -380,7 +498,96 @@ Assert-ThrowsCode {
     Get-A3SignatureRecord -LiteralPath 'C:\definitely-missing\a3-app.exe'
 } 'A3_ARTIFACT_MISSING' | Out-Null
 
-$corePath = 'C:\release\a3-app.exe'
+$lockTestDirectory = Join-Path ([IO.Path]::GetTempPath()) ("a3-signature-lock-{0}" -f [guid]::NewGuid())
+New-Item -ItemType Directory -Path $lockTestDirectory | Out-Null
+try {
+    $lockTestPath = Join-Path $lockTestDirectory 'artifact.exe'
+    $renamedLockTestPath = Join-Path $lockTestDirectory 'artifact-renamed.exe'
+    $lockedBytes = [byte[]](1..32)
+    $replacementBytes = [byte[]](33..64)
+    [IO.File]::WriteAllBytes($lockTestPath, $lockedBytes)
+    $lockedSha256 = (Get-FileHash -LiteralPath $lockTestPath -Algorithm SHA256).Hash
+    $lockMutationState = [pscustomobject]@{
+        OverwriteDenied = $false
+        RenameDenied = $false
+        DeleteDenied = $false
+    }
+    $lockValidSignature = [pscustomobject]@{
+        Status = 'Valid'
+        SignerCertificate = [pscustomobject]@{
+            Subject = 'CN=A3 Learning Project'
+            NotBefore = [datetime]'2026-07-01T00:00:00Z'
+            NotAfter = [datetime]'2027-07-01T00:00:00Z'
+        }
+        TimeStamperCertificate = [pscustomobject]@{
+            Subject = 'CN=A3 Test Timestamp Authority'
+        }
+    }
+    $lockSignatureProvider = {
+        param([string]$LiteralPath)
+        return $lockValidSignature
+    }.GetNewClosure()
+    $pathHashProvider = {
+        param([IO.Stream]$ArtifactStream)
+        return Get-TestStreamSha256 -ArtifactStream $ArtifactStream
+    }
+    $mutatingNativeProcessProvider = {
+        param([string]$FilePath, [string[]]$Arguments)
+        try {
+            [IO.File]::WriteAllBytes($lockTestPath, $replacementBytes)
+            [IO.File]::WriteAllBytes($lockTestPath, $lockedBytes)
+        }
+        catch {
+            $lockMutationState.OverwriteDenied = $true
+        }
+        try {
+            [IO.File]::Move($lockTestPath, $renamedLockTestPath)
+            [IO.File]::Move($renamedLockTestPath, $lockTestPath)
+        }
+        catch {
+            $lockMutationState.RenameDenied = $true
+        }
+        try {
+            [IO.File]::Delete($lockTestPath)
+            [IO.File]::WriteAllBytes($lockTestPath, $lockedBytes)
+        }
+        catch {
+            $lockMutationState.DeleteDenied = $true
+        }
+        return [pscustomobject]@{
+            ExitCode = 0
+            Output = @(
+                "Hash of file (sha256): $('D' * 64)"
+                "The signature is timestamped: $signToolTimestampText"
+                "Successfully verified: $lockTestPath"
+            )
+        }
+    }.GetNewClosure()
+
+    $lockedRecord = & $module {
+        param($LiteralPath, $SignToolPath, $SignatureProvider, $HashProvider, $NativeProcessProvider)
+        Get-A3SignatureRecordCore `
+            -LiteralPath $LiteralPath `
+            -SignToolPath $SignToolPath `
+            -SignatureProvider $SignatureProvider `
+            -HashProvider $HashProvider `
+            -NativeProcessProvider $NativeProcessProvider
+    } $lockTestPath 'C:\approved-sdk\signtool.exe' $lockSignatureProvider $pathHashProvider $mutatingNativeProcessProvider
+    if (-not $lockMutationState.OverwriteDenied -or
+        -not $lockMutationState.RenameDenied -or
+        -not $lockMutationState.DeleteDenied) {
+        throw 'The verification window must deny overwrite, rename, and delete mutations.'
+    }
+    Assert-Equal $lockedRecord.Sha256 $lockedSha256 'The locked verification record must bind to the bytes held by the open stream.'
+}
+finally {
+    Remove-Item -LiteralPath $lockTestDirectory -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+$coreTestDirectory = Join-Path ([IO.Path]::GetTempPath()) ("a3-signature-core-{0}" -f [guid]::NewGuid())
+New-Item -ItemType Directory -Path $coreTestDirectory | Out-Null
+$corePath = Join-Path $coreTestDirectory 'a3-app.exe'
+[IO.File]::WriteAllBytes($corePath, [byte[]](65..96))
 $rawHashA = ('A' * 64)
 $rawHashB = ('B' * 64)
 $authenticodeDigest = ('D' * 64)
@@ -415,7 +622,7 @@ $changingHashes = [Collections.Generic.Queue[string]]::new()
 $changingHashes.Enqueue($rawHashA)
 $changingHashes.Enqueue($rawHashB)
 $changingHashProvider = {
-    param([string]$LiteralPath)
+    param([IO.Stream]$ArtifactStream)
     return $changingHashes.Dequeue()
 }.GetNewClosure()
 Assert-ThrowsCode {
@@ -434,7 +641,7 @@ $stableHashes = [Collections.Generic.Queue[string]]::new()
 $stableHashes.Enqueue($rawHashA)
 $stableHashes.Enqueue($rawHashA)
 $stableHashProvider = {
-    param([string]$LiteralPath)
+    param([IO.Stream]$ArtifactStream)
     return $stableHashes.Dequeue()
 }.GetNewClosure()
 $stableRecord = & $module {
@@ -454,7 +661,7 @@ if ($null -ne $stableRecord.PSObject.Properties['ReportedSha256']) {
 }
 
 $constantHashProvider = {
-    param([string]$LiteralPath)
+    param([IO.Stream]$ArtifactStream)
     return $rawHashA
 }.GetNewClosure()
 $nonzeroNativeProcessProvider = {
@@ -519,5 +726,26 @@ Assert-ThrowsCode {
             -NativeProcessProvider $NativeProcessProvider
     } $corePath 'C:\approved-sdk\signtool.exe' $signatureProvider $constantHashProvider $missingTimestampLineProvider
 } 'A3_TIMESTAMP_MISSING' | Out-Null
+
+foreach ($hashLineEnding in @("`n", "`r`n")) {
+    $providerHashWithLineEnding = $rawHashA + $hashLineEnding
+    $invalidHashProvider = {
+        param([IO.Stream]$ArtifactStream)
+        return $providerHashWithLineEnding
+    }.GetNewClosure()
+    Assert-ThrowsCode {
+        & $module {
+            param($LiteralPath, $SignToolPath, $SignatureProvider, $HashProvider, $NativeProcessProvider)
+            Get-A3SignatureRecordCore `
+                -LiteralPath $LiteralPath `
+                -SignToolPath $SignToolPath `
+                -SignatureProvider $SignatureProvider `
+                -HashProvider $HashProvider `
+                -NativeProcessProvider $NativeProcessProvider
+        } $corePath 'C:\approved-sdk\signtool.exe' $signatureProvider $invalidHashProvider $nativeProcessProvider
+    } 'A3_SIGNATURE_RECORD_INVALID' | Out-Null
+}
+
+Remove-Item -LiteralPath $coreTestDirectory -Recurse -Force
 
 Write-Host 'signature-verification.test.ps1 passed'

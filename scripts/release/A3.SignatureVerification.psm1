@@ -80,14 +80,35 @@ function ConvertTo-A3CanonicalUtcText {
     )
 }
 
+function Test-A3Sha256Text {
+    param([AllowNull()] $Value)
+
+    return $Value -is [string] -and
+        $Value.Length -eq 64 -and
+        $Value -match '\A[A-Fa-f0-9]{64}\z'
+}
+
 function ConvertFrom-A3SignToolVerificationOutput {
     param(
         [Parameter(Mandatory)] [string]$OutputText,
         [string]$SafePath = '<artifact>'
     )
 
-    $timestampMatch = [regex]::Match(
+    $signatureIndexMatches = [regex]::Matches(
         $OutputText,
+        '(?im)^\s*Signature Index:\s*\d+\b[^\r\n]*'
+    )
+    if ($signatureIndexMatches.Count -gt 1) {
+        throw (New-A3SignatureError 'A3_MULTIPLE_SIGNATURES_UNSUPPORTED' "Multiple Authenticode signatures are not supported for $SafePath.")
+    }
+
+    $verificationBlock = $OutputText
+    if ($signatureIndexMatches.Count -eq 1) {
+        $verificationBlock = $OutputText.Substring($signatureIndexMatches[0].Index)
+    }
+
+    $timestampMatch = [regex]::Match(
+        $verificationBlock,
         '(?im)^\s*The signature is timestamped(?:\s+(?:at|on))?\s*:\s*(?<timestamp>.+?)\s*$'
     )
     if (-not $timestampMatch.Success) {
@@ -118,10 +139,10 @@ function ConvertFrom-A3SignToolVerificationOutput {
     }
 
     $hashMatch = [regex]::Match(
-        $OutputText,
-        '(?im)^\s*Hash of file \(sha256\):\s*(?<sha256>[A-Fa-f0-9]{64})\s*$'
+        $verificationBlock,
+        '(?im)^[ \t]*Hash of file \(sha256\):[ \t]*(?<sha256>[A-Fa-f0-9]{64})[ \t]*(?:\r?\n|\z)'
     )
-    if (-not $hashMatch.Success) {
+    if (-not $hashMatch.Success -or -not (Test-A3Sha256Text -Value $hashMatch.Groups['sha256'].Value)) {
         throw (New-A3SignatureError 'A3_DIGEST_NOT_SHA256' "A SHA-256 file digest was not reported for $SafePath.")
     }
 
@@ -175,7 +196,7 @@ function Assert-A3SignatureRecord {
     $notBeforeText = Get-A3RecordString -Record $Record -Name 'CertificateNotBeforeUtc'
     $notAfterText = Get-A3RecordString -Record $Record -Name 'CertificateNotAfterUtc'
     $recordSha256 = Get-A3RecordString -Record $Record -Name 'Sha256'
-    if ($recordSha256 -notmatch '^[A-Fa-f0-9]{64}$') {
+    if (-not (Test-A3Sha256Text -Value $recordSha256)) {
         throw (New-A3SignatureError 'A3_SIGNATURE_RECORD_INVALID' 'The signature record contains an invalid SHA-256 value.')
     }
 
@@ -190,7 +211,7 @@ function Assert-A3SignatureRecord {
     }
 
     if ($PSBoundParameters.ContainsKey('ExpectedSha256')) {
-        if ([string]::IsNullOrWhiteSpace($ExpectedSha256) -or $ExpectedSha256 -notmatch '^[A-Fa-f0-9]{64}$') {
+        if (-not (Test-A3Sha256Text -Value $ExpectedSha256)) {
             throw (New-A3SignatureError 'A3_SIGNATURE_RECORD_INVALID' 'The expected SHA-256 value is invalid.')
         }
         if ($recordSha256.ToUpperInvariant() -cne $ExpectedSha256.ToUpperInvariant()) {
@@ -199,18 +220,64 @@ function Assert-A3SignatureRecord {
     }
 }
 
-function ConvertTo-A3CanonicalWindowsPath {
+function Resolve-A3FileSystemPath {
     param([Parameter(Mandatory)] [string]$Path)
 
     if ([string]::IsNullOrWhiteSpace($Path)) {
-        throw (New-A3SignatureError 'A3_HASH_MAP_MISMATCH' 'Signature record and expected-hash paths must match one-to-one.')
+        throw (New-A3SignatureError 'A3_PATH_INVALID' 'The artifact path is not a valid filesystem path.')
     }
+
     try {
-        return [IO.Path]::GetFullPath($Path).ToUpperInvariant()
+        $resolved = @(Resolve-Path -LiteralPath $Path -ErrorAction SilentlyContinue)
+        if ($resolved.Count -gt 1) {
+            throw [InvalidOperationException]::new('Multiple paths resolved.')
+        }
+
+        if ($resolved.Count -eq 1) {
+            if ($resolved[0].Provider.Name -cne 'FileSystem') {
+                throw [InvalidOperationException]::new('Non-filesystem provider.')
+            }
+            $providerPath = [string]$resolved[0].ProviderPath
+        }
+        else {
+            $provider = $null
+            $drive = $null
+            $providerPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath(
+                $Path,
+                [ref]$provider,
+                [ref]$drive
+            )
+            if ($null -eq $provider -or $provider.Name -cne 'FileSystem') {
+                throw [InvalidOperationException]::new('Non-filesystem provider.')
+            }
+        }
+
+        if ($providerPath.StartsWith('\\.\', [StringComparison]::OrdinalIgnoreCase) -or
+            $providerPath.StartsWith('\\?\GLOBALROOT\', [StringComparison]::OrdinalIgnoreCase)) {
+            throw [InvalidOperationException]::new('Device path.')
+        }
+        if ($providerPath.StartsWith('\\?\UNC\', [StringComparison]::OrdinalIgnoreCase)) {
+            $providerPath = '\\' + $providerPath.Substring(8)
+        }
+        elseif ($providerPath.StartsWith('\\?\', [StringComparison]::OrdinalIgnoreCase)) {
+            $withoutPrefix = $providerPath.Substring(4)
+            if ($withoutPrefix -notmatch '\A[A-Za-z]:[\\/]') {
+                throw [InvalidOperationException]::new('Unsupported extended path.')
+            }
+            $providerPath = $withoutPrefix
+        }
+
+        return [IO.Path]::GetFullPath($providerPath)
     }
     catch {
-        throw (New-A3SignatureError 'A3_HASH_MAP_MISMATCH' 'Signature record and expected-hash paths must match one-to-one.')
+        throw (New-A3SignatureError 'A3_PATH_INVALID' 'The artifact path is not a valid filesystem path.')
     }
+}
+
+function ConvertTo-A3CanonicalWindowsPath {
+    param([Parameter(Mandatory)] [string]$Path)
+
+    return (Resolve-A3FileSystemPath -Path $Path).ToUpperInvariant()
 }
 
 function Assert-A3SignatureRecords {
@@ -256,7 +323,7 @@ function Assert-A3SignatureRecords {
             }
 
             $expectedHash = $ExpectedSha256ByPath[$mapPath]
-            if ($expectedHash -isnot [string] -or $expectedHash -notmatch '^[A-Fa-f0-9]{64}$') {
+            if (-not (Test-A3Sha256Text -Value $expectedHash)) {
                 throw (New-A3SignatureError 'A3_SIGNATURE_RECORD_INVALID' 'The expected SHA-256 value is invalid.')
             }
             $expectedHashes.Add($canonicalMapPath, $expectedHash.ToUpperInvariant())
@@ -364,16 +431,19 @@ function Find-A3SignTool {
 function Invoke-A3RawSha256Provider {
     param(
         [Parameter(Mandatory)] [string]$LiteralPath,
+        [Parameter(Mandatory)] [IO.Stream]$ArtifactStream,
         [Parameter(Mandatory)] [scriptblock]$HashProvider
     )
 
     try {
-        $sha256 = & $HashProvider $LiteralPath
+        $ArtifactStream.Position = 0
+        $sha256 = & $HashProvider $ArtifactStream
+        $ArtifactStream.Position = 0
     }
     catch {
         throw (New-A3SignatureError 'A3_SIGNATURE_RECORD_INVALID' "The SHA-256 digest could not be read for $LiteralPath.")
     }
-    if ($sha256 -isnot [string] -or $sha256 -notmatch '^[A-Fa-f0-9]{64}$') {
+    if (-not (Test-A3Sha256Text -Value $sha256)) {
         throw (New-A3SignatureError 'A3_SIGNATURE_RECORD_INVALID' "The SHA-256 digest could not be read for $LiteralPath.")
     }
     return $sha256.ToUpperInvariant()
@@ -388,55 +458,78 @@ function Get-A3SignatureRecordCore {
         [Parameter(Mandatory)] [scriptblock]$NativeProcessProvider
     )
 
-    $sha256BeforeVerification = Invoke-A3RawSha256Provider -LiteralPath $LiteralPath -HashProvider $HashProvider
-
     try {
-        $signature = & $SignatureProvider $LiteralPath
+        $artifactStream = [IO.File]::Open(
+            $LiteralPath,
+            [IO.FileMode]::Open,
+            [IO.FileAccess]::Read,
+            [IO.FileShare]::Read
+        )
     }
     catch {
-        throw (New-A3SignatureError 'A3_SIGNATURE_INVALID' "Authenticode verification failed for $LiteralPath.")
-    }
-    if ($null -eq $signature -or $signature.Status.ToString() -cne 'Valid' -or $null -eq $signature.SignerCertificate) {
-        throw (New-A3SignatureError 'A3_SIGNATURE_INVALID' "Invalid Authenticode signature for $LiteralPath.")
+        throw (New-A3SignatureError 'A3_ARTIFACT_LOCK_FAILED' "The signed artifact could not be locked for verification: $LiteralPath.")
     }
 
-    $arguments = @('verify', '/pa', '/all', '/v', $LiteralPath)
     try {
-        $nativeResult = & $NativeProcessProvider $SignToolPath $arguments
-    }
-    catch {
-        throw (New-A3SignatureError 'A3_SIGNATURE_INVALID' "Windows signature verification failed for $LiteralPath.")
-    }
-    if ($null -eq $nativeResult -or
-        $null -eq $nativeResult.PSObject.Properties['ExitCode'] -or
-        $null -eq $nativeResult.PSObject.Properties['Output'] -or
-        $nativeResult.ExitCode -ne 0) {
-        throw (New-A3SignatureError 'A3_SIGNATURE_INVALID' "Windows signature verification failed for $LiteralPath.")
-    }
+        $sha256BeforeVerification = Invoke-A3RawSha256Provider `
+            -LiteralPath $LiteralPath `
+            -ArtifactStream $artifactStream `
+            -HashProvider $HashProvider
 
-    $outputText = @($nativeResult.Output | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
-    if ($null -eq $signature.TimeStamperCertificate) {
-        throw (New-A3SignatureError 'A3_TIMESTAMP_MISSING' "Missing trusted timestamp for $LiteralPath.")
-    }
+        try {
+            $signature = & $SignatureProvider $LiteralPath
+        }
+        catch {
+            throw (New-A3SignatureError 'A3_SIGNATURE_INVALID' "Authenticode verification failed for $LiteralPath.")
+        }
+        if ($null -eq $signature -or $signature.Status.ToString() -cne 'Valid' -or $null -eq $signature.SignerCertificate) {
+            throw (New-A3SignatureError 'A3_SIGNATURE_INVALID' "Invalid Authenticode signature for $LiteralPath.")
+        }
 
-    $parsedSignToolOutput = ConvertFrom-A3SignToolVerificationOutput -OutputText $outputText -SafePath $LiteralPath
-    $sha256AfterVerification = Invoke-A3RawSha256Provider -LiteralPath $LiteralPath -HashProvider $HashProvider
-    if ($sha256BeforeVerification -cne $sha256AfterVerification) {
-        throw (New-A3SignatureError 'A3_HASH_MISMATCH' "SHA-256 changed during signature verification for $LiteralPath.")
-    }
+        $arguments = @('verify', '/pa', '/all', '/v', $LiteralPath)
+        try {
+            $nativeResult = & $NativeProcessProvider $SignToolPath $arguments
+        }
+        catch {
+            throw (New-A3SignatureError 'A3_SIGNATURE_INVALID' "Windows signature verification failed for $LiteralPath.")
+        }
+        if ($null -eq $nativeResult -or
+            $null -eq $nativeResult.PSObject.Properties['ExitCode'] -or
+            $null -eq $nativeResult.PSObject.Properties['Output'] -or
+            $nativeResult.ExitCode -ne 0) {
+            throw (New-A3SignatureError 'A3_SIGNATURE_INVALID' "Windows signature verification failed for $LiteralPath.")
+        }
 
-    $certificate = $signature.SignerCertificate
-    $notBefore = ([DateTimeOffset]$certificate.NotBefore).ToUniversalTime()
-    $notAfter = ([DateTimeOffset]$certificate.NotAfter).ToUniversalTime()
-    return [pscustomobject][ordered]@{
-        Path = $LiteralPath
-        Status = $signature.Status.ToString()
-        Subject = [string]$certificate.Subject
-        FileDigestAlgorithm = $parsedSignToolOutput.FileDigestAlgorithm
-        TimestampUtc = $parsedSignToolOutput.TimestampUtc
-        CertificateNotBeforeUtc = ConvertTo-A3CanonicalUtcText -Value $notBefore
-        CertificateNotAfterUtc = ConvertTo-A3CanonicalUtcText -Value $notAfter
-        Sha256 = $sha256BeforeVerification
+        $outputText = @($nativeResult.Output | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
+        if ($null -eq $signature.TimeStamperCertificate) {
+            throw (New-A3SignatureError 'A3_TIMESTAMP_MISSING' "Missing trusted timestamp for $LiteralPath.")
+        }
+
+        $parsedSignToolOutput = ConvertFrom-A3SignToolVerificationOutput -OutputText $outputText -SafePath $LiteralPath
+        $sha256AfterVerification = Invoke-A3RawSha256Provider `
+            -LiteralPath $LiteralPath `
+            -ArtifactStream $artifactStream `
+            -HashProvider $HashProvider
+        if ($sha256BeforeVerification -cne $sha256AfterVerification) {
+            throw (New-A3SignatureError 'A3_HASH_MISMATCH' "SHA-256 changed during signature verification for $LiteralPath.")
+        }
+
+        $certificate = $signature.SignerCertificate
+        $notBefore = ([DateTimeOffset]$certificate.NotBefore).ToUniversalTime()
+        $notAfter = ([DateTimeOffset]$certificate.NotAfter).ToUniversalTime()
+        return [pscustomobject][ordered]@{
+            Path = $LiteralPath
+            Status = $signature.Status.ToString()
+            Subject = [string]$certificate.Subject
+            FileDigestAlgorithm = $parsedSignToolOutput.FileDigestAlgorithm
+            TimestampUtc = $parsedSignToolOutput.TimestampUtc
+            CertificateNotBeforeUtc = ConvertTo-A3CanonicalUtcText -Value $notBefore
+            CertificateNotAfterUtc = ConvertTo-A3CanonicalUtcText -Value $notAfter
+            Sha256 = $sha256BeforeVerification
+        }
+    }
+    finally {
+        $artifactStream.Dispose()
     }
 }
 
@@ -447,11 +540,10 @@ function Get-A3SignatureRecord {
         [string]$SignToolPath
     )
 
-    $resolved = Resolve-Path -LiteralPath $LiteralPath -ErrorAction SilentlyContinue
-    if ($null -eq $resolved -or -not (Test-Path -LiteralPath $resolved.Path -PathType Leaf)) {
+    $resolvedPath = Resolve-A3FileSystemPath -Path $LiteralPath
+    if (-not (Test-Path -LiteralPath $resolvedPath -PathType Leaf)) {
         throw (New-A3SignatureError 'A3_ARTIFACT_MISSING' "Required signed artifact is missing: $LiteralPath.")
     }
-    $resolvedPath = [IO.Path]::GetFullPath($resolved.Path)
 
     if ($PSBoundParameters.ContainsKey('SignToolPath')) {
         $signTool = Find-A3SignTool -ExplicitPath $SignToolPath
@@ -465,8 +557,14 @@ function Get-A3SignatureRecord {
         return Get-AuthenticodeSignature -LiteralPath $Path -ErrorAction Stop
     }
     $hashProvider = {
-        param([string]$Path)
-        return (Get-FileHash -LiteralPath $Path -Algorithm SHA256 -ErrorAction Stop).Hash
+        param([IO.Stream]$ArtifactStream)
+        $sha256 = [Security.Cryptography.SHA256]::Create()
+        try {
+            return -join @($sha256.ComputeHash($ArtifactStream) | ForEach-Object { $_.ToString('X2') })
+        }
+        finally {
+            $sha256.Dispose()
+        }
     }
     $nativeProcessProvider = {
         param([string]$FilePath, [string[]]$Arguments)
