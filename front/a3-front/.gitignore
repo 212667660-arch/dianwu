@@ -12,7 +12,15 @@ dist
 dist-ssr
 release
 !scripts/release/
-!scripts/release/**
+scripts/release/*
+!scripts/release/*.mjs
+!scripts/release/*.cjs
+scripts/release/.env
+scripts/release/.env.*
+scripts/release/**/*.pem
+scripts/release/**/*.key
+scripts/release/**/*.p12
+scripts/release/**/*.pfx
 *.local
 
 # Editor directories and files
