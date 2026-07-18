@@ -27,6 +27,17 @@ body.is-dragging {
   cursor: grabbing;
 }
 
+body.is-resizing,
+#pet[data-resize-corner="nw"],
+#pet[data-resize-corner="se"] {
+  cursor: nwse-resize;
+}
+
+#pet[data-resize-corner="ne"],
+#pet[data-resize-corner="sw"] {
+  cursor: nesw-resize;
+}
+
 #pet {
   display: grid;
   place-items: center;

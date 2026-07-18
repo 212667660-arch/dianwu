@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import type { KnowledgeDocument, KnowledgeImportJob } from '@/api'
 
@@ -39,6 +40,13 @@ import KnowledgeLibrary from './KnowledgeLibrary.vue'
 
 function setDesktopBridge(value: unknown) {
   Object.defineProperty(window, 'a3Desktop', { configurable: true, writable: true, value })
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((onResolve, onReject) => { resolve = onResolve; reject = onReject })
+  return { promise, resolve, reject }
 }
 
 beforeEach(() => {
@@ -179,9 +187,50 @@ it('reloads documents when the learner switches collections', async () => {
   await wrapper.get('[aria-label="打开集合 物理"]').trigger('click')
   await flushPromises()
 
-  expect(apiMock.knowledgeDocuments).toHaveBeenCalledWith(4)
+  expect(apiMock.knowledgeDocuments).toHaveBeenCalledWith({
+    collectionId: 4, trash: false, sort: 'created', direction: 'desc',
+  })
   expect(wrapper.get('[data-testid="document-grid"]').text()).toContain('牛顿定律.md')
   expect(wrapper.get('[data-testid="document-grid"]').text()).not.toContain('极限讲义.pdf')
+})
+
+it('preserves all active filters when switching collections', async () => {
+  store.knowledgeCollections = [
+    ...store.knowledgeCollections,
+    { id: 4, name: '物理', description: '力与运动', color: '#8f9d7a', document_count: 1, bound_session_count: 0, created_at: '', updated_at: '' },
+  ]
+  const physicsDocument = {
+    ...store.knowledgeDocuments[0], id: 10, display_name: '牛顿定律.md', favorite: true, collection_ids: [4], tags: ['力学'],
+  }
+  const wrapper = mount(KnowledgeLibrary, { global: { stubs: { ElDrawer: { template: '<div><slot /></div>' } } } })
+  await flushPromises()
+
+  await wrapper.get('[aria-label="筛选知识库资料"]').setValue('牛顿')
+  await wrapper.get('[data-testid="trash-filter"]').setValue(true)
+  await wrapper.findAll('.advanced-filters input[type="checkbox"]')[1].setValue(true)
+  await wrapper.get('[aria-label="按标签筛选"]').setValue('力学')
+  await wrapper.get('[aria-label="按状态筛选"]').setValue('COMPLETED')
+  await wrapper.get('[data-testid="sort-filter"]').setValue('name')
+  await wrapper.get('[aria-label="排序方向"]').setValue('asc')
+  await flushPromises()
+  apiMock.knowledgeDocuments.mockClear()
+  apiMock.knowledgeDocuments.mockResolvedValueOnce([physicsDocument])
+
+  await wrapper.get('[aria-label="打开集合 物理"]').trigger('click')
+  await flushPromises()
+
+  expect(apiMock.knowledgeDocuments).toHaveBeenCalledWith({
+    collectionId: 4,
+    trash: true,
+    favorite: true,
+    tag: '力学',
+    query: '牛顿',
+    status: 'COMPLETED',
+    sort: 'name',
+    direction: 'asc',
+  })
+  expect(wrapper.get('[aria-label="打开集合 物理"]').element.closest('.collection-wrap')?.classList.contains('active')).toBe(true)
+  expect(wrapper.get('[data-testid="document-grid"]').text()).toContain('牛顿定律.md')
 })
 
 it('keeps the previous collection and documents when collection loading fails', async () => {
@@ -226,6 +275,131 @@ it('ignores a stale collection response after a newer selection', async () => {
   expect(wrapper.get('[data-testid="document-grid"]').text()).not.toContain('牛顿定律.md')
 })
 
+it('keeps a pending collection selection when a filter refresh wins the race', async () => {
+  store.knowledgeCollections = [
+    ...store.knowledgeCollections,
+    { id: 4, name: '物理', description: '力与运动', color: '#8f9d7a', document_count: 1, bound_session_count: 0, created_at: '', updated_at: '' },
+  ]
+  const collectionRefresh = deferred<KnowledgeDocument[]>()
+  const filterRefresh = deferred<KnowledgeDocument[]>()
+  const physicsDocument = {
+    ...store.knowledgeDocuments[0], id: 10, display_name: '牛顿定律.md', collection_ids: [4],
+  }
+  const wrapper = mount(KnowledgeLibrary, { global: { stubs: { ElDrawer: { template: '<div><slot /></div>' } } } })
+  await flushPromises()
+  apiMock.knowledgeDocuments.mockClear()
+  apiMock.knowledgeDocuments
+    .mockReturnValueOnce(collectionRefresh.promise)
+    .mockReturnValueOnce(filterRefresh.promise)
+
+  await wrapper.get('[aria-label="打开集合 物理"]').trigger('click')
+  await wrapper.get('[aria-label="筛选知识库资料"]').setValue('牛顿')
+  expect(apiMock.knowledgeDocuments).toHaveBeenNthCalledWith(2, expect.objectContaining({ collectionId: 4, query: '牛顿' }))
+
+  filterRefresh.resolve([physicsDocument])
+  await flushPromises()
+  expect(wrapper.get('.center-heading strong').text()).toBe('物理')
+  expect(wrapper.get('[data-testid="document-grid"]').text()).toContain('牛顿定律.md')
+
+  collectionRefresh.resolve([{ ...store.knowledgeDocuments[0], display_name: '旧集合响应.md' }])
+  await flushPromises()
+  expect(wrapper.get('.center-heading strong').text()).toBe('物理')
+  expect(wrapper.get('[data-testid="document-grid"]').text()).toContain('牛顿定律.md')
+  expect(wrapper.get('[data-testid="document-grid"]').text()).not.toContain('旧集合响应.md')
+})
+
+it('commits a pending collection response after a favorite succeeds on the old list', async () => {
+  store.knowledgeCollections = [
+    ...store.knowledgeCollections,
+    { id: 4, name: '物理', description: '力与运动', color: '#8f9d7a', document_count: 1, bound_session_count: 0, created_at: '', updated_at: '' },
+  ]
+  store.knowledgeDocuments = [{
+    ...store.knowledgeDocuments[0], favorite: false, deleted_at: null, collection_ids: [3], tags: [],
+  }]
+  const collectionRefresh = deferred<KnowledgeDocument[]>()
+  const saving = deferred<{ items: { document_id: number; ok: boolean; code: null }[] }>()
+  store.bulkKnowledgeDocuments.mockReturnValueOnce(saving.promise)
+  const wrapper = mount(KnowledgeLibrary, { global: { stubs: { ElDrawer: { template: '<div><slot /></div>' } } } })
+  await flushPromises()
+  apiMock.knowledgeDocuments.mockClear()
+  apiMock.knowledgeDocuments.mockReturnValueOnce(collectionRefresh.promise)
+
+  await wrapper.get('[aria-label="打开集合 物理"]').trigger('click')
+  await wrapper.get('[data-testid="favorite-document-9"]').trigger('click')
+  saving.resolve({ items: [{ document_id: 9, ok: true, code: null }] })
+  await flushPromises()
+  collectionRefresh.resolve([{
+    ...store.knowledgeDocuments[0], display_name: '目标集合讲义.md', favorite: false, collection_ids: [4], tags: ['目标集合'],
+  }])
+  await flushPromises()
+
+  expect(wrapper.get('.center-heading strong').text()).toBe('物理')
+  expect(wrapper.get('[data-testid="document-grid"]').text()).toContain('目标集合讲义.md')
+  expect(store.knowledgeDocuments[0].favorite).toBe(true)
+  expect(wrapper.get('[data-testid="favorite-document-9"]').text()).toBe('★')
+})
+
+it('refreshes a pending favorite-only collection after unfavoriting on the old list', async () => {
+  store.knowledgeCollections = [
+    ...store.knowledgeCollections,
+    { id: 4, name: '物理', description: '力与运动', color: '#8f9d7a', document_count: 2, bound_session_count: 0, created_at: '', updated_at: '' },
+  ]
+  store.knowledgeDocuments = [{
+    ...store.knowledgeDocuments[0], favorite: true, deleted_at: null, collection_ids: [3, 4], tags: [],
+  }]
+  const staleCollectionRefresh = deferred<KnowledgeDocument[]>()
+  const latestFavoriteRefresh = deferred<KnowledgeDocument[]>()
+  const saving = deferred<{ items: { document_id: number; ok: boolean; code: null }[] }>()
+  store.bulkKnowledgeDocuments.mockReturnValueOnce(saving.promise)
+  const wrapper = mount(KnowledgeLibrary, { global: { stubs: { ElDrawer: { template: '<div><slot /></div>' } } } })
+  await flushPromises()
+  await wrapper.findAll('.advanced-filters input[type="checkbox"]')[1].setValue(true)
+  await flushPromises()
+  apiMock.knowledgeDocuments.mockClear()
+  apiMock.knowledgeDocuments
+    .mockReturnValueOnce(staleCollectionRefresh.promise)
+    .mockReturnValueOnce(latestFavoriteRefresh.promise)
+
+  await wrapper.get('[aria-label="打开集合 物理"]').trigger('click')
+  await wrapper.get('[data-testid="favorite-document-9"]').trigger('click')
+  saving.resolve({ items: [{ document_id: 9, ok: true, code: null }] })
+  await flushPromises()
+
+  expect(apiMock.knowledgeDocuments).toHaveBeenNthCalledWith(2, expect.objectContaining({
+    collectionId: 4, favorite: true,
+  }))
+  staleCollectionRefresh.resolve([{
+    ...store.knowledgeDocuments[0], id: 9, display_name: '已取消旧快照.md', favorite: true, collection_ids: [4],
+  }])
+  await flushPromises()
+  expect(wrapper.get('[data-testid="document-grid"]').text()).not.toContain('已取消旧快照.md')
+
+  latestFavoriteRefresh.resolve([{
+    ...store.knowledgeDocuments[0], id: 10, display_name: '仍收藏资料.md', favorite: true, collection_ids: [4],
+  }])
+  await flushPromises()
+  expect(wrapper.get('.center-heading strong').text()).toBe('物理')
+  expect(wrapper.get('[data-testid="document-grid"]').text()).toContain('仍收藏资料.md')
+  expect(wrapper.get('[data-testid="document-grid"]').text()).not.toContain('已取消旧快照.md')
+})
+
+it('does not report a stale filter failure after a newer filter succeeds', async () => {
+  const wrapper = mount(KnowledgeLibrary, { global: { stubs: { ElDrawer: { template: '<div><slot /></div>' } } } })
+  await flushPromises()
+  const stale = deferred<KnowledgeDocument[]>()
+  apiMock.knowledgeDocuments
+    .mockReturnValueOnce(stale.promise)
+    .mockResolvedValueOnce(store.knowledgeDocuments)
+
+  await wrapper.get('[aria-label="筛选知识库资料"]').setValue('旧筛选')
+  await wrapper.get('[aria-label="筛选知识库资料"]').setValue('新筛选')
+  await flushPromises()
+  stale.reject(new Error('旧筛选失败'))
+  await flushPromises()
+
+  expect(messageMock.error).not.toHaveBeenCalledWith('旧筛选失败')
+})
+
 it('loads only the first collection documents on a normal visit', async () => {
   store.knowledgeDocuments = [
     ...store.knowledgeDocuments,
@@ -236,7 +410,9 @@ it('loads only the first collection documents on a normal visit', async () => {
   const wrapper = mount(KnowledgeLibrary, { global: { stubs: { ElDrawer: { template: '<div><slot /></div>' } } } })
   await flushPromises()
 
-  expect(apiMock.knowledgeDocuments).toHaveBeenCalledWith(3)
+  expect(apiMock.knowledgeDocuments).toHaveBeenCalledWith({
+    collectionId: 3, trash: false, sort: 'created', direction: 'desc',
+  })
   expect(wrapper.get('[data-testid="document-grid"]').text()).toContain('极限讲义.pdf')
   expect(wrapper.get('[data-testid="document-grid"]').text()).not.toContain('其他集合.md')
 })
@@ -339,15 +515,118 @@ it('toggles one favorite without changing selection or reloading the document li
 
   expect(store.bulkKnowledgeDocuments).toHaveBeenCalledWith({
     action: 'favorite', document_ids: [9], collection_ids: [], tags: [], favorite: true,
-  })
+  }, { refresh: false })
   expect(apiMock.knowledgeDocuments).not.toHaveBeenCalled()
+})
+
+it('keeps a pending favorite visible across a concurrent refresh and reconciles success onto refreshed fields', async () => {
+  const saving = deferred<{ items: { document_id: number; ok: boolean; code: null }[] }>()
+  store.knowledgeDocuments = [{
+    ...store.knowledgeDocuments[0], favorite: false, deleted_at: null, collection_ids: [3], tags: [],
+  }]
+  store.bulkKnowledgeDocuments.mockReturnValueOnce(saving.promise)
+  const wrapper = mount(KnowledgeLibrary, {
+    global: { stubs: { ElDrawer: { template: '<div><slot /></div>' } } },
+  })
+  await flushPromises()
+
+  await wrapper.get('[data-testid="favorite-document-9"]').trigger('click')
+  store.knowledgeDocuments = [{ ...store.knowledgeDocuments[0], favorite: false, tags: ['刷新保留'] }]
+  await nextTick()
+  expect(wrapper.get('[data-testid="favorite-document-9"]').text()).toBe('★')
+
+  saving.resolve({ items: [{ document_id: 9, ok: true, code: null }] })
+  await flushPromises()
+
+  expect(store.knowledgeDocuments[0].favorite).toBe(true)
+  expect(store.knowledgeDocuments[0].tags).toEqual(['刷新保留'])
+  expect(wrapper.get('[data-testid="favorite-document-9"]').text()).toBe('★')
+})
+
+it('ignores a stale document refresh that resolves after a favorite save succeeds', async () => {
+  store.knowledgeDocuments = [{
+    ...store.knowledgeDocuments[0], favorite: false, deleted_at: null, collection_ids: [3], tags: [],
+  }]
+  const staleRefresh = deferred<KnowledgeDocument[]>()
+  const saving = deferred<{ items: { document_id: number; ok: boolean; code: null }[] }>()
+  const wrapper = mount(KnowledgeLibrary, {
+    global: { stubs: { ElDrawer: { template: '<div><slot /></div>' } } },
+  })
+  await flushPromises()
+  apiMock.knowledgeDocuments.mockReturnValueOnce(staleRefresh.promise)
+  store.bulkKnowledgeDocuments.mockReturnValueOnce(saving.promise)
+
+  await wrapper.get('[aria-label="筛选知识库资料"]').setValue('旧请求')
+  await wrapper.get('[data-testid="favorite-document-9"]').trigger('click')
+  saving.resolve({ items: [{ document_id: 9, ok: true, code: null }] })
+  await flushPromises()
+  staleRefresh.resolve([{ ...store.knowledgeDocuments[0], favorite: false, tags: ['旧响应'] }])
+  await flushPromises()
+
+  expect(store.knowledgeDocuments[0].favorite).toBe(true)
+  expect(store.knowledgeDocuments[0].tags).not.toEqual(['旧响应'])
+})
+
+it('applies a document refresh started after favorite begins without losing the saved favorite', async () => {
+  store.knowledgeDocuments = [{
+    ...store.knowledgeDocuments[0], favorite: false, deleted_at: null, collection_ids: [3], tags: [],
+  }]
+  const saving = deferred<{ items: { document_id: number; ok: boolean; code: null }[] }>()
+  const refreshed = deferred<KnowledgeDocument[]>()
+  store.bulkKnowledgeDocuments.mockReturnValueOnce(saving.promise)
+  const wrapper = mount(KnowledgeLibrary, {
+    global: { stubs: { ElDrawer: { template: '<div><slot /></div>' } } },
+  })
+  await flushPromises()
+  apiMock.knowledgeDocuments.mockClear()
+  apiMock.knowledgeDocuments.mockReturnValueOnce(refreshed.promise)
+
+  await wrapper.get('[data-testid="favorite-document-9"]').trigger('click')
+  await wrapper.get('[aria-label="筛选知识库资料"]').setValue('后发请求')
+  expect(apiMock.knowledgeDocuments).toHaveBeenCalledOnce()
+
+  saving.resolve({ items: [{ document_id: 9, ok: true, code: null }] })
+  await flushPromises()
+  refreshed.resolve([{ ...store.knowledgeDocuments[0], favorite: false, tags: ['后发响应'] }])
+  await flushPromises()
+
+  expect(store.knowledgeDocuments[0].tags).toEqual(['后发响应'])
+  expect(store.knowledgeDocuments[0].favorite).toBe(true)
+  expect(wrapper.get('[data-testid="favorite-document-9"]').text()).toBe('★')
+})
+
+it('applies the latest document refresh started before a favorite save that fails', async () => {
+  store.knowledgeDocuments = [{
+    ...store.knowledgeDocuments[0], favorite: false, deleted_at: null, collection_ids: [3], tags: [],
+  }]
+  const refreshed = deferred<KnowledgeDocument[]>()
+  const saving = deferred<never>()
+  store.bulkKnowledgeDocuments.mockReturnValueOnce(saving.promise)
+  const wrapper = mount(KnowledgeLibrary, {
+    global: { stubs: { ElDrawer: { template: '<div><slot /></div>' } } },
+  })
+  await flushPromises()
+  apiMock.knowledgeDocuments.mockClear()
+  apiMock.knowledgeDocuments.mockReturnValueOnce(refreshed.promise)
+
+  await wrapper.get('[aria-label="筛选知识库资料"]').setValue('收藏前请求')
+  expect(apiMock.knowledgeDocuments).toHaveBeenCalledOnce()
+  await wrapper.get('[data-testid="favorite-document-9"]').trigger('click')
+  saving.reject(new Error('收藏保存失败'))
+  await flushPromises()
+  refreshed.resolve([{ ...store.knowledgeDocuments[0], favorite: false, tags: ['失败后仍应用'] }])
+  await flushPromises()
+
+  expect(store.knowledgeDocuments[0].tags).toEqual(['失败后仍应用'])
+  expect(store.knowledgeDocuments[0].favorite).toBe(false)
 })
 
 it('rolls back one favorite without disturbing selection when saving fails', async () => {
   store.knowledgeDocuments = [{
     ...store.knowledgeDocuments[0], favorite: false, deleted_at: null, collection_ids: [3], tags: [],
   }]
-  store.bulkKnowledgeDocuments.mockRejectedValueOnce(new Error('收藏保存失败'))
+  const saving = deferred<never>()
+  store.bulkKnowledgeDocuments.mockReturnValueOnce(saving.promise)
   const wrapper = mount(KnowledgeLibrary, {
     global: { stubs: { ElDrawer: { template: '<div><slot /></div>' } } },
   })
@@ -355,10 +634,13 @@ it('rolls back one favorite without disturbing selection when saving fails', asy
   apiMock.knowledgeDocuments.mockClear()
 
   await wrapper.get('[data-testid="favorite-document-9"]').trigger('click')
+  store.knowledgeDocuments = [{ ...store.knowledgeDocuments[0], favorite: true, tags: ['并发刷新'] }]
+  saving.reject(new Error('收藏保存失败'))
   await flushPromises()
 
   expect(wrapper.get('[data-testid="bulk-selection-count"]').text()).toContain('0')
   expect(wrapper.get('[data-testid="favorite-document-9"]').text()).toBe('☆')
+  expect(store.knowledgeDocuments[0].tags).toEqual(['并发刷新'])
   expect(apiMock.knowledgeDocuments).not.toHaveBeenCalled()
   expect(messageMock.error).toHaveBeenCalledWith('收藏保存失败')
 })

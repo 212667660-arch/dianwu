@@ -6,7 +6,7 @@ import test from 'node:test'
 import { pathToFileURL } from 'node:url'
 
 import { PET_ANIMATION_SPECS } from './pet-config.mjs'
-import { createPetController } from './pet-controller.mjs'
+import { constrainPetBounds, createPetController, resizePetBounds } from './pet-controller.mjs'
 
 function manifest(id = 'motuan') {
   return {
@@ -45,6 +45,7 @@ class FakeWindow {
     this.bounds = { x: options.x, y: options.y, width: options.width, height: options.height }
     this.loaded = ''
     this.alwaysOnTopCalls = []
+    this.moveTopCalls = 0
     FakeWindow.created.push(this)
   }
   loadFile(file) { this.loaded = file }
@@ -57,6 +58,7 @@ class FakeWindow {
   setBounds(bounds) { this.bounds = { ...this.bounds, ...bounds } }
   setPosition(x, y) { this.bounds.x = x; this.bounds.y = y }
   setAlwaysOnTop(value) { this.alwaysOnTopCalls.push(value) }
+  moveTop() { this.moveTopCalls += 1 }
   on() {}
 }
 
@@ -71,7 +73,7 @@ function fakeScreen() {
   }
 }
 
-async function fixture() {
+async function fixture({ fsImpl = fs } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'a3-pet-controller-'))
   const packagedPetDir = path.join(root, 'packaged-pet')
   const userDataDir = path.join(root, 'user-data')
@@ -80,7 +82,7 @@ async function fixture() {
   const controller = createPetController({
     BrowserWindow: FakeWindow,
     screen: fakeScreen(),
-    fs,
+    fs: fsImpl,
     userDataDir,
     packagedPetDir,
     petIndex: path.join(root, 'pet-index.html'),
@@ -126,6 +128,146 @@ test('controller creates a transparent frameless always-on-top pet window', asyn
   assert.equal(window.options.webPreferences.sandbox, true)
   assert.equal(window.loaded, path.join(root, 'pet-index.html'))
   assert.equal(window.visible, true)
+})
+
+test('controller toggles a visible pet off and brings a hidden pet back to the top', async () => {
+  const { controller } = await fixture()
+  await controller.prepare()
+  const window = controller.createWindow()
+
+  assert.equal(await controller.toggleVisibility(), true)
+  assert.equal(window.visible, false)
+  assert.equal(controller.snapshot().settings.visible, false)
+
+  assert.equal(await controller.toggleVisibility(), true)
+  assert.equal(window.visible, true)
+  assert.equal(window.moveTopCalls, 1)
+  assert.equal(controller.snapshot().settings.visible, true)
+})
+
+test('concurrent pet setting writes are serialized through one atomic persistence lane', async () => {
+  let activeTemporaryWrites = 0
+  let maxTemporaryWrites = 0
+  const fsImpl = {
+    ...fs,
+    async writeFile(file, ...args) {
+      const isTemporary = String(file).endsWith('pet-settings.json.tmp')
+      if (isTemporary) {
+        activeTemporaryWrites += 1
+        maxTemporaryWrites = Math.max(maxTemporaryWrites, activeTemporaryWrites)
+        await new Promise(resolve => setTimeout(resolve, 10))
+      }
+      try {
+        return await fs.writeFile(file, ...args)
+      } finally {
+        if (isTemporary) activeTemporaryWrites -= 1
+      }
+    },
+  }
+  const { controller } = await fixture({ fsImpl })
+  await controller.prepare()
+  controller.createWindow()
+
+  await Promise.all([
+    controller.toggleVisibility(),
+    controller.toggleVisibility(),
+    controller.updateSettings({ alwaysOnTop: false }),
+  ])
+
+  assert.equal(maxTemporaryWrites, 1)
+})
+
+test('proportional corner resizing keeps the opposite corner anchored and clamps to one through three times', () => {
+  assert.deepEqual(resizePetBounds({
+    origin: { x: 100, y: 100, width: 192, height: 208 },
+    corner: 'se',
+    start: { screenX: 292, screenY: 308 },
+    current: { screenX: 484, screenY: 516 },
+    cell: { width: 192, height: 208 },
+  }), { x: 100, y: 100, width: 384, height: 416 })
+  assert.deepEqual(resizePetBounds({
+    origin: { x: 100, y: 100, width: 192, height: 208 },
+    corner: 'nw',
+    start: { screenX: 100, screenY: 100 },
+    current: { screenX: -1000, screenY: -1000 },
+    cell: { width: 192, height: 208 },
+  }), { x: -284, y: -316, width: 576, height: 624 })
+  assert.deepEqual(resizePetBounds({
+    origin: { x: 100, y: 100, width: 384, height: 416 },
+    corner: 'se',
+    start: { screenX: 484, screenY: 516 },
+    current: { screenX: 100, screenY: 100 },
+    cell: { width: 192, height: 208 },
+  }), { x: 100, y: 100, width: 192, height: 208 })
+})
+
+test('display constraints preserve aspect ratio and the fixed minimum size', () => {
+  assert.deepEqual(constrainPetBounds(
+    { x: 0, y: 0, width: 576, height: 624 },
+    { width: 192, height: 208 },
+    [{ id: 1, workArea: { x: 0, y: 0, width: 600, height: 384 } }],
+  ), { x: 0, y: 0, width: 354, height: 384, displayId: 1 })
+  assert.deepEqual(constrainPetBounds(
+    { x: 0, y: 0, width: 192, height: 208 },
+    { width: 192, height: 208 },
+    [{ id: 2, workArea: { x: 0, y: 0, width: 100, height: 100 } }],
+  ), { x: 0, y: 0, width: 192, height: 208, displayId: 2 })
+})
+
+test('manual pet resize persists and restores independently from click interactions', async () => {
+  const { controller, userDataDir, packagedPetDir, root } = await fixture()
+  await controller.prepare()
+  const window = controller.createWindow()
+  const before = window.getBounds()
+
+  assert.equal(controller.beginResize({ corner: 'se', screenX: before.x + before.width, screenY: before.y + before.height }), true)
+  assert.equal(controller.beginDrag({ screenX: 500, screenY: 300 }), false)
+  assert.equal(controller.moveResize({ screenX: before.x + before.width * 2, screenY: before.y + before.height * 2 }), true)
+  assert.equal(await controller.endResize(), true)
+  assert.equal(window.getBounds().width, 384)
+  assert.equal(window.getBounds().height, 416)
+
+  const restored = createPetController({
+    BrowserWindow: FakeWindow,
+    screen: fakeScreen(),
+    fs,
+    userDataDir,
+    packagedPetDir,
+    petIndex: path.join(root, 'pet-index.html'),
+    petPreload: path.join(root, 'pet-preload.cjs'),
+    pathToFileURL,
+  })
+  await restored.prepare()
+  const restoredWindow = restored.createWindow({ forceHidden: true })
+  assert.equal(restoredWindow.getBounds().width, 384)
+  assert.equal(restoredWindow.getBounds().height, 416)
+
+  await restored.updateSettings({ scale: 1.25 })
+  assert.equal(restoredWindow.getBounds().width, 240)
+  assert.equal(restoredWindow.getBounds().height, 260)
+})
+
+test('legacy undersized scale and transient oversized bounds migrate to the fixed base size', async () => {
+  const { controller, userDataDir } = await fixture()
+  await fs.mkdir(userDataDir, { recursive: true })
+  await fs.writeFile(path.join(userDataDir, 'pet-settings.json'), JSON.stringify({
+    visible: true,
+    alwaysOnTop: true,
+    scale: 0.75,
+    speed: 1.25,
+    soundEnabled: true,
+    soundVolume: 0.5,
+    voiceEnabled: false,
+    voiceVolume: 0.75,
+    position: { x: 20, y: 30, width: 1200, height: 900 },
+  }), 'utf8')
+
+  await controller.prepare()
+  const window = controller.createWindow({ forceHidden: true })
+
+  assert.equal(controller.snapshot().settings.scale, 1)
+  assert.equal(controller.snapshot().settings.speed, 1.25)
+  assert.deepEqual(window.getBounds(), { x: 20, y: 30, width: 192, height: 208 })
 })
 
 test('controller persists visibility scale speed and restores the saved position', async () => {

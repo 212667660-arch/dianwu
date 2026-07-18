@@ -3,6 +3,22 @@ import { createBrowserPetAudioRuntime } from './pet-audio.js'
 const DIRECTIONAL_STATES = new Set(['running-left', 'running-right'])
 const CLICK_DELAY_MS = 220
 const IDLE_THROTTLE_MS = 60_000
+const RESIZE_MARGIN_PX = 14
+
+export function resizeCornerAt({ x, y, width, height, margin = RESIZE_MARGIN_PX }) {
+  if (![x, y, width, height, margin].every(Number.isFinite) || width <= 0 || height <= 0 || margin <= 0) {
+    throw new TypeError('Pet resize hit area is invalid.')
+  }
+  const west = x >= 0 && x <= margin
+  const east = x >= width - margin && x <= width
+  const north = y >= 0 && y <= margin
+  const south = y >= height - margin && y <= height
+  if (north && west) return 'nw'
+  if (north && east) return 'ne'
+  if (south && west) return 'sw'
+  if (south && east) return 'se'
+  return null
+}
 
 export function frameDuration(duration, speed) {
   if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(speed) || speed <= 0) {
@@ -34,6 +50,13 @@ export function dragDirection(startX, currentX, threshold = 3) {
   const delta = currentX - startX
   if (Math.abs(delta) <= threshold) return null
   return delta < 0 ? 'running-left' : 'running-right'
+}
+
+export function pointerMoved(startX, startY, currentX, currentY, threshold = 3) {
+  if (![startX, startY, currentX, currentY, threshold].every(Number.isFinite) || threshold < 0) {
+    throw new TypeError('Pet pointer movement is invalid.')
+  }
+  return Math.hypot(currentX - startX, currentY - startY) > threshold
 }
 
 export function resourceMode({ hidden, state, now, lastInteractionAt }) {
@@ -113,16 +136,12 @@ export function createInteractionController({
   clearTimer = timer => clearTimeout(timer),
 }) {
   let timer = null
-  let activeState = null
   return {
     play(state) {
-      if (timer !== null && activeState === state) return false
-      if (timer !== null) clearTimer(timer)
-      activeState = state
+      if (timer !== null) return false
       onState(state)
       timer = setTimer(() => {
         timer = null
-        activeState = null
         onState(null)
       }, durationFor(state))
       return true
@@ -130,10 +149,24 @@ export function createInteractionController({
     cancel() {
       if (timer !== null) clearTimer(timer)
       timer = null
-      activeState = null
       onState(null)
     },
+    isActive() {
+      return timer !== null
+    },
   }
+}
+
+export function queueSingleClick(interactionController, clickResolver) {
+  if (interactionController.isActive()) return false
+  clickResolver.click()
+  return true
+}
+
+export function queueDoubleClick(interactionController, clickResolver) {
+  if (interactionController.isActive()) return false
+  clickResolver.doubleClick()
+  return true
 }
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
@@ -198,8 +231,21 @@ async function startPetRenderer() {
 
   function playInteraction(state) {
     lastInteractionAt = Date.now()
-    audio.playInteraction(state)
-    interactionController.play(state)
+    if (interactionController.play(state)) audio.playInteraction(state)
+  }
+
+  function cornerFor(event) {
+    return resizeCornerAt({
+      x: event.clientX,
+      y: event.clientY,
+      width: root.clientWidth,
+      height: root.clientHeight,
+    })
+  }
+
+  function setResizeCursor(corner) {
+    if (corner) root.dataset.resizeCorner = corner
+    else delete root.dataset.resizeCorner
   }
 
   function drawFrame() {
@@ -252,16 +298,32 @@ async function startPetRenderer() {
     if (event.button !== 0) return
     lastInteractionAt = Date.now()
     clickResolver.cancel()
-    pointer = { id: event.pointerId, startX: event.screenX, startY: event.screenY, moved: false }
+    const corner = cornerFor(event)
+    pointer = { id: event.pointerId, startX: event.screenX, startY: event.screenY, moved: false, corner }
     root.setPointerCapture(event.pointerId)
-    document.body.classList.add('is-dragging')
-    bridge.beginDrag({ screenX: event.screenX, screenY: event.screenY })
+    if (corner) {
+      document.body.classList.add('is-resizing')
+      setResizeCursor(corner)
+      bridge.beginResize({ corner, screenX: event.screenX, screenY: event.screenY })
+    } else {
+      document.body.classList.add('is-dragging')
+      bridge.beginDrag({ screenX: event.screenX, screenY: event.screenY })
+    }
   })
   root.addEventListener('pointermove', event => {
-    if (!pointer || pointer.id !== event.pointerId) return
+    if (!pointer) {
+      setResizeCursor(cornerFor(event))
+      return
+    }
+    if (pointer.id !== event.pointerId) return
+    if (pointer.corner) {
+      pointer.moved = pointer.moved || pointerMoved(pointer.startX, pointer.startY, event.screenX, event.screenY)
+      bridge.moveResize({ screenX: event.screenX, screenY: event.screenY })
+      return
+    }
+    if (pointerMoved(pointer.startX, pointer.startY, event.screenX, event.screenY)) pointer.moved = true
     const direction = dragDirection(pointer.startX, event.screenX)
     if (direction) {
-      pointer.moved = true
       dragState = direction
       setState()
     }
@@ -270,24 +332,35 @@ async function startPetRenderer() {
   root.addEventListener('pointerup', event => {
     if (!pointer || pointer.id !== event.pointerId) return
     const moved = pointer.moved
+    const corner = pointer.corner
     pointer = null
+    if (corner) {
+      document.body.classList.remove('is-resizing')
+      bridge.endResize()
+      setResizeCursor(cornerFor(event))
+      return
+    }
     dragState = null
     setState()
     document.body.classList.remove('is-dragging')
     bridge.endDrag()
-    if (!moved) clickResolver.click()
+    if (!moved) queueSingleClick(interactionController, clickResolver)
   })
   root.addEventListener('pointercancel', () => {
+    const corner = pointer?.corner
     pointer = null
     dragState = null
     setState()
     document.body.classList.remove('is-dragging')
-    bridge.endDrag()
+    document.body.classList.remove('is-resizing')
+    if (corner) bridge.endResize()
+    else bridge.endDrag()
+    setResizeCursor(null)
   })
   root.addEventListener('dblclick', event => {
     event.preventDefault()
     lastInteractionAt = Date.now()
-    clickResolver.doubleClick()
+    queueDoubleClick(interactionController, clickResolver)
   })
   document.addEventListener('visibilitychange', () => {
     lastTick = performance.now()

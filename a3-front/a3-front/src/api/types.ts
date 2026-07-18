@@ -391,7 +391,7 @@ export interface SessionModelPreference extends SessionModelPreferenceInput {
 }
 
 export type PetTaskState = 'idle' | 'running' | 'waiting' | 'review' | 'failed'
-export type PetScale = 0.5 | 0.75 | 1 | 1.25 | 1.5
+export type PetScale = 1 | 1.25 | 1.5 | 2 | 3
 export type PetSpeed = 0.5 | 0.75 | 1 | 1.25 | 1.5 | 2
 
 export interface PetSettings {

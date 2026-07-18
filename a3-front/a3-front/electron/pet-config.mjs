@@ -12,7 +12,7 @@ export const PET_ANIMATION_SPECS = Object.freeze({
   review: Object.freeze({ row: 8, durations: Object.freeze([150, 150, 150, 150, 150, 280]) }),
 })
 
-export const PET_SCALE_VALUES = Object.freeze([0.5, 0.75, 1, 1.25, 1.5])
+export const PET_SCALE_VALUES = Object.freeze([1, 1.25, 1.5, 2, 3])
 export const PET_SPEED_VALUES = Object.freeze([0.5, 0.75, 1, 1.25, 1.5, 2])
 export const PET_VOLUME_VALUES = Object.freeze([0, 0.25, 0.5, 0.75, 1])
 export const PET_TASK_STATES = Object.freeze(['idle', 'running', 'waiting', 'review', 'failed'])

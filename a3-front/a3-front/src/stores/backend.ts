@@ -323,7 +323,11 @@ export const useBackendStore = defineStore('backend', () => {
   async function importDroppedKnowledgeFiles(files: FileList | File[], collectionId: number) { const result = await backendApi.importDroppedKnowledgeFiles(files, collectionId); await refreshKnowledge(); return result }
   async function cancelKnowledgeJob(jobId: number) { const result = await backendApi.cancelKnowledgeImport(jobId); await refreshKnowledge(); return result }
   async function retryKnowledgeJob(jobId: number) { const result = await backendApi.retryKnowledgeImport(jobId); await refreshKnowledge(); return result }
-  async function bulkKnowledgeDocuments(input: KnowledgeBulkRequest) { const result = await backendApi.bulkKnowledgeDocuments(input); await refreshKnowledge(); return result }
+  async function bulkKnowledgeDocuments(input: KnowledgeBulkRequest, options: { refresh?: boolean } = {}) {
+    const result = await backendApi.bulkKnowledgeDocuments(input)
+    if (options.refresh !== false) await refreshKnowledge()
+    return result
+  }
   async function deleteKnowledgeDocument(documentId: number) { await backendApi.deleteKnowledgeDocument(documentId); await refreshKnowledge() }
   async function rebuildKnowledgeDocument(documentId: number) { const result = await backendApi.rebuildKnowledgeDocument(documentId); await refreshKnowledge(); return result }
 

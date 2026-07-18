@@ -198,9 +198,10 @@ test('desktop pet uses a separate sandbox preload and main-process controller', 
     'a3:pet-get', 'a3:pet-update-settings', 'a3:pet-set-task-state',
     'a3:pet-choose-character', 'a3:pet-reset-character',
     'a3:pet-ready', 'a3:pet-drag-begin', 'a3:pet-drag-move', 'a3:pet-drag-end',
+    'a3:pet-resize-begin', 'a3:pet-resize-move', 'a3:pet-resize-end',
   ]) assert.match(main, new RegExp(channel))
 
-  for (const name of ['ready:', 'beginDrag:', 'moveDrag:', 'endDrag:', 'onState:', 'onSettings:']) {
+  for (const name of ['ready:', 'beginDrag:', 'moveDrag:', 'endDrag:', 'beginResize:', 'moveResize:', 'endResize:', 'onState:', 'onSettings:']) {
     assert.match(petPreload, new RegExp(name))
   }
   assert.doesNotMatch(petPreload, /(?:^|[,{]\s*)ipcRenderer\s*:/m)

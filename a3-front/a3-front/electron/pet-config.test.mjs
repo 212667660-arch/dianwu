@@ -58,7 +58,7 @@ test('pet manifest text accepts an optional UTF-8 BOM', () => {
 })
 
 test('pet settings accept only fixed visibility scale and speed values', () => {
-  assert.deepEqual(PET_SCALE_VALUES, [0.5, 0.75, 1, 1.25, 1.5])
+  assert.deepEqual(PET_SCALE_VALUES, [1, 1.25, 1.5, 2, 3])
   assert.deepEqual(PET_SPEED_VALUES, [0.5, 0.75, 1, 1.25, 1.5, 2])
   assert.deepEqual(PET_VOLUME_VALUES, [0, 0.25, 0.5, 0.75, 1])
   assert.deepEqual(PET_TASK_STATES, ['idle', 'running', 'waiting', 'review', 'failed'])

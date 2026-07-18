@@ -18,7 +18,7 @@
 
 - [ ] Add `**/.test-venv/` to the Python environment ignore section.
 - [ ] Expand S-039 acceptance to include tray toggle behavior, persistent proportional pet resizing, and the dedicated test environment.
-- [ ] Create `.test-venv` with uv and install `backend/requirements.txt` without running tests.
+- [ ] Create `.test-venv` with uv and install `backend/requirements-test.txt` without running tests.
 
 ### Task 2: Window toggle behavior
 
@@ -74,4 +74,3 @@
 - [ ] Run backend pytest using `.test-venv\\Scripts\\python.exe` and an isolated `A3_DATA_DIR`.
 - [ ] Run `npm run desktop:pack`, `npm run desktop:dist`, unpacked lifecycle verification, and record hashes.
 - [ ] Request final code review; fix all Critical and Important findings before marking S-039 complete.
-

@@ -5,6 +5,9 @@ contextBridge.exposeInMainWorld('a3Pet', Object.freeze({
   beginDrag: point => ipcRenderer.send('a3:pet-drag-begin', point),
   moveDrag: point => ipcRenderer.send('a3:pet-drag-move', point),
   endDrag: () => ipcRenderer.send('a3:pet-drag-end'),
+  beginResize: input => ipcRenderer.send('a3:pet-resize-begin', input),
+  moveResize: point => ipcRenderer.send('a3:pet-resize-move', point),
+  endResize: () => ipcRenderer.send('a3:pet-resize-end'),
   onState: listener => {
     const callback = (_event, payload) => listener(payload)
     ipcRenderer.on('a3:pet-state', callback)

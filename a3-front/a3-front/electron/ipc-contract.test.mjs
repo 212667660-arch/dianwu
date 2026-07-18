@@ -371,6 +371,7 @@ test('桌宠 IPC 只接受固定设置值和任务状态', () => {
 
   for (const input of [
     { visible: true, assetPath: 'C:\\secret' },
+    { scale: 0.75 },
     { scale: 1.1 },
     { speed: Number.NaN },
     { soundVolume: 0.4 },

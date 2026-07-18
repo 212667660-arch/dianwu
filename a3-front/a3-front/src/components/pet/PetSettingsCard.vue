@@ -40,6 +40,7 @@
         <select data-test="pet-scale" :value="snapshot.settings.scale" :disabled="busy || !snapshot.available" @change="changeScale">
           <option v-for="value in scales" :key="value" :value="value">{{ Math.round(value * 100) }}%</option>
         </select>
+        <small>也可以拖动墨团四角等比例缩放；点击只播放动作。</small>
       </label>
       <label>动画
         <select data-test="pet-speed" :value="snapshot.settings.speed" :disabled="busy || !snapshot.available" @change="changeSpeed">
@@ -55,7 +56,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { backendApi, type PetSettings, type PetSnapshot, type PetVolume } from '@/api'
 
-const scales: PetSettings['scale'][] = [0.5, 0.75, 1, 1.25, 1.5]
+const scales: PetSettings['scale'][] = [1, 1.25, 1.5, 2, 3]
 const speeds: PetSettings['speed'][] = [0.5, 0.75, 1, 1.25, 1.5, 2]
 const volumes: PetVolume[] = [0, 0.25, 0.5, 0.75, 1]
 const snapshot = reactive<PetSnapshot>({

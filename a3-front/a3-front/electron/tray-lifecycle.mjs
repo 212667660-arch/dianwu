@@ -13,13 +13,23 @@ export function showMainWindow(window) {
 }
 
 
+export function toggleMainWindow(window) {
+  if (!window || window.isDestroyed()) return false
+  if (window.isVisible() && !window.isMinimized() && window.isFocused()) {
+    window.minimize()
+    return true
+  }
+  return showMainWindow(window)
+}
+
+
 export function createTrayController({
   Tray,
   Menu,
   icon,
   getMainWindow,
   requestQuit,
-  showPet = () => {},
+  togglePet = () => {},
   getAiPaused = () => false,
   setAiPaused = async () => {},
 }) {
@@ -29,14 +39,15 @@ export function createTrayController({
 
   const tray = new Tray(icon)
   const show = () => showMainWindow(getMainWindow())
+  const toggle = () => toggleMainWindow(getMainWindow())
   let menuTemplate = []
   let menu = null
   let destroyed = false
 
   const rebuild = () => {
     menuTemplate = [
-      { label: '显示主窗口', click: show },
-      { label: '显示墨团', click: showPet },
+      { label: '显示/最小化主窗口', click: toggle },
+      { label: '显示/隐藏墨团', click: togglePet },
       {
         label: getAiPaused() ? '继续 AI' : '暂停 AI',
         click: async () => {
@@ -53,14 +64,14 @@ export function createTrayController({
 
   tray.setToolTip('智学协作台')
   rebuild()
-  tray.on('click', show)
-  tray.on('double-click', show)
+  tray.on('click', toggle)
 
   return {
     tray,
     get menu() { return menu },
     get menuTemplate() { return menuTemplate },
     show,
+    toggle,
     rebuild,
     destroy() {
       if (destroyed) return

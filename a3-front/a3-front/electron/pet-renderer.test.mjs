@@ -8,7 +8,11 @@ import {
   createInteractionController,
   dragDirection,
   frameDuration,
+  pointerMoved,
+  queueDoubleClick,
+  queueSingleClick,
   resolveDisplayState,
+  resizeCornerAt,
   resourceMode,
   renderPetFrame,
 } from './pet/pet-renderer.js'
@@ -60,6 +64,72 @@ test('repeated identical interactions cannot extend the current animation lifeti
   assert.equal(nextId, 1)
   assert.equal(clearCount, 0)
   assert.equal(timers.size, 1)
+})
+
+test('mixed clicks cannot switch animations or extend the active interaction lifetime', () => {
+  const timers = new Map()
+  const states = []
+  let nextId = 0
+  let clearCount = 0
+  const controller = createInteractionController({
+    onState: state => states.push(state),
+    durationFor: () => 400,
+    setTimer: callback => {
+      const id = ++nextId
+      timers.set(id, callback)
+      return id
+    },
+    clearTimer: id => {
+      clearCount += 1
+      timers.delete(id)
+    },
+  })
+
+  controller.play('jumping')
+  for (let index = 0; index < 100; index += 1) {
+    controller.play(index % 2 === 0 ? 'waving' : 'jumping')
+  }
+
+  assert.equal(nextId, 1)
+  assert.equal(clearCount, 0)
+  assert.deepEqual(states, ['jumping'])
+  timers.values().next().value()
+  assert.deepEqual(states, ['jumping', null])
+})
+
+test('a click queued before an interaction expires is discarded instead of extending animation time', () => {
+  const interactionTimers = new Map()
+  const clickTimers = new Map()
+  const states = []
+  let nextInteractionId = 0
+  let nextClickId = 0
+  const interactions = createInteractionController({
+    onState: state => states.push(state),
+    durationFor: () => 400,
+    setTimer: callback => { const id = ++nextInteractionId; interactionTimers.set(id, callback); return id },
+    clearTimer: id => interactionTimers.delete(id),
+  })
+  const clicks = createClickResolver({
+    onSingle: () => interactions.play('waving'),
+    onDouble: () => interactions.play('jumping'),
+    setTimer: callback => { const id = ++nextClickId; clickTimers.set(id, callback); return id },
+    clearTimer: id => clickTimers.delete(id),
+  })
+
+  interactions.play('jumping')
+  assert.equal(queueSingleClick(interactions, clicks), false)
+  assert.equal(queueDoubleClick(interactions, clicks), false)
+  assert.equal(clickTimers.size, 0)
+  interactionTimers.values().next().value()
+  assert.deepEqual(states, ['jumping', null])
+})
+
+test('four resize corners use bounded transparent hit areas', () => {
+  assert.equal(resizeCornerAt({ x: 4, y: 5, width: 192, height: 208 }), 'nw')
+  assert.equal(resizeCornerAt({ x: 188, y: 5, width: 192, height: 208 }), 'ne')
+  assert.equal(resizeCornerAt({ x: 4, y: 204, width: 192, height: 208 }), 'sw')
+  assert.equal(resizeCornerAt({ x: 188, y: 204, width: 192, height: 208 }), 'se')
+  assert.equal(resizeCornerAt({ x: 96, y: 104, width: 192, height: 208 }), null)
 })
 
 test('canvas backing size depends only on logical dimensions and clamped dpr', () => {
@@ -146,6 +216,8 @@ test('drag direction uses a movement threshold', () => {
   assert.equal(dragDirection(100, 98), null)
   assert.equal(dragDirection(100, 90), 'running-left')
   assert.equal(dragDirection(100, 112), 'running-right')
+  assert.equal(pointerMoved(100, 100, 100, 110), true)
+  assert.equal(pointerMoved(100, 100, 102, 102), false)
 })
 
 test('hidden pets pause and idle pets throttle after sixty seconds', () => {

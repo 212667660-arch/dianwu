@@ -6,6 +6,7 @@ import {
   createTrayController,
   mainWindowCloseAction,
   showMainWindow,
+  toggleMainWindow,
 } from './tray-lifecycle.mjs'
 
 
@@ -47,20 +48,23 @@ function visibleIcon() {
 }
 
 
-function fakeWindow({ minimized = false, destroyed = false } = {}) {
+function fakeWindow({ minimized = false, destroyed = false, visible = false, focused = false } = {}) {
   const calls = []
   return {
     calls,
     isDestroyed: () => destroyed,
     isMinimized: () => minimized,
-    restore: () => calls.push('restore'),
-    show: () => calls.push('show'),
-    focus: () => calls.push('focus'),
+    isVisible: () => visible,
+    isFocused: () => focused,
+    restore: () => { minimized = false; calls.push('restore') },
+    show: () => { visible = true; calls.push('show') },
+    focus: () => { focused = true; calls.push('focus') },
+    minimize: () => { minimized = true; focused = false; calls.push('minimize') },
   }
 }
 
 
-function fixture({ window = fakeWindow(), requestQuit = () => {}, showPet = () => {}, getAiPaused = () => false, setAiPaused = async () => {} } = {}) {
+function fixture({ window = fakeWindow(), requestQuit = () => {}, togglePet = () => {}, getAiPaused = () => false, setAiPaused = async () => {} } = {}) {
   FakeTray.instances.length = 0
   return createTrayController({
     Tray: FakeTray,
@@ -68,7 +72,7 @@ function fixture({ window = fakeWindow(), requestQuit = () => {}, showPet = () =
     icon: visibleIcon(),
     getMainWindow: () => window,
     requestQuit,
-    showPet,
+    togglePet,
     getAiPaused,
     setAiPaused,
   })
@@ -87,6 +91,26 @@ test('tray click restores, shows, and focuses the main window', () => {
 })
 
 
+test('tray toggle minimizes a focused visible main window and restores a background window', () => {
+  const foreground = fakeWindow({ visible: true, focused: true })
+  assert.equal(toggleMainWindow(foreground), true)
+  assert.deepEqual(foreground.calls, ['minimize'])
+
+  const background = fakeWindow({ visible: true, focused: false })
+  assert.equal(toggleMainWindow(background), true)
+  assert.deepEqual(background.calls, ['show', 'focus'])
+})
+
+
+test('explicit show used by second-instance startup never minimizes a focused window', () => {
+  const window = fakeWindow({ visible: true, focused: true })
+  const controller = fixture({ window })
+
+  assert.equal(controller.show(), true)
+  assert.deepEqual(window.calls, ['show', 'focus'])
+})
+
+
 test('tray menu exposes main window pet AI pause and complete exit actions', async () => {
   const window = fakeWindow()
   let quits = 0
@@ -95,13 +119,13 @@ test('tray menu exposes main window pet AI pause and complete exit actions', asy
   const controller = fixture({
     window,
     requestQuit: () => { quits += 1 },
-    showPet: () => { petShows += 1 },
+    togglePet: () => { petShows += 1 },
     getAiPaused: () => paused,
     setAiPaused: async value => { paused = value },
   })
 
-  const openItem = controller.menuTemplate.find(item => item.label === '显示主窗口')
-  const petItem = controller.menuTemplate.find(item => item.label === '显示墨团')
+  const openItem = controller.menuTemplate.find(item => item.label === '显示/最小化主窗口')
+  const petItem = controller.menuTemplate.find(item => item.label === '显示/隐藏墨团')
   const pauseItem = controller.menuTemplate.find(item => item.label === '暂停 AI')
   const exitItem = controller.menuTemplate.find(item => item.label === '完全退出')
   openItem.click()

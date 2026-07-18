@@ -42,7 +42,7 @@ const TEXTBOOK_OFFICIAL_URLS = Object.freeze({
   'pep-high-math': 'https://jc.pep.com.cn/?filed=%E9%AB%98%E4%B8%AD&subject=%E6%95%B0%E5%AD%A6',
 })
 const PET_SETTINGS_FIELDS = new Set(['visible', 'alwaysOnTop', 'scale', 'speed', 'soundEnabled', 'soundVolume', 'voiceEnabled', 'voiceVolume'])
-const PET_SCALE_VALUES = new Set([0.5, 0.75, 1, 1.25, 1.5])
+const PET_SCALE_VALUES = new Set([1, 1.25, 1.5, 2, 3])
 const PET_SPEED_VALUES = new Set([0.5, 0.75, 1, 1.25, 1.5, 2])
 const PET_VOLUME_VALUES = new Set([0, 0.25, 0.5, 0.75, 1])
 const PET_TASK_STATES = new Set(['idle', 'running', 'waiting', 'review', 'failed'])

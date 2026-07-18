@@ -11,7 +11,7 @@ const apiMock = vi.hoisted(() => ({
   sessionModelPreference: vi.fn(), saveSessionModelPreference: vi.fn(),
   knowledgeStatus: vi.fn(), knowledgeCollections: vi.fn(), knowledgeDocuments: vi.fn(),
   knowledgeImports: vi.fn(), sessionKnowledgeCollections: vi.fn(),
-  saveSessionKnowledgeCollections: vi.fn(),
+  saveSessionKnowledgeCollections: vi.fn(), bulkKnowledgeDocuments: vi.fn(),
   retryResourceArtifact: vi.fn(),
 }))
 
@@ -65,6 +65,7 @@ beforeEach(() => {
   apiMock.knowledgeImports.mockResolvedValue([])
   apiMock.sessionKnowledgeCollections.mockResolvedValue({ session_id: 'test-session', collection_ids: [1], privacy_mode: 'allow_model_context' })
   apiMock.saveSessionKnowledgeCollections.mockResolvedValue({ session_id: 'test-session', collection_ids: [2], privacy_mode: 'allow_model_context' })
+  apiMock.bulkKnowledgeDocuments.mockResolvedValue({ items: [] })
   apiMock.retryResourceArtifact.mockResolvedValue({ bundle: { bundle_id: 'b1', artifacts: [] } })
 })
 
@@ -149,6 +150,32 @@ describe('backend store', () => {
 
     expect(store.knowledgeCollections).toHaveLength(1)
     expect(store.knowledgeStatus).toBeNull()
+  })
+
+  it('can keep a single document mutation local while bulk mutations still refresh knowledge', async () => {
+    const store = useBackendStore()
+    const input = {
+      action: 'favorite' as const,
+      document_ids: [9],
+      collection_ids: [],
+      tags: [],
+      favorite: true,
+    }
+
+    await store.bulkKnowledgeDocuments(input, { refresh: false })
+
+    expect(apiMock.bulkKnowledgeDocuments).toHaveBeenCalledWith(input)
+    expect(apiMock.knowledgeStatus).not.toHaveBeenCalled()
+    expect(apiMock.knowledgeCollections).not.toHaveBeenCalled()
+    expect(apiMock.knowledgeDocuments).not.toHaveBeenCalled()
+    expect(apiMock.knowledgeImports).not.toHaveBeenCalled()
+
+    await store.bulkKnowledgeDocuments(input)
+
+    expect(apiMock.knowledgeStatus).toHaveBeenCalledTimes(1)
+    expect(apiMock.knowledgeCollections).toHaveBeenCalledTimes(1)
+    expect(apiMock.knowledgeDocuments).toHaveBeenCalledTimes(1)
+    expect(apiMock.knowledgeImports).toHaveBeenCalledTimes(1)
   })
 
   it('rolls back session bindings when save fails', async () => {

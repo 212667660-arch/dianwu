@@ -27,6 +27,5 @@
 
 ## 测试环境与验收
 
-- 工作树使用 `.test-venv` 作为专用 Python 测试环境，依赖来自 `backend/requirements.txt`。
+- 工作树使用 `.test-venv` 作为专用 Python 测试环境，运行依赖来自 `backend/requirements.txt`，异步测试插件由 `backend/requirements-test.txt` 固定。
 - 按用户要求，功能实现完成后再运行定向测试、完整前端/Electron、完整后端、桌面构建与生命周期验收。
-

@@ -48,6 +48,7 @@ import {
   backendApi,
   errorMessage,
   type KnowledgeCollection,
+  type KnowledgeDocument,
   type KnowledgeBulkAction,
   type KnowledgeBulkRequest,
   type KnowledgeImportBatch,
@@ -67,9 +68,11 @@ const backend = useBackendStore()
 const route = inject(routeLocationKey, null)
 const router = inject(routerKey, null)
 const activeCollectionId = ref<number | null>(null)
+const pendingCollectionId = ref<number | null>(null)
 const selectedDocumentId = ref<number | null>(null)
 const selectedDocumentIds = ref<number[]>([])
 const favoritePendingIds = ref<number[]>([])
+const favoriteOverrides = ref<Record<number, boolean>>({})
 const filter = ref('')
 const trashOnly = ref(false)
 const favoriteOnly = ref(false)
@@ -84,7 +87,8 @@ const collectionDrawer = ref(false)
 const inspectorDrawer = ref(false)
 const textbookItems = ref<TextbookCatalogItem[]>([])
 let disposeImportProgress: (() => void) | undefined
-let collectionRequestVersion = 0
+let documentRequestVersion = 0
+let favoriteInvalidatedThroughVersion = 0
 
 function firstQueryValue(value: string | null | (string | null)[] | undefined) {
   return Array.isArray(value) ? value[0] : value
@@ -92,7 +96,11 @@ function firstQueryValue(value: string | null | (string | null)[] | undefined) {
 
 const desktopAvailable = computed(() => Boolean(window.a3Desktop?.knowledgeChooseFiles))
 const activeCollection = computed(() => backend.knowledgeCollections.find(item => item.id === activeCollectionId.value))
-const filteredDocuments = computed(() => backend.knowledgeDocuments)
+const filteredDocuments = computed(() => backend.knowledgeDocuments.map(item => (
+  Object.hasOwn(favoriteOverrides.value, item.id)
+    ? { ...item, favorite: favoriteOverrides.value[item.id] }
+    : item
+)))
 const canMutateSelection = computed(() => selectedDocumentIds.value.length > 0)
 const allVisibleSelected = computed(() => filteredDocuments.value.length > 0 && filteredDocuments.value.every(item => selectedDocumentIds.value.includes(item.id)))
 const selectedDocument = computed(() => backend.knowledgeDocuments.find(item => item.id === selectedDocumentId.value) || null)
@@ -118,24 +126,44 @@ const routedLocator = computed<KnowledgeLocator | null>(() => {
   }
 })
 
+function applyFavoriteOverrides(documents: KnowledgeDocument[]) {
+  return documents.map(item => (
+    Object.hasOwn(favoriteOverrides.value, item.id)
+      ? { ...item, favorite: favoriteOverrides.value[item.id] }
+      : item
+  ))
+}
+
+function canApplyDocumentRequest(requestVersion: number, requestCollectionId: number | null) {
+  return requestVersion === documentRequestVersion && (
+    requestVersion > favoriteInvalidatedThroughVersion
+    || (requestCollectionId !== null && pendingCollectionId.value === requestCollectionId)
+  )
+}
+
 async function selectCollection(id: number) {
-  const requestVersion = ++collectionRequestVersion
+  pendingCollectionId.value = id
+  const requestVersion = ++documentRequestVersion
   try {
-    const documents = await backendApi.knowledgeDocuments(id)
-    if (requestVersion !== collectionRequestVersion) return
+    const documents = await backendApi.knowledgeDocuments(documentFilters(id))
+    if (!canApplyDocumentRequest(requestVersion, id)) return
     activeCollectionId.value = id
+    if (pendingCollectionId.value === id) pendingCollectionId.value = null
     collectionDrawer.value = false
-    backend.knowledgeDocuments = documents
+    backend.knowledgeDocuments = applyFavoriteOverrides(documents)
     selectedDocumentIds.value = []
     selectedDocumentId.value = backend.knowledgeDocuments[0]?.id || null
   } catch (error) {
-    if (requestVersion === collectionRequestVersion) ElMessage.error(errorMessage(error))
+    if (canApplyDocumentRequest(requestVersion, id)) {
+      if (pendingCollectionId.value === id) pendingCollectionId.value = null
+      ElMessage.error(errorMessage(error))
+    }
   }
 }
 
-function documentFilters() {
+function documentFilters(collectionId: number | null = pendingCollectionId.value ?? activeCollectionId.value) {
   return {
-    ...(activeCollectionId.value ? { collectionId: activeCollectionId.value } : {}),
+    ...(collectionId ? { collectionId } : {}),
     trash: trashOnly.value,
     ...(favoriteOnly.value ? { favorite: true } : {}),
     ...(tagFilter.value.trim() ? { tag: tagFilter.value.trim() } : {}),
@@ -147,13 +175,27 @@ function documentFilters() {
 }
 
 async function refreshFilteredDocuments() {
+  const requestCollectionId = pendingCollectionId.value ?? activeCollectionId.value
+  const requestVersion = ++documentRequestVersion
   try {
-    const documents = await backendApi.knowledgeDocuments(documentFilters())
-    backend.knowledgeDocuments = documents
-    selectedDocumentIds.value = selectedDocumentIds.value.filter(id => documents.some(item => item.id === id))
-    if (!documents.some(item => item.id === selectedDocumentId.value)) selectedDocumentId.value = documents[0]?.id || null
+    const documents = await backendApi.knowledgeDocuments(documentFilters(requestCollectionId))
+    if (!canApplyDocumentRequest(requestVersion, requestCollectionId)) return
+    backend.knowledgeDocuments = applyFavoriteOverrides(documents)
+    if (pendingCollectionId.value !== null && pendingCollectionId.value === requestCollectionId) {
+      activeCollectionId.value = requestCollectionId
+      pendingCollectionId.value = null
+      collectionDrawer.value = false
+      selectedDocumentIds.value = []
+      selectedDocumentId.value = documents[0]?.id || null
+    } else {
+      selectedDocumentIds.value = selectedDocumentIds.value.filter(id => documents.some(item => item.id === id))
+      if (!documents.some(item => item.id === selectedDocumentId.value)) selectedDocumentId.value = documents[0]?.id || null
+    }
   } catch (error) {
-    ElMessage.error(errorMessage(error))
+    if (canApplyDocumentRequest(requestVersion, requestCollectionId)) {
+      if (pendingCollectionId.value === requestCollectionId) pendingCollectionId.value = null
+      ElMessage.error(errorMessage(error))
+    }
   }
 }
 
@@ -185,6 +227,13 @@ async function runBulk(action: KnowledgeBulkAction, fields: Partial<KnowledgeBul
     const result = await backend.bulkKnowledgeDocuments(input)
     const failures = result.items.filter(item => !item.ok)
     if (failures.length) ElMessage.warning(`${failures.length} 份资料未完成操作，请重试。`)
+    if (action === 'favorite' && typeof fields.favorite === 'boolean') {
+      const nextOverrides = { ...favoriteOverrides.value }
+      for (const item of result.items) {
+        if (item.ok) nextOverrides[item.document_id] = fields.favorite
+      }
+      favoriteOverrides.value = nextOverrides
+    }
     selectedDocumentIds.value = []
     await refreshFilteredDocuments()
   } catch (error) {
@@ -207,9 +256,15 @@ async function toggleFavorite(id: number, favorite: boolean) {
   if (favoritePendingIds.value.includes(id)) return
   const index = backend.knowledgeDocuments.findIndex(item => item.id === id)
   if (index < 0) return
-  const previous = backend.knowledgeDocuments[index]
+  const hadPreviousOverride = Object.hasOwn(favoriteOverrides.value, id)
+  const previousFavorite = hadPreviousOverride
+    ? favoriteOverrides.value[id]
+    : Boolean(backend.knowledgeDocuments[index].favorite)
+  const favoriteReadCutoff = documentRequestVersion
+  let saved = false
   favoritePendingIds.value = [...favoritePendingIds.value, id]
-  backend.knowledgeDocuments[index] = { ...previous, favorite }
+  favoriteOverrides.value = { ...favoriteOverrides.value, [id]: favorite }
+  backend.knowledgeDocuments[index] = { ...backend.knowledgeDocuments[index], favorite }
   try {
     const result = await backend.bulkKnowledgeDocuments({
       action: 'favorite',
@@ -217,19 +272,39 @@ async function toggleFavorite(id: number, favorite: boolean) {
       collection_ids: [],
       tags: [],
       favorite,
-    })
+    }, { refresh: false })
     if (!result.items.some(item => item.document_id === id && item.ok)) {
       throw new Error('收藏状态未保存，请重试。')
+    }
+    saved = true
+    favoriteInvalidatedThroughVersion = Math.max(favoriteInvalidatedThroughVersion, favoriteReadCutoff)
+    const currentIndex = backend.knowledgeDocuments.findIndex(item => item.id === id)
+    if (currentIndex >= 0) {
+      backend.knowledgeDocuments[currentIndex] = { ...backend.knowledgeDocuments[currentIndex], favorite }
     }
     if (favoriteOnly.value && !favorite) {
       backend.knowledgeDocuments = backend.knowledgeDocuments.filter(item => item.id !== id)
       if (selectedDocumentId.value === id) selectedDocumentId.value = backend.knowledgeDocuments[0]?.id || null
     }
+    if (pendingCollectionId.value !== null && favoriteOnly.value) {
+      void refreshFilteredDocuments()
+    }
   } catch (error) {
     const rollbackIndex = backend.knowledgeDocuments.findIndex(item => item.id === id)
-    if (rollbackIndex >= 0) backend.knowledgeDocuments[rollbackIndex] = previous
+    if (rollbackIndex >= 0) {
+      backend.knowledgeDocuments[rollbackIndex] = {
+        ...backend.knowledgeDocuments[rollbackIndex],
+        favorite: previousFavorite,
+      }
+    }
     ElMessage.error(errorMessage(error))
   } finally {
+    if (!saved) {
+      const remainingOverrides = { ...favoriteOverrides.value }
+      if (hadPreviousOverride) remainingOverrides[id] = previousFavorite
+      else delete remainingOverrides[id]
+      favoriteOverrides.value = remainingOverrides
+    }
     favoritePendingIds.value = favoritePendingIds.value.filter(item => item !== id)
   }
 }
@@ -414,7 +489,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  collectionRequestVersion += 1
+  documentRequestVersion += 1
   disposeImportProgress?.()
 })
 </script>

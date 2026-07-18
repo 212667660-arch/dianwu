@@ -351,7 +351,7 @@ async function createTray() {
     icon,
     getMainWindow: () => mainWindow,
     requestQuit: requestAppQuit,
-    showPet: () => { void petController.updateSettings({ visible: true }) },
+    togglePet: () => safelyMovePet(() => petController.toggleVisibility()),
     getAiPaused: () => desktopStateStore.snapshot().ai_paused,
     setAiPaused: async value => {
       await desktopStateStore.setAiPaused(value)
@@ -547,6 +547,15 @@ ipcMain.on('a3:pet-drag-move', (event, point) => {
 })
 ipcMain.on('a3:pet-drag-end', event => {
   if (petController.isPetSender(event)) safelyMovePet(() => petController.endDrag())
+})
+ipcMain.on('a3:pet-resize-begin', (event, input) => {
+  if (petController.isPetSender(event)) safelyMovePet(() => petController.beginResize(input))
+})
+ipcMain.on('a3:pet-resize-move', (event, point) => {
+  if (petController.isPetSender(event)) safelyMovePet(() => petController.moveResize(point))
+})
+ipcMain.on('a3:pet-resize-end', event => {
+  if (petController.isPetSender(event)) safelyMovePet(() => petController.endResize())
 })
 ipcMain.on('a3:stream-start', (event, streamId, input) => { void backendProxy?.startStream(event, streamId, input) })
 ipcMain.on('a3:stream-cancel', (event, streamId) => { backendProxy?.cancelStream(event, streamId) })
