@@ -88,8 +88,8 @@
 | S-039 | P0 | 完成 | 修复用户验收缺陷并完成托盘切换、墨团固定基础大小与手动拉伸 | S-037、S-038、用户四张真实桌面截图 | 单一答案入口与无遮挡提交、收藏局部更新无闪烁且并发安全、学习诊断说明、主窗口/墨团托盘显示收起切换、墨团 192×208 基础尺寸与 1–3 倍等比例四角拉伸、点击不改变大小、`.test-venv` 专用测试环境、完整回归与真实桌面验收；证据见 S-039-COMPLETE |
 | S-040 | P0 | 完成 | 收敛最新功能分支、任务队列与 GitHub 远端状态 | S-039、`codex/s022-five-resource-bundle` 旧同步分支、`origin/main` | 已以 `codex/s022-s026-remediation` 为唯一功能基线完成目录、文档、测试、队列、`origin/main` 和 GitHub 远端收敛；证据见 S-040-COMPLETE |
 | S-041 | P0 | 完成 | 设计 Windows 代码签名与默认中文、可下载语言包总体架构 | S-040、现有 Windows 发布包、桌面设置与安全边界 | 已确定 Azure Trusted Signing 受保护发布链、签名顺序/验证，以及内置 zh-CN、公开 Releases、Ed25519 数据包、原子安装/回滚和 content locale 契约；证据见 S-041-DESIGN |
-| S-042 | P0 | 进行中 | 实现 Windows 可信代码签名与签名发布验收 | S-041；真实签名最终验收依赖 Azure Trusted Signing 资源就绪 | 签名构建脚本、凭据不落盘、api.exe/主程序/卸载器/安装器签名、时间戳、签名验证和最终安装包 |
-| S-043 | P0 | 就绪 | 实现默认中文、其他语言可下载的语言包系统 | S-041 | 内置 zh-CN、可信语言包目录/下载/校验/原子安装/回滚、设置切换、首批语言、前端/Electron/桌宠本地化和桌面验收 |
+| S-042 | P0 | 进行中 | 实现 Windows 可信代码签名与签名发布验收 | S-041；真实签名最终验收依赖 Azure Trusted Signing 资源就绪 | 实施计划已完成；待按计划实现签名配置、凭据不落盘、api.exe/主程序/elevate/卸载器/安装器签名、时间戳、签名验证和最终安装包 |
+| S-043 | P0 | 就绪 | 实现默认中文、其他语言可下载的语言包系统 | S-041 | 实施计划已完成；待实现内置 zh-CN、可信语言包目录/下载/校验/原子安装/回滚、设置切换、首批语言、前端/Electron/桌宠本地化和桌面验收 |
 | T-033 | P0 | 完成 | 实现多 API 配置、高可用切换、模型选择与推理强度控制 | S-017 | 版本 2 加密多配置、原子热应用与回滚、3 次/2 配置预算、Retry-After/熔断、普通与流式故障边界、全局/学习空间模型和思考强度选择、兼容迁移、真实桌面 5/5 连接及完整打包回归 |
 | T-035 | P0 | 完成 | 实现本地知识库与安全文件导入 | S-018 | 已完成文件选择/拖放、七格式与限额校验、隔离解析 worker、SQLite 元数据/FTS/可选语义索引、可追溯引用、学习助手绑定与隐私模式、删除/重建、恶意文件/性能/打包测试及 Windows 桌面安装包验收 |
 | T-036 | P1 | 完成 | 实现桌宠形象包、用户上传、进度事件与语音鼓励 | S-019 | 已完成角色包目录选择、固定文件/atlas 校验、原子替换、失败保留旧角色、恢复墨团、热重载、动作音效和本地语音鼓励；全面素材/许可证、逐帧视觉与主观音色 QA 保留后续 |
@@ -164,7 +164,7 @@
 
 ## 八、当前执行顺序
 
-Sol 当前执行 S-042：先按已批准规格编写并审查实施计划，再以 TDD 接入 Azure Trusted Signing 的 fail-closed 配置、受保护 workflow、签名验证和资源准备文档；在 Azure 资源未创建时完成可离线验证的实现并保持真实签名发布阻塞。随后连续执行已就绪的 S-043，不再重复询问已确认的语言范围与信任方案。
+Sol 当前执行 S-042：两份独立实施计划已完成并通过规格覆盖、占位符、类型/命名一致性和路径审查；下一步按签名计划以 TDD 接入 Azure Trusted Signing 的 fail-closed 配置、受保护 workflow、签名验证和资源准备文档。在 Azure 资源未创建时完成全部可离线验证实现并保持真实签名发布阻塞，随后连续执行 S-043。
 
 ### 历史执行轨迹（仅供追溯，不代表当前状态）
 
@@ -342,3 +342,4 @@ S-016 已完成：本仓库提交身份已设置为 `Wei kb <212667660@qq.com>`�
 | 2026-07-18 | S-039-COMPLETE | Sol | a3-front/a3-front/electron、a3-front/a3-front/src/views/KnowledgeLibrary.vue、src/views/KnowledgeLibrary.test.ts、src/stores/backend.ts、src/components/pet/PetSettingsCard.vue、backend/requirements-test.txt、专用 `.test-venv`、托盘/墨团设计与计划、release/、codex/AI模型任务队列.md | 完成用户验收缺陷修复：练习页只保留一个答案入口且提交按钮无遮挡；学习诊断说明与恢复入口完善；收藏采用局部乐观更新并通过独立失效边界、待选集合状态和完整筛选查询解决旧响应覆盖、后发读取丢失、失败误取消、集合/筛选/仅收藏成员竞态，顶部筛选栏不再闪烁。主窗口托盘单击实现前台最小化、后台/隐藏/最小化恢复聚焦，墨团托盘显示/隐藏切换。墨团固定 192×208 基础/最小尺寸，支持 1–3 倍四角等比例拉伸；点击不改变大小，连续点击/双击不延长动画，竖向拖动不误触，小屏幕约束保持比例，位置/尺寸/设置串行原子持久化并迁移旧异常尺寸。专用 `.test-venv` 使用 pytest 8.3.5、pytest-asyncio 0.25.3；后端 559 passed、7 skipped，Electron/Node 180 passed，Vitest 151 passed，`desktop:dist` 成功，最终复审 Critical/Important/Minor 均为 0。最新 unpacked 隔离启动退出码 0、生命周期标记 4/4、数据库创建成功、残留进程 0。安装器 `智学协作台 Setup 1.0.0.exe` 为 228,386,365 bytes，SHA-256 `A27AAA2B1AE5F351B3853781880CF73D5FCD66D6E0E4B583344981E0F6E96C2D`；unpacked 主程序为 186,358,272 bytes，SHA-256 `15745EB54EDC1E602B3173146FAAF4893A12321665477F316B63F28D22E75396`；二者版本 1.0.0，均未签名。 |
 | 2026-07-18 | S-040-COMPLETE | Sol | `.gitignore`、`README.md`、`backend/quick_test.ps1`、`backend/tests/test_quick_test_entrypoint.py`、`backend/tests/test_model_preferences.py`、`front/a3-front/`（由外层 `a3-front/` 完整迁移）、两份 S-022 参考文档、仓库收敛计划、`codex/AI模型任务队列.md` | 以 S-039 最新实现为唯一功能基线，182 个前端文件完整迁移且旧索引为 0；拒绝移入旧提交 `9806f78` 的协议/资源管线回退，该提交不是当前 HEAD 祖先。实现提交 `88a2fb0`，合并 `origin/main` 为 `ae5fd1c`；合并后后端 560 passed、7 skipped，Electron/Node 180 passed，Vitest 151 passed，`compileall` 与 `npm run build:desktop` 通过，两阶段审查最终无遗留问题。分支 `codex/s022-s026-remediation` 已推送至 `https://github.com/212667660-arch/dianwu.git`，首轮本地/上游/远端哈希均为 `ae5fd1c`、ahead/behind `0/0`。GitHub Push Protection 识别到历史内容安全测试中的 Slack/Stripe 假值，经用户授权按测试假值放行，未关闭仓库保护。生成目录未跟踪；Windows 安装包仍未代码签名。 |
 | 2026-07-18 | S-041-DESIGN | Sol | `front/a3-front/docs/superpowers/specs/2026-07-18-windows-trusted-signing-design.md`、`front/a3-front/docs/superpowers/specs/2026-07-18-downloadable-language-packs-design.md`、`codex/AI模型任务队列.md` | 完成现有 electron-builder/PyInstaller/NSIS 签名缺口与约 44 个 Vue/Electron 中文硬编码文件审计；确定 Azure Trusted Signing、受保护 `windows-signing` Environment、主程序/api.exe/elevate/卸载器/安装器全链验证，以及内置 zh-CN、首批 en-US/zh-TW、独立公开语言包仓库、Ed25519/RFC 8785、受控下载、离线导入、原子激活/回滚、密钥轮换和 UI/content locale 联动。规格经 placeholder、内部一致性、范围和歧义自审，`git diff --check` 通过。 |
+| 2026-07-18 | S-042-S-043-PLANS | Sol | `front/a3-front/docs/superpowers/plans/2026-07-18-windows-trusted-signing-plan.md`、`front/a3-front/docs/superpowers/plans/2026-07-18-downloadable-language-packs-plan.md`、`codex/AI模型任务队列.md` | 将两个独立子系统拆成 9 个签名任务/47 个 TDD 步骤与 17 个语言任务/89 个 TDD 步骤，锁定精确文件、稳定错误码、测试命令、提交边界、Azure 外部验收门、公开语言包仓库和密钥不落盘流程。计划逐项对照规格完成覆盖审查，placeholder 扫描为 0、尾随空白为 0，类型/方法名和路径契约已收敛。 |
