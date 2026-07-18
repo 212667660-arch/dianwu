@@ -15,9 +15,8 @@
               <div class="toolbar"><el-tag effect="plain">{{ row.question.difficulty }}</el-tag><span class="quality-label">资源质量 {{ row.quality }}</span></div>
             </div>
             <div class="answer-row">
-              <el-input v-model="answers[row.question.id]" placeholder="输入你的答案" @keyup.enter="submit(row.question.id)" />
-              <el-input-number v-model="hints[row.question.id]" :min="0" :max="20" controls-position="right" aria-label="提示次数" />
-              <el-button type="primary" :loading="submitting === row.question.id" @click="submit(row.question.id)">提交</el-button>
+              <el-input v-model="answers[row.question.id]" :data-testid="`assessment-answer-${row.question.id}`" placeholder="输入你的答案" @keyup.enter="submit(row.question.id)" />
+              <el-button :data-testid="`assessment-submit-${row.question.id}`" type="primary" :loading="submitting === row.question.id" @click="submit(row.question.id)">提交</el-button>
             </div>
             <div v-if="results[row.question.id]" class="result-box" :class="results[row.question.id].correct ? 'correct' : 'incorrect'">
               <div><strong>{{ results[row.question.id].correct ? '回答正确' : '需要巩固' }}</strong><span>掌握度 {{ Math.round(results[row.question.id].mastery_score * 100) }}%</span></div>
@@ -60,7 +59,6 @@ import { useBackendStore } from '@/stores/backend'
 const backend = useBackendStore()
 const router = useRouter()
 const answers = reactive<Record<number, string>>({})
-const hints = reactive<Record<number, number>>({})
 const results = reactive<Record<number, AttemptResponse>>({})
 const submitting = ref<number | null>(null)
 const questionRows = computed(() => backend.resources.flatMap(resource => resource.questions.map(question => ({ question, quality: resource.quality_score, topic: resource.topic }))).reverse())
@@ -70,7 +68,7 @@ async function submit(questionId: number) {
   if (!answer) return ElMessage.warning('请输入答案')
   submitting.value = questionId
   try {
-    results[questionId] = await backend.submitAnswer(questionId, answer, hints[questionId] || 0)
+    results[questionId] = await backend.submitAnswer(questionId, answer, 0)
     ElMessage[results[questionId].correct ? 'success' : 'warning'](results[questionId].feedback)
   } catch (error) {
     ElMessage.error(errorMessage(error))
@@ -90,7 +88,8 @@ function formatDate(value: string) { return new Date(value).toLocaleString('zh-C
 .question-heading span { color: var(--muted); font-size: 11px; }
 .question-heading h3 { margin: 4px 0 0; font-size: 15px; line-height: 1.6; }
 .quality-label { white-space: nowrap; }
-.answer-row { display: grid; grid-template-columns: minmax(0, 1fr) 110px auto; gap: 8px; margin-top: 13px; }
+.answer-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-top: 13px; }
+.answer-row :deep(.el-button) { min-width: 82px; }
 .result-box { margin-top: 12px; padding: 13px; border-left: 4px solid; background: var(--surface-soft); }
 .result-box.correct { border-color: var(--accent); }
 .result-box.incorrect { border-color: var(--danger); }
