@@ -42,19 +42,94 @@ function Get-A3SafeRecordPath {
 function ConvertTo-A3UtcDate {
     param([Parameter(Mandatory)] [string]$Value)
 
+    if ($Value -notmatch '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$') {
+        throw (New-A3SignatureError 'A3_SIGNATURE_RECORD_INVALID' 'The signature record contains an invalid UTC date value.')
+    }
+
     $parsed = [DateTimeOffset]::MinValue
-    $styles = [Globalization.DateTimeStyles]::AllowWhiteSpaces -bor
-        [Globalization.DateTimeStyles]::AssumeUniversal -bor
+    [string[]]$formats = @(
+        "yyyy-MM-dd'T'HH:mm:ss'Z'"
+        "yyyy-MM-dd'T'HH:mm:ss.f'Z'"
+        "yyyy-MM-dd'T'HH:mm:ss.ff'Z'"
+        "yyyy-MM-dd'T'HH:mm:ss.fff'Z'"
+        "yyyy-MM-dd'T'HH:mm:ss.ffff'Z'"
+        "yyyy-MM-dd'T'HH:mm:ss.fffff'Z'"
+        "yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'"
+        "yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'"
+    )
+    $styles = [Globalization.DateTimeStyles]::AssumeUniversal -bor
         [Globalization.DateTimeStyles]::AdjustToUniversal
-    if (-not [DateTimeOffset]::TryParse(
+    if (-not [DateTimeOffset]::TryParseExact(
         $Value,
+        $formats,
         [Globalization.CultureInfo]::InvariantCulture,
         $styles,
         [ref]$parsed
     )) {
-        throw (New-A3SignatureError 'A3_SIGNATURE_RECORD_INVALID' 'The signature record contains an invalid date value.')
+        throw (New-A3SignatureError 'A3_SIGNATURE_RECORD_INVALID' 'The signature record contains an invalid UTC date value.')
     }
     return $parsed.ToUniversalTime()
+}
+
+function ConvertTo-A3CanonicalUtcText {
+    param([Parameter(Mandatory)] [DateTimeOffset]$Value)
+
+    return $Value.ToUniversalTime().UtcDateTime.ToString(
+        "yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'",
+        [Globalization.CultureInfo]::InvariantCulture
+    )
+}
+
+function ConvertFrom-A3SignToolVerificationOutput {
+    param(
+        [Parameter(Mandatory)] [string]$OutputText,
+        [string]$SafePath = '<artifact>'
+    )
+
+    $timestampMatch = [regex]::Match(
+        $OutputText,
+        '(?im)^\s*The signature is timestamped(?:\s+(?:at|on))?\s*:\s*(?<timestamp>.+?)\s*$'
+    )
+    if (-not $timestampMatch.Success) {
+        throw (New-A3SignatureError 'A3_TIMESTAMP_MISSING' "Missing trusted timestamp for $SafePath.")
+    }
+
+    $localTimestamp = [datetime]::MinValue
+    [string[]]$timestampFormats = @(
+        'ddd MMM dd HH:mm:ss yyyy'
+        'ddd MMM d HH:mm:ss yyyy'
+    )
+    if (-not [datetime]::TryParseExact(
+        $timestampMatch.Groups['timestamp'].Value,
+        $timestampFormats,
+        [Globalization.CultureInfo]::GetCultureInfo('en-US'),
+        [Globalization.DateTimeStyles]::AllowWhiteSpaces,
+        [ref]$localTimestamp
+    )) {
+        throw (New-A3SignatureError 'A3_SIGNATURE_RECORD_INVALID' "The trusted timestamp is invalid for $SafePath.")
+    }
+
+    try {
+        $unspecifiedTimestamp = [datetime]::SpecifyKind($localTimestamp, [DateTimeKind]::Unspecified)
+        $timestampUtc = [TimeZoneInfo]::ConvertTimeToUtc($unspecifiedTimestamp, [TimeZoneInfo]::Local)
+    }
+    catch {
+        throw (New-A3SignatureError 'A3_SIGNATURE_RECORD_INVALID' "The trusted timestamp is invalid for $SafePath.")
+    }
+
+    $hashMatch = [regex]::Match(
+        $OutputText,
+        '(?im)^\s*Hash of file \(sha256\):\s*(?<sha256>[A-Fa-f0-9]{64})\s*$'
+    )
+    if (-not $hashMatch.Success) {
+        throw (New-A3SignatureError 'A3_DIGEST_NOT_SHA256' "A SHA-256 file digest was not reported for $SafePath.")
+    }
+
+    return [pscustomobject][ordered]@{
+        TimestampUtc = ConvertTo-A3CanonicalUtcText -Value ([DateTimeOffset]$timestampUtc)
+        FileDigestAlgorithm = 'SHA256'
+        ReportedSha256 = $hashMatch.Groups['sha256'].Value.ToUpperInvariant()
+    }
 }
 
 function Assert-A3SignatureRecord {
@@ -238,32 +313,7 @@ function Get-A3SignatureRecord {
         throw (New-A3SignatureError 'A3_TIMESTAMP_MISSING' "Missing trusted timestamp for $resolvedPath.")
     }
 
-    $timestampMatch = [regex]::Match(
-        $outputText,
-        '(?im)^\s*The signature is timestamped(?:\s+(?:at|on))?\s*:\s*(?<timestamp>.+?)\s*$'
-    )
-    if (-not $timestampMatch.Success) {
-        throw (New-A3SignatureError 'A3_TIMESTAMP_MISSING' "Missing trusted timestamp for $resolvedPath.")
-    }
-
-    $timestamp = [DateTimeOffset]::MinValue
-    $timestampStyles = [Globalization.DateTimeStyles]::AllowWhiteSpaces -bor
-        [Globalization.DateTimeStyles]::AssumeUniversal -bor
-        [Globalization.DateTimeStyles]::AdjustToUniversal
-    $timestampText = $timestampMatch.Groups['timestamp'].Value
-    $timestampParsed = [DateTimeOffset]::TryParse(
-        $timestampText,
-        [Globalization.CultureInfo]::GetCultureInfo('en-US'),
-        $timestampStyles,
-        [ref]$timestamp
-    )
-    if (-not $timestampParsed) {
-        throw (New-A3SignatureError 'A3_SIGNATURE_RECORD_INVALID' "The trusted timestamp is invalid for $resolvedPath.")
-    }
-
-    if ($outputText -notmatch '(?im)^\s*Hash of file \(sha256\):\s*[A-Fa-f0-9]{64}\s*$') {
-        throw (New-A3SignatureError 'A3_DIGEST_NOT_SHA256' "A SHA-256 file digest was not reported for $resolvedPath.")
-    }
+    $parsedSignToolOutput = ConvertFrom-A3SignToolVerificationOutput -OutputText $outputText -SafePath $resolvedPath
 
     try {
         $sha256 = (Get-FileHash -LiteralPath $resolvedPath -Algorithm SHA256 -ErrorAction Stop).Hash.ToUpperInvariant()
@@ -279,10 +329,10 @@ function Get-A3SignatureRecord {
         Path = $resolvedPath
         Status = $signature.Status.ToString()
         Subject = [string]$certificate.Subject
-        FileDigestAlgorithm = 'SHA256'
-        TimestampUtc = $timestamp.ToUniversalTime().ToString('o', [Globalization.CultureInfo]::InvariantCulture)
-        CertificateNotBeforeUtc = $notBefore.ToString('o', [Globalization.CultureInfo]::InvariantCulture)
-        CertificateNotAfterUtc = $notAfter.ToString('o', [Globalization.CultureInfo]::InvariantCulture)
+        FileDigestAlgorithm = $parsedSignToolOutput.FileDigestAlgorithm
+        TimestampUtc = $parsedSignToolOutput.TimestampUtc
+        CertificateNotBeforeUtc = ConvertTo-A3CanonicalUtcText -Value $notBefore
+        CertificateNotAfterUtc = ConvertTo-A3CanonicalUtcText -Value $notAfter
         Sha256 = $sha256
     }
 }

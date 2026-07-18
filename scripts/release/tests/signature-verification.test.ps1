@@ -83,6 +83,58 @@ $lowercaseDigest.FileDigestAlgorithm = 'sha256'
 $lowercaseDigest.Sha256 = ('a' * 64)
 Assert-A3SignatureRecord -Record $lowercaseDigest -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256 ('A' * 64)
 
+$fractionalUtc = Copy-Record $valid
+$fractionalUtc.TimestampUtc = '2026-07-18T08:00:00.1234567Z'
+$fractionalUtc.CertificateNotBeforeUtc = '2026-07-01T00:00:00.1Z'
+$fractionalUtc.CertificateNotAfterUtc = '2027-07-01T00:00:00.0000001Z'
+Assert-A3SignatureRecord -Record $fractionalUtc -ExpectedPublisher 'CN=A3 Learning Project'
+
+foreach ($propertyName in @('TimestampUtc', 'CertificateNotBeforeUtc', 'CertificateNotAfterUtc')) {
+    foreach ($looseDateValue in @(
+        '07/18/2026 08:00'
+        '2026-07-18'
+        '2026-07-18T08:00:00+08:00'
+    )) {
+        $record = Copy-Record $valid
+        $record.($propertyName) = $looseDateValue
+        Assert-ThrowsCode {
+            Assert-A3SignatureRecord -Record $record -ExpectedPublisher 'CN=A3 Learning Project'
+        } 'A3_SIGNATURE_RECORD_INVALID' | Out-Null
+    }
+}
+
+$signToolTimestampText = 'Thu Jul 09 19:44:12 2026'
+$signToolHash = ('B' * 64)
+$localTimestamp = [datetime]::ParseExact(
+    $signToolTimestampText,
+    'ddd MMM dd HH:mm:ss yyyy',
+    [Globalization.CultureInfo]::GetCultureInfo('en-US'),
+    [Globalization.DateTimeStyles]::None
+)
+$expectedTimestampUtc = [TimeZoneInfo]::ConvertTimeToUtc(
+    [datetime]::SpecifyKind($localTimestamp, [DateTimeKind]::Unspecified),
+    [TimeZoneInfo]::Local
+).ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'", [Globalization.CultureInfo]::InvariantCulture)
+
+foreach ($timestampLine in @(
+    "The signature is timestamped: $signToolTimestampText"
+    "The signature is timestamped at: $signToolTimestampText"
+    "The signature is timestamped on: $signToolTimestampText"
+)) {
+    $signToolOutput = @"
+Hash of file (sha256): $signToolHash
+$timestampLine
+Successfully verified: C:\release\a3-app.exe
+"@
+    $parsedSignToolOutput = & $module {
+        param([string]$OutputText)
+        ConvertFrom-A3SignToolVerificationOutput -OutputText $OutputText
+    } $signToolOutput
+    Assert-Equal $parsedSignToolOutput.TimestampUtc $expectedTimestampUtc 'Signtool timestamps must be interpreted as local time and serialized as canonical UTC.'
+    Assert-Equal $parsedSignToolOutput.FileDigestAlgorithm 'SHA256' 'Signtool output must contain the SHA-256 marker.'
+    Assert-Equal $parsedSignToolOutput.ReportedSha256 $signToolHash 'Signtool output must parse the reported SHA-256 value.'
+}
+
 foreach ($status in @('NotSigned', 'HashMismatch')) {
     $record = Copy-Record $valid
     $record.Status = $status
