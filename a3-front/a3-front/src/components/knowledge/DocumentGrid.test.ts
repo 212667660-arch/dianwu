@@ -72,3 +72,22 @@ it('supports document selection and exposes favorite, tags, ETA and safe failure
   expect(wrapper.emitted('toggle-selection')?.[0]).toEqual([9])
   expect(wrapper.emitted('toggle-favorite')?.[0]).toEqual([9, false])
 })
+
+it('disables only the favorite control whose update is pending', () => {
+  const wrapper = mount(DocumentGrid, {
+    props: {
+      documents: [
+        { ...document, favorite: false },
+        { ...document, id: 10, display_name: '导数讲义.pdf', favorite: false },
+      ],
+      jobs: [],
+      selectedId: null,
+      cancelJob: vi.fn(),
+      favoritePendingIds: [9],
+    },
+  })
+
+  expect(wrapper.get('[data-testid="favorite-document-9"]').attributes('disabled')).toBeDefined()
+  expect(wrapper.get('[data-testid="favorite-document-9"]').attributes('aria-busy')).toBe('true')
+  expect(wrapper.get('[data-testid="favorite-document-10"]').attributes('disabled')).toBeUndefined()
+})

@@ -32,6 +32,8 @@
             type="button"
             class="favorite-control"
             :class="{ active: item.favorite }"
+            :disabled="favoritePendingIds.includes(item.id)"
+            :aria-busy="favoritePendingIds.includes(item.id)"
             :aria-label="`${item.favorite ? '取消收藏' : '收藏'} ${item.display_name}`"
             :data-testid="`favorite-document-${item.id}`"
             @click="$emit('toggle-favorite', item.id, !item.favorite)"
@@ -85,9 +87,10 @@ const props = withDefaults(defineProps<{
   jobs: KnowledgeImportJob[]
   selectedId: number | null
   selectedIds?: number[]
+  favoritePendingIds?: number[]
   cancelJob: (id: number) => unknown
   retryJob?: (id: number) => unknown
-}>(), { selectedIds: () => [] })
+}>(), { selectedIds: () => [], favoritePendingIds: () => [] })
 
 defineEmits<{
   (event: 'select', id: number): void

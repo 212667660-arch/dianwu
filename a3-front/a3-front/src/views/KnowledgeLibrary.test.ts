@@ -317,3 +317,48 @@ it('reports a collection deletion failure instead of treating it as dialog cance
 
   expect(messageMock.error).toHaveBeenCalledWith('删除服务暂时不可用')
 })
+
+it('toggles one favorite without changing selection or reloading the document list', async () => {
+  store.knowledgeDocuments = [{
+    ...store.knowledgeDocuments[0], favorite: false, deleted_at: null, collection_ids: [3], tags: [],
+  }]
+  store.bulkKnowledgeDocuments.mockResolvedValueOnce({
+    items: [{ document_id: 9, ok: true, code: null }],
+  })
+  const wrapper = mount(KnowledgeLibrary, {
+    global: { stubs: { ElDrawer: { template: '<div><slot /></div>' } } },
+  })
+  await flushPromises()
+  apiMock.knowledgeDocuments.mockClear()
+
+  await wrapper.get('[data-testid="favorite-document-9"]').trigger('click')
+
+  expect(wrapper.get('[data-testid="bulk-selection-count"]').text()).toContain('0')
+  expect(wrapper.get('[data-testid="favorite-document-9"]').text()).toBe('★')
+  await flushPromises()
+
+  expect(store.bulkKnowledgeDocuments).toHaveBeenCalledWith({
+    action: 'favorite', document_ids: [9], collection_ids: [], tags: [], favorite: true,
+  })
+  expect(apiMock.knowledgeDocuments).not.toHaveBeenCalled()
+})
+
+it('rolls back one favorite without disturbing selection when saving fails', async () => {
+  store.knowledgeDocuments = [{
+    ...store.knowledgeDocuments[0], favorite: false, deleted_at: null, collection_ids: [3], tags: [],
+  }]
+  store.bulkKnowledgeDocuments.mockRejectedValueOnce(new Error('收藏保存失败'))
+  const wrapper = mount(KnowledgeLibrary, {
+    global: { stubs: { ElDrawer: { template: '<div><slot /></div>' } } },
+  })
+  await flushPromises()
+  apiMock.knowledgeDocuments.mockClear()
+
+  await wrapper.get('[data-testid="favorite-document-9"]').trigger('click')
+  await flushPromises()
+
+  expect(wrapper.get('[data-testid="bulk-selection-count"]').text()).toContain('0')
+  expect(wrapper.get('[data-testid="favorite-document-9"]').text()).toBe('☆')
+  expect(apiMock.knowledgeDocuments).not.toHaveBeenCalled()
+  expect(messageMock.error).toHaveBeenCalledWith('收藏保存失败')
+})

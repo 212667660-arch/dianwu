@@ -32,7 +32,7 @@
           <button v-else data-testid="bulk-restore" type="button" :disabled="!canMutateSelection" @click="runBulk('restore')">恢复</button>
           <button v-if="trashOnly" data-testid="bulk-purge" class="danger" type="button" :disabled="!canMutateSelection" @click="bulkPurge">永久删除</button>
         </div>
-        <DocumentGrid :documents="filteredDocuments" :jobs="backend.knowledgeJobs" :selected-id="selectedDocumentId" :selected-ids="selectedDocumentIds" :cancel-job="backend.cancelKnowledgeJob" :retry-job="backend.retryKnowledgeJob" @select="selectDocument" @toggle-selection="toggleDocumentSelection" @toggle-favorite="toggleFavorite" @drag-active="dropActive=$event" @drop="handleDrop" />
+        <DocumentGrid :documents="filteredDocuments" :jobs="backend.knowledgeJobs" :selected-id="selectedDocumentId" :selected-ids="selectedDocumentIds" :favorite-pending-ids="favoritePendingIds" :cancel-job="backend.cancelKnowledgeJob" :retry-job="backend.retryKnowledgeJob" @select="selectDocument" @toggle-selection="toggleDocumentSelection" @toggle-favorite="toggleFavorite" @drag-active="dropActive=$event" @drop="handleDrop" />
       </div>
       <DocumentInspector :document="selectedDocument" :desktop-available="desktopAvailable" @summarize="summarizeDocument" @worked-example="workedExampleDocument" @open="openDocument" @rebuild="rebuildDocument" @delete="deleteDocument" />
     </div>
@@ -69,6 +69,7 @@ const router = inject(routerKey, null)
 const activeCollectionId = ref<number | null>(null)
 const selectedDocumentId = ref<number | null>(null)
 const selectedDocumentIds = ref<number[]>([])
+const favoritePendingIds = ref<number[]>([])
 const filter = ref('')
 const trashOnly = ref(false)
 const favoriteOnly = ref(false)
@@ -202,9 +203,35 @@ function bulkSetTags() {
 
 function bulkFavorite(favorite: boolean) { void runBulk('favorite', { favorite }) }
 
-function toggleFavorite(id: number, favorite: boolean) {
-  selectedDocumentIds.value = [id]
-  void runBulk('favorite', { favorite })
+async function toggleFavorite(id: number, favorite: boolean) {
+  if (favoritePendingIds.value.includes(id)) return
+  const index = backend.knowledgeDocuments.findIndex(item => item.id === id)
+  if (index < 0) return
+  const previous = backend.knowledgeDocuments[index]
+  favoritePendingIds.value = [...favoritePendingIds.value, id]
+  backend.knowledgeDocuments[index] = { ...previous, favorite }
+  try {
+    const result = await backend.bulkKnowledgeDocuments({
+      action: 'favorite',
+      document_ids: [id],
+      collection_ids: [],
+      tags: [],
+      favorite,
+    })
+    if (!result.items.some(item => item.document_id === id && item.ok)) {
+      throw new Error('收藏状态未保存，请重试。')
+    }
+    if (favoriteOnly.value && !favorite) {
+      backend.knowledgeDocuments = backend.knowledgeDocuments.filter(item => item.id !== id)
+      if (selectedDocumentId.value === id) selectedDocumentId.value = backend.knowledgeDocuments[0]?.id || null
+    }
+  } catch (error) {
+    const rollbackIndex = backend.knowledgeDocuments.findIndex(item => item.id === id)
+    if (rollbackIndex >= 0) backend.knowledgeDocuments[rollbackIndex] = previous
+    ElMessage.error(errorMessage(error))
+  } finally {
+    favoritePendingIds.value = favoritePendingIds.value.filter(item => item !== id)
+  }
 }
 
 async function bulkTrash() {
