@@ -12,6 +12,7 @@ def test_session_model_preference_defaults_and_persists_override() -> None:
     session_id = "model-pref-default"
     db = SessionLocal()
     try:
+        repo.delete_session(db, session_id)
         repo.get_or_create_session(db, session_id)
     finally:
         db.close()

@@ -2,7 +2,7 @@
 
 > 项目：基于大模型的个性化资源生成与学习多智能体系统开发
 > 队列位置：E:\软件杯\codex\AI模型任务队列.md
-> 当前模型批次：Sol（S-039 已完成，当前批次无就绪任务）
+> 当前模型批次：Sol（S-040 最新分支、任务队列与 GitHub 收敛进行中）
 > 最后审视日期：2026-07-18
 
 ## 一、使用规则
@@ -30,26 +30,18 @@
 
 ## 三、现有实现审视
 
-### 建议保留
+### 当前发布基线
 
-- FastAPI 按 routers、services、models 分层，结构适合继续扩展。
-- config.py 使用环境变量加载 OpenAI 兼容模型配置，真实 .env 已被 .gitignore 忽略。
-- 画像 Agent 与资源 Agent 已分离，并通过纯文本标记传递结果，符合赛题方向。
-- SQLite 会话、消息、画像和资源模型已经具备原型所需的持久化基础。
-- 普通接口、画像接口、资源接口和 SSE 接口均可导入，根健康检查返回 200。
+- FastAPI 已完成多轮诊断、真实 SSE、取消、统一错误信封、模型故障转移、内容安全和版本化资源协议。
+- 五类个性化资源具备独立 Planning/Specialist/Aggregator 管线、质量门、持久化、历史恢复、单产物重试和桌面端安全渲染闭环。
+- 本地知识库支持七种格式、FTS5、离线中文 OCR、逐页引用、集合/标签/收藏/回收站和可信教材学习交互。
+- Vue/Electron 桌面端已完成安装版模型配置、托盘、墨团桌宠、诊断日志、比赛演示和 Windows 安装包发布验收。
+- S-039 基线验证为后端 559 passed、7 skipped，Electron/Node 180 passed，Vitest 151 passed，`desktop:dist` 成功。
 
-### 必须改进
+### 当前收敛边界
 
-- 首条消息会立即生成画像，不符合“通过简短对话诊断”的多轮流程，需要明确状态机。
-- 当前 SSE 先等待完整结果，再切成小块发送，不是真正的大模型流式输出。
-- llm_service 把错误转换成普通文本并返回 200，业务层只能靠关键词识别错误。
-- 画像和资源输出依赖字符串字段解析，缺少正式协议版本、字段校验和修复策略。
-- requirements.txt 缺少代码直接依赖的 SQLAlchemy，环境无法可靠复现。
-- 绝对式模块导入依赖从 backend 目录启动，不利于 Electron 打包和模块化运行。
-- async 路由中执行同步数据库操作，未来并发时可能阻塞事件循环。
-- init_db 在导入和请求中重复调用，应该迁移到 FastAPI lifespan。
-- CORS、请求字段、session_id 和资源元数据缺少生产级约束。
-- 当前没有自动化测试，也没有固定的模型效果评测样例。
+- `codex/s022-s026-remediation` 是包含 S-039 的唯一功能基线；旧同步分支只提取目录、文档和测试卫生改动，不回退协议、内容安全、OCR、知识库或桌面实现。
+- Windows 安装包尚未代码签名，属于已知非功能性发布事项。
 
 ## 四、Sol 队列
 
@@ -76,8 +68,10 @@
 | S-019 | P1 | 完成 | 设计可扩展桌宠、用户形象导入、学习进度感知与语音鼓励 | S-009、S-010、T-030、用户新增需求 | 两阶段均已完成：透明桌宠与任务状态联动、主进程安全角色包导入/恢复、本地 Web Audio 动作音效、系统 speechSynthesis 语音鼓励，以及音效/语音独立开关与音量 |
 | S-020 | P0 | 完成 | 核对当前 Electron 桌面端并完成全功能发布验收 | T-033、T-035、T-036、用户本轮要求 | 完整自动化回归、最新 unpacked 构建、隔离数据桌面流程、现有模型配置脱敏实测、导航/知识库/学习/桌宠/退出清理矩阵及发现问题修复 |
 | S-021 | P0 | 完成 | 对照软件杯官网文件审计当前项目是否具备参赛提交条件 | S-020、比赛官网最新通知 | 官网资格与赛题要求、提交物清单、当前产物逐项对照、阻塞项与提交前行动清单 |
-| S-023 | P1 | 完成 | Code Quality Review: v2 Protocol Models (models.py, __init__.py, tests) | 无 | 审查报告 → 本轮对话 |
 | S-022 | P0 | 完成 | 实现至少五类个性化学习资源生成与桌面端展示 | S-021、现有 learning-resource/v1 | 已完成严格 v2 协议、五类质量门、会话归属持久化、真实进度与取消、统一服务、HTTP/SSE/历史/独立重试、桌面端类型契约、安全渲染和 SmartTutor 闭环；完整验收见 S-022-REMEDIATION-COMPLETE |
+| S-023 | P1 | 完成 | Code Quality Review: v2 Protocol Models (models.py, __init__.py, tests) | 无 | 审查报告 → 本轮对话 |
+| S-024 | P0 | 完成 | 实现 Bundle Aggregator：组装、状态计算、目录排序与质量平均 | 无（v2 models 已就绪） | aggregator.py、test_resource_bundle_aggregator.py、12+ 测试通过 |
+| S-025 | P1 | 完成 | 实现前端 SafeMermaid 安全渲染组件与大纲降级 | 无 | SafeMermaid.vue、SafeMermaid.test.ts、vitest 4/4 通过 |
 | S-026 | P0 | 完成 | 实现系统级分层内容安全过滤 | S-022 端到端修复与安全渲染基线；用户已批准完成 S-022 后自动继续 | 已完成 `content-safety/v1`、输入/上下文/输出安全门、Reviewer Agent、可信引用、安全审计、SafeMarkdown/SafeMermaid/CSP、两轮代码审查修复与完整打包验收；最终证据见 S-026-FINAL-REVIEW |
 | S-027 | P0 | 完成 | 对照 `2026-07-16-deepseek-write.md` 核对五类资源架构、代码与可优化项 | S-022 当前实现；S-026 保持暂停 | 已确认独立管线、五类 specialist、v2 协议和组件骨架存在，但桌面端未接入、会话状态不恢复、取消/进度/重试未闭环、知识与来源未传入、bundle/artifact 持久化断层、类型门槛和渲染安全不足；证据与优化顺序见本轮对话 |
 | S-028 | P1 | 完成 | 生成可像普通 Windows APP 一样双击安装和启动的最新桌面发布包 | S-026 最终修复与桌面打包验收 | 已生成包含最新后端的 NSIS 安装程序、unpacked 便携版及 blockmap；安装包路径、哈希、生命周期与签名状态见 S-028-WINDOWS-INSTALLER |
@@ -92,6 +86,7 @@
 | S-037 | P0 | 完成 | 对全部前端、后端、Electron 和最终桌面包执行发布级验收 | S-033、S-034、S-035、S-036 | 全量测试、构建、PyInstaller、desktop pack、生命周期、真实 OCR/导入和零残留进程证据；完整证据见 S-037-RELEASE-ACCEPTANCE |
 | S-038 | P1 | 完成 | 将 Windows 主程序、安装器、快捷方式和主窗口图标统一为墨团形象 | S-037、现有墨团 spritesheet 与托盘图标 | 透明 512px 主图、多尺寸 ICO、Electron Builder/NSIS/BrowserWindow 接入、最终安装包图标与生命周期验收；证据见 S-038-COMPLETE |
 | S-039 | P0 | 完成 | 修复用户验收缺陷并完成托盘切换、墨团固定基础大小与手动拉伸 | S-037、S-038、用户四张真实桌面截图 | 单一答案入口与无遮挡提交、收藏局部更新无闪烁且并发安全、学习诊断说明、主窗口/墨团托盘显示收起切换、墨团 192×208 基础尺寸与 1–3 倍等比例四角拉伸、点击不改变大小、`.test-venv` 专用测试环境、完整回归与真实桌面验收；证据见 S-039-COMPLETE |
+| S-040 | P0 | 进行中 | 收敛最新功能分支、任务队列与 GitHub 远端状态 | S-039、`codex/s022-five-resource-bundle` 旧同步分支、`origin/main` | 以 `codex/s022-s026-remediation` 为唯一功能基线，筛选旧分支非回退改动，统一前端目录与文档路径，修正队列结构，完成全量验证并推送最新分支 |
 | T-033 | P0 | 完成 | 实现多 API 配置、高可用切换、模型选择与推理强度控制 | S-017 | 版本 2 加密多配置、原子热应用与回滚、3 次/2 配置预算、Retry-After/熔断、普通与流式故障边界、全局/学习空间模型和思考强度选择、兼容迁移、真实桌面 5/5 连接及完整打包回归 |
 | T-035 | P0 | 完成 | 实现本地知识库与安全文件导入 | S-018 | 已完成文件选择/拖放、七格式与限额校验、隔离解析 worker、SQLite 元数据/FTS/可选语义索引、可追溯引用、学习助手绑定与隐私模式、删除/重建、恶意文件/性能/打包测试及 Windows 桌面安装包验收 |
 | T-036 | P1 | 完成 | 实现桌宠形象包、用户上传、进度事件与语音鼓励 | S-019 | 已完成角色包目录选择、固定文件/atlas 校验、原子替换、失败保留旧角色、恢复墨团、热重载、动作音效和本地语音鼓励；全面素材/许可证、逐帧视觉与主观音色 QA 保留后续 |
@@ -161,8 +156,13 @@
 | INBOX-006 | Sol | 完成 | 继续优化后端学习效果 | S-010 已完成下一步学习决策、资源质量评分、低质量自动修复和测试台验收。 |
 | INBOX-007 | Luna/Terra | 完成 | 盘点 A3 前端并准备续作任务 | 已分流至 L-010；后续实施为 T-026、T-027，Electron 接入待用户确认后解锁 T-028。 |
 | INBOX-008 | Sol | 完成 | 检查前后端接口是否存在问题 | S-013 已完成：当前学习主流程接口匹配且回归通过；发现安装版模型配置闭环缺失与错误信封不一致，分别登记为 S-014、T-029。 |
+| INBOX-009 | Sol | 完成 | 编写开题报告 part 2“整体解决方案设计”300—600 字文案 | 已形成 583 字可直接粘贴文本，覆盖整体概述、五层架构、核心 Agent 与五类资源、学习闭环创新、60 分质量门槛、量化价值、落地可行性与推广场景；PowerShell 字数与关键词检查通过。 |
 
 ## 八、当前执行顺序
+
+Sol 当前执行 S-040：以 `codex/s022-s026-remediation` 为唯一功能基线，完成前端外层目录迁移、队列与文档修正、全量回归、`origin/main` 集成和 GitHub 最新分支推送。完成前不得把旧同步分支的协议、内容安全、OCR、知识库或 Electron 生产实现移入最新基线。
+
+### 历史执行轨迹（仅供追溯，不代表当前状态）
 
 Sol 已完成 T-035 的 12 个 TDD 任务：知识库采用 Electron userData 本地对象存储与 SHA-256 去重、隔离 parser worker、SQLite FTS5 必选索引、可选本地 OCR/语义包、学习空间集合绑定、两种隐私模式、可追溯引用和不可信资料防护。暖色三栏界面延续 openhanako 式陪伴工作台，并保留账号与桌宠扩展边界。
 
@@ -299,10 +299,6 @@ S-016 已完成：本仓库提交身份已设置为 `Wei kb <212667660@qq.com>`�
 | 2026-07-10 | S-001 | Sol | codex/architecture/S-001-多轮诊断状态机与Agent边界.md | 状态、边界、转换、不变量和 Terra 实现清单齐全 |
 | 2026-07-10 | S-002 | Sol | codex/architecture/S-002-版本化纯文本协议规范.md | 三类协议、解析、校验、修复和版本策略齐全 |
 | 2026-07-10 | QUEUE-INIT | Sol | AGENTS.md、codex/AI模型任务队列.md | 完成业务代码盘点、Python 编译、应用导入和根接口 200 验证 |
-
-| S-024 | P0 | 完成 | 实现 Bundle Aggregator：组装、状态计算、目录排序与质量平均 | 无（v2 models 已就绪） | aggregator.py、test_resource_bundle_aggregator.py、12+ 测试通过 |
-| S-025 | P1 | 完成 | 实现前端 SafeMermaid 安全渲染组件与大纲降级 | 无 | SafeMermaid.vue、SafeMermaid.test.ts、vitest 4/4 通过 |
-
 
 | 2026-07-16 | S-025-SAFEMERMAID | Sol | a3-front/a3-front/src/components/learning/SafeMermaid.vue、a3-front/a3-front/src/tests/components/SafeMermaid.test.ts、a3-front/a3-front/package.json、codex/AI模型任务队列.md | 创建 SafeMermaid Vue 3 组件：仅渲染 flowchart/graph 前缀安全代码、禁止 script/click/iframe 等注入模式、解析失败或非安全格式降级为文本大纲、动态 import mermaid 并设置 securityLevel:strict。vitest 4/4 通过，全量 12/12 通过。 |
 | 2026-07-17 | S-026-DESIGN | Sol | a3-front/a3-front/docs/superpowers/specs/2026-07-17-content-safety-filter-design.md、codex/AI模型任务队列.md | 用户批准分层内容安全设计：统一输入、上下文、生成后与渲染安全门，采用确定性检查、Safety Reviewer Agent、可信引用和安全 Markdown/Mermaid；按用户要求只保存设计，实施状态为保留。 |

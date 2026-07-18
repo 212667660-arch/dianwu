@@ -32,6 +32,7 @@ backend/evaluation/live-evaluation-history/
 **/build/
 **/release/
 **/desktop-backend/
+**/desktop-backend.backup-*/
 **/coverage/
 **/.vite/
 **/.vitest/

@@ -7,7 +7,7 @@ Vue 3 + TypeScript + Pinia + Element Plus 构建的 A3 学习多智能体系统�
 先在项目根目录启动后端 `127.0.0.1:8000`，再执行：
 
 ```powershell
-cd E:\软件杯\a3-front\a3-front
+cd E:\软件杯\front\a3-front
 npm install
 npm run dev
 ```
@@ -44,7 +44,7 @@ npm run build
 桌面端源码和发布产物均在本目录：`electron/` 保存主进程与 preload，`release/` 保存解压验证产物或安装包。界面以 HanaAgent/openhanako 的三栏工作区布局为参考，保留 A3 的学习诊断、资源和复习流程。
 
 ```powershell
-cd E:\软件杯\a3-front\a3-front
+cd E:\软件杯\front\a3-front
 npm run desktop:dev
 ```
 
@@ -67,6 +67,6 @@ npm run desktop:dist
 - 新配置启用失败时会恢复旧密文并重启原后端；没有旧配置时继续停留在未配置状态。
 - Web 开发模式仍使用后端 `POST /api/settings/model/test` 和 `PUT /api/settings/model`，这不是生产桌面端的密钥存储路径。
 
-当前版本仅为未来桌宠和账号体系保留隔离的窗口、IPC、状态事件与账号提供者边界；不显示桌宠、登录、注册或同步入口。
+当前版本已提供墨团桌宠、本地知识库、教材目录、学习资源卡片、模型配置和桌面诊断；账号体系仍只保留扩展边界，不显示登录、注册或同步入口。
 
-preload 仅暴露固定桥接方法：`request`、`startStream`、`cancelStream`、`onStreamEvent`、`onBackendExit`、`modelConfigTest` 和 `modelConfigSave`。主进程为普通 HTTP、SSE 与模型配置执行来源校验、固定路由、令牌注入、请求体限制和窗口关闭清理。独立 Web 开发仍可通过 Vite 代理访问 `http://127.0.0.1:8000`；Electron 不依赖固定端口。
+preload 仅暴露固定的后端请求与流式事件、模型档案、知识库、教材目录、桌面状态/诊断和桌宠桥接能力。主进程统一执行来源校验、固定路由与字段白名单、令牌注入、请求体限制、本地路径隔离和窗口关闭清理；renderer 不接收后端令牌、地址、凭据密文或用户选择的文件路径。独立 Web 开发仍可通过 Vite 代理访问 `http://127.0.0.1:8000`；Electron 不依赖固定端口。
