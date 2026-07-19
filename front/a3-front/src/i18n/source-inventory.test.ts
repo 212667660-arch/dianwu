@@ -4,6 +4,7 @@ import {
   extractSourceCandidates,
   shouldScanSource,
   validateInventory,
+  validateRepositoryInventory,
   type InventoryEntry,
   type SourceCandidate,
 } from './source-inventory'
@@ -68,6 +69,18 @@ describe('source inventory extraction', () => {
     expect(first).toEqual(repeated)
     expect(first[0]).toMatchObject({ source: 'src/a.ts', line: 1, column: 11 })
     expect(first[0].id).not.toBe(moved[0].id)
+  })
+
+  it('preserves source-file columns and stable ids for inline Vue blocks', () => {
+    const source = `<template><p title="内联标题">内联正文</p></template>\n<script setup>const label = '内联脚本'</script>`
+    const first = extractSourceCandidates('src/Inline.vue', source)
+    const repeated = extractSourceCandidates('src/Inline.vue', source)
+    const byRaw = new Map(first.map(candidate => [candidate.raw, candidate]))
+    const sourceColumn = (raw: string) => source.split('\n')[raw === '内联脚本' ? 1 : 0].indexOf(raw) + 1
+    expect(byRaw.get('内联标题')).toMatchObject({ line: 1, column: sourceColumn('内联标题') - 1 })
+    expect(byRaw.get('内联正文')).toMatchObject({ line: 1, column: sourceColumn('内联正文') })
+    expect(byRaw.get('内联脚本')).toMatchObject({ line: 2, column: sourceColumn('内联脚本') - 1 })
+    expect(first.map(candidate => candidate.id)).toEqual(repeated.map(candidate => candidate.id))
   })
 
   it('filters tests, generated output, and locale catalogs', () => {
@@ -135,5 +148,28 @@ describe('source inventory validation', () => {
     expect(validateInventory([candidate()], [{ ...base, expression_bindings: [{ expression: 'current', placeholder: 'bad-name' }, base.expression_bindings[1]] }], { progress: '进度 {bad-name}/{total}' }).issues).toContainEqual(expect.objectContaining({ code: 'invalid_placeholder' }))
     expect(validateInventory([candidate()], [{ ...base, template: '进度 {total}/{current}' }], { progress: '进度 {total}/{current}' }).issues).toContainEqual(expect.objectContaining({ code: 'template_mismatch' }))
     expect(validateInventory([candidate()], [{ ...base, template: '进度 {current}/{current}' }], { progress: '进度 {current}/{current}' }).issues).toContainEqual(expect.objectContaining({ code: 'template_mismatch' }))
+  })
+
+  it('requires distinct source expressions to bind distinct placeholders', () => {
+    const entry: InventoryEntry = {
+      id: 'candidate-1', mode: 'mapped', catalog_key: 'progress', template: '进度 {value}/{value}',
+      expression_bindings: [{ expression: 'current', placeholder: 'value' }, { expression: 'total', placeholder: 'value' }],
+    }
+    expect(validateInventory([candidate()], [entry], { progress: entry.template }).issues).toContainEqual(expect.objectContaining({ code: 'placeholder_collision' }))
+  })
+
+  it('allows repeated occurrences of one expression to reuse its placeholder', () => {
+    const repeated = candidate({ raw: '${name} 对应 ${name}', expressions: ['name', 'name'], static_parts: ['', ' 对应 ', ''] })
+    const entry: InventoryEntry = {
+      id: 'candidate-1', mode: 'mapped', catalog_key: 'name', template: '{name} 对应 {name}',
+      expression_bindings: [{ expression: 'name', placeholder: 'name' }, { expression: 'name', placeholder: 'name' }],
+    }
+    expect(validateInventory([repeated], [entry], { name: entry.template }).issues).toEqual([])
+  })
+
+  it('treats an empty staging inventory as incomplete when repository candidates exist', () => {
+    const result = validateRepositoryInventory([candidate()], { version: 1, entries: [] }, {})
+    expect(result.missing).toHaveLength(1)
+    expect(result.complete).toBe(false)
   })
 })

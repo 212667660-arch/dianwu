@@ -29,7 +29,7 @@ export type InventoryEntry =
   | { id: string; mode: 'mapped'; catalog_key: string; template: string; expression_bindings: Array<{ expression: string; placeholder: string }> }
   | { id: string; mode: 'classified'; reason: ClassifiedReason }
 
-export interface InventoryIssue { id: string; code: 'duplicate_entry' | 'invalid_reason' | 'invalid_placeholder' | 'expression_mismatch' | 'template_mismatch' | 'missing_catalog_key' | 'catalog_value_mismatch' }
+export interface InventoryIssue { id: string; code: 'duplicate_entry' | 'invalid_reason' | 'invalid_placeholder' | 'placeholder_collision' | 'expression_mismatch' | 'template_mismatch' | 'missing_catalog_key' | 'catalog_value_mismatch' }
 
 export interface InventoryValidation {
   missing: SourceCandidate[]
@@ -105,23 +105,23 @@ function extractScript(source: string, text: string, offsetLine = 0, offsetColum
   return result
 }
 
-function walkVueTemplate(source: string, root: RootNode, lineOffset: number): SourceCandidate[] {
+function walkVueTemplate(source: string, root: RootNode, lineOffset: number, columnOffset: number): SourceCandidate[] {
   const result: SourceCandidate[] = []
   const add = (kind: CandidateKind, raw: string, expressions: string[], staticParts: string[], line: number, column: number) => {
-    const candidate = makeCandidate(source, kind, raw, expressions, staticParts, line + lineOffset, column)
+    const candidate = makeCandidate(source, kind, raw, expressions, staticParts, line + lineOffset, column + (line === 1 ? columnOffset : 0))
     if (candidate) result.push(candidate)
   }
   const visit = (node: RootNode | TemplateChildNode): void => {
     if (node.type === NodeTypes.TEXT) add('vue_text', node.content, [], [node.content], node.loc.start.line, node.loc.start.column)
     if (node.type === NodeTypes.INTERPOLATION) {
-      result.push(...extractScript(source, node.content.loc.source, node.content.loc.start.line - 1 + lineOffset, node.content.loc.start.column - 1))
+      result.push(...extractScript(source, node.content.loc.source, node.content.loc.start.line - 1 + lineOffset, node.content.loc.start.column - 1 + (node.content.loc.start.line === 1 ? columnOffset : 0)))
     }
     if (node.type === NodeTypes.ELEMENT) {
       for (const prop of node.props) {
         if (prop.type === NodeTypes.ATTRIBUTE && prop.value && STATIC_ATTRIBUTES.has(prop.name)) {
           add('vue_static_attribute', prop.value.content, [], [prop.value.content], prop.value.loc.start.line, prop.value.loc.start.column)
         } else if (prop.type === NodeTypes.DIRECTIVE && prop.exp) {
-          result.push(...extractScript(source, prop.exp.loc.source, prop.exp.loc.start.line - 1 + lineOffset, prop.exp.loc.start.column - 1))
+          result.push(...extractScript(source, prop.exp.loc.source, prop.exp.loc.start.line - 1 + lineOffset, prop.exp.loc.start.column - 1 + (prop.exp.loc.start.line === 1 ? columnOffset : 0)))
         }
       }
       for (const child of node.children) visit(child)
@@ -142,9 +142,9 @@ export function extractSourceCandidates(source: string, text: string): SourceCan
   if (!source.endsWith('.vue')) return extractScript(source, text)
   const { descriptor } = parseSfc(text, { filename: source })
   const result: SourceCandidate[] = []
-  if (descriptor.template) result.push(...walkVueTemplate(source, parseTemplate(descriptor.template.content), descriptor.template.loc.start.line - 1))
+  if (descriptor.template) result.push(...walkVueTemplate(source, parseTemplate(descriptor.template.content), descriptor.template.loc.start.line - 1, descriptor.template.loc.start.column - 1))
   for (const block of [descriptor.script, descriptor.scriptSetup]) {
-    if (block) result.push(...extractScript(source, block.content, block.loc.start.line - 1))
+    if (block) result.push(...extractScript(source, block.content, block.loc.start.line - 1, block.loc.start.column - 1))
   }
   return result.sort((left, right) => left.line - right.line || left.column - right.column || left.id.localeCompare(right.id))
 }
@@ -178,6 +178,19 @@ export function validateInventory(candidates: SourceCandidate[], entries: Invent
     if (bindings.length !== candidate.expressions.length
       || bindings.some((binding, index) => binding.expression !== candidate.expressions[index])) issues.push({ id, code: 'expression_mismatch' })
     if (bindings.some(binding => !/^[A-Za-z][A-Za-z0-9_]*$/.test(binding.placeholder))) issues.push({ id, code: 'invalid_placeholder' })
+    const expressionToPlaceholder = new Map<string, string>()
+    const placeholderToExpression = new Map<string, string>()
+    for (const binding of bindings) {
+      const existingPlaceholder = expressionToPlaceholder.get(binding.expression)
+      const existingExpression = placeholderToExpression.get(binding.placeholder)
+      if ((existingPlaceholder !== undefined && existingPlaceholder !== binding.placeholder)
+        || (existingExpression !== undefined && existingExpression !== binding.expression)) {
+        issues.push({ id, code: 'placeholder_collision' })
+        break
+      }
+      expressionToPlaceholder.set(binding.expression, binding.placeholder)
+      placeholderToExpression.set(binding.placeholder, binding.expression)
+    }
     const bindingPlaceholders = bindings.map(binding => binding.placeholder)
     let expectedTemplate = candidate.static_parts[0] ?? ''
     for (let index = 0; index < bindings.length; index += 1) {
@@ -190,4 +203,23 @@ export function validateInventory(candidates: SourceCandidate[], entries: Invent
     else if (message !== entry.template) issues.push({ id, code: 'catalog_value_mismatch' })
   }
   return { missing, extra, issues }
+}
+
+export interface InventoryDocument {
+  version: 1
+  entries: InventoryEntry[]
+}
+
+export type RepositoryInventoryValidation = InventoryValidation & { complete: boolean }
+
+/**
+ * Repository completion requires callers to pass every production candidate discovered by a real source walk.
+ * An empty staging inventory document is valid data, but is never evidence that repository classification is complete.
+ */
+export function validateRepositoryInventory(candidates: SourceCandidate[], inventory: InventoryDocument, catalog: Record<string, string>): RepositoryInventoryValidation {
+  const validation = validateInventory(candidates, inventory.entries, catalog)
+  return {
+    ...validation,
+    complete: candidates.length > 0 && validation.missing.length === 0 && validation.extra.length === 0 && validation.issues.length === 0,
+  }
 }
