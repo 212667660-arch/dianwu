@@ -19,6 +19,7 @@ import statuses from './locales/zh-CN/messages/statuses.json'
 import errors from './locales/zh-CN/messages/errors.json'
 import desktop from './locales/zh-CN/messages/desktop.json'
 import pet from './locales/zh-CN/messages/pet.json'
+import sourceInventory from './locales/zh-CN/messages/source-inventory.json'
 
 export const CATALOG_VERSION = 1 as const
 export const BUILT_IN_LOCALE = 'zh-CN' as const
@@ -52,6 +53,7 @@ export const BUILT_IN_MESSAGES = deepFreeze({
   errors,
   desktop,
   pet,
+  sourceInventory,
 } as const)
 
 const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
