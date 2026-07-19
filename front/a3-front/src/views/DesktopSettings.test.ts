@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, expect, it, vi } from 'vitest'
+import { BUILT_IN_MESSAGES } from '@/i18n/catalog'
 
 const apiMock = vi.hoisted(() => ({
   desktopInfo: vi.fn(), desktopDiagnostics: vi.fn(), exportDesktopDiagnostics: vi.fn(), checkDesktopUpdates: vi.fn(),
@@ -31,5 +32,7 @@ it('shows version status and provides diagnosis log export and update checks', a
   expect(wrapper.text()).toContain('backend ready')
   expect(wrapper.text()).toContain('report.json')
   expect(wrapper.text()).toContain('离线构建')
+  expect(wrapper.text()).toContain('简体中文')
+  expect(wrapper.text()).toContain(BUILT_IN_MESSAGES.views.desktopSettings.language.contentFollowsUi)
   expect(wrapper.find('[data-testid="pet-settings"]').exists()).toBe(true)
 })

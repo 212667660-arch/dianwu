@@ -2,13 +2,13 @@
   <section class="page model-settings-page">
     <header class="settings-hero">
       <div>
-        <span class="hero-kicker">让可靠的连接，安静地守在学习背后</span>
-        <h1>模型与连接</h1>
-        <p>保存多套模型服务，选择默认连接，并为偶发的网络波动排好温柔而克制的备用顺序。</p>
+        <span class="hero-kicker">{{ t('views.modelSettings.connection') }}</span>
+        <h1>{{ t('views.modelSettings.modelConnection') }}</h1>
+        <p>{{ t('views.modelSettings.overview') }}</p>
       </div>
       <div class="hero-status" :class="{ ready: backend.modelRuntimeStatus?.ready }">
         <i />
-        {{ backend.modelRuntimeStatus?.ready ? '学习引擎已就绪' : '等待第一套可用配置' }}
+        {{ backend.modelRuntimeStatus?.ready ? t('views.modelSettings.ready') : t('views.modelSettings.firstAvailableProfilePending') }}
       </div>
     </header>
 
@@ -16,8 +16,8 @@
       <div class="banner-copy">
         <span class="banner-icon">↝</span>
         <div>
-          <strong>自动使用备用配置</strong>
-          <p>仅在连接中断、超时或服务临时不可用时切换；认证和输入错误不会被备用配置掩盖。</p>
+          <strong>{{ t('views.modelSettings.autoFailoverTitle') }}</strong>
+          <p>{{ t('views.modelSettings.failoverExplanation') }}</p>
         </div>
       </div>
       <el-switch
@@ -36,8 +36,8 @@
     <div v-if="backend.modelProfiles.length === 0" class="first-light">
       <span>☼</span>
       <div>
-        <strong>点亮第一盏模型灯</strong>
-        <p>先在右侧填写并测试一套连接。密钥会由系统加密保存，页面不会再次读取它。</p>
+        <strong>{{ t('views.modelSettings.modelTitle') }}</strong>
+        <p>{{ t('views.modelSettings.credentialStorageExplanation') }}</p>
       </div>
     </div>
 
@@ -62,32 +62,32 @@
 
       <aside class="status-desk">
         <article class="desk-card runtime-card">
-          <span class="desk-eyebrow">此刻的连接</span>
+          <span class="desk-eyebrow">{{ t('views.modelSettings.connectionTitle') }}</span>
           <h2>{{ runtimeTitle }}</h2>
           <div class="runtime-orbit" :class="{ ready: backend.modelRuntimeStatus?.ready }">
             <span /><span /><span />
           </div>
           <dl>
-            <div><dt>默认配置</dt><dd>{{ defaultProfile?.label || '尚未设置' }}</dd></div>
-            <div><dt>备用数量</dt><dd>{{ backend.modelPolicy?.fallback_profile_ids.length || 0 }}</dd></div>
-            <div><dt>自动切换</dt><dd>{{ backend.modelPolicy?.auto_failover ? '已开启' : '已关闭' }}</dd></div>
+            <div><dt>{{ t('views.modelSettings.defaultProfile') }}</dt><dd>{{ defaultProfile?.label || t('views.modelSettings.notSet') }}</dd></div>
+            <div><dt>{{ t('views.modelSettings.failoverCount') }}</dt><dd>{{ backend.modelPolicy?.fallback_profile_ids.length || 0 }}</dd></div>
+            <div><dt>{{ t('views.modelSettings.automatic') }}</dt><dd>{{ backend.modelPolicy?.auto_failover ? t('views.modelSettings.enabled') : t('views.modelSettings.disabled') }}</dd></div>
           </dl>
         </article>
 
         <article class="desk-card safety-card">
-          <span class="desk-eyebrow">安全边界</span>
-          <h3>密钥只在受信主进程短暂停留</h3>
-          <p>列表、运行状态、学习记录和日志只接触脱敏信息。编辑旧配置时，Key 留空即沿用原密钥。</p>
+          <span class="desk-eyebrow">{{ t('views.modelSettings.security') }}</span>
+          <h3>{{ t('views.modelSettings.apiKeyTitle') }}</h3>
+          <p>{{ t('views.modelSettings.credentialBoundaryExplanation') }}</p>
         </article>
 
         <article class="desk-card order-card">
-          <span class="desk-eyebrow">连接顺序</span>
+          <span class="desk-eyebrow">{{ t('views.modelSettings.connectionOrder') }}</span>
           <ol>
-            <li><b>1</b><span>学习空间手动选择</span></li>
-            <li><b>2</b><span>全局默认配置</span></li>
-            <li><b>3</b><span>你排列的备用配置</span></li>
+            <li><b>1</b><span>{{ t('views.modelSettings.workspaceSelectionMode') }}</span></li>
+            <li><b>2</b><span>{{ t('views.modelSettings.profileDefaultGlobal') }}</span></li>
+            <li><b>3</b><span>{{ t('views.modelSettings.failoverProfile') }}</span></li>
           </ol>
-          <p>流式回答一旦已经出现文字，就不会静默拼接另一个模型。</p>
+          <p>{{ t('views.modelSettings.modelDescription') }}</p>
         </article>
       </aside>
     </div>
@@ -95,11 +95,14 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { errorMessage, type ModelProfileInput, type ModelProfileSummary } from '@/api'
 import ModelProfileEditor from '@/components/model/ModelProfileEditor.vue'
 import ModelProfileList from '@/components/model/ModelProfileList.vue'
 import { useBackendStore } from '@/stores/backend'
+
+const { t } = useI18n()
 
 const backend = useBackendStore()
 const selectedId = ref('')
@@ -109,9 +112,9 @@ const feedback = reactive({ success: '', error: '' })
 const selectedProfile = computed(() => backend.modelProfiles.find(profile => profile.id === selectedId.value) || null)
 const defaultProfile = computed(() => backend.modelProfiles.find(profile => profile.id === backend.modelPolicy?.default_profile_id))
 const runtimeTitle = computed(() => {
-  if (!backend.modelProfiles.length) return '书桌还在等第一位伙伴'
-  if (backend.modelRuntimeStatus?.ready) return '连接正在安静工作'
-  return '有配置需要你的照看'
+  if (!backend.modelProfiles.length) return t('views.modelSettings.desk')
+  if (backend.modelRuntimeStatus?.ready) return t('views.modelSettings.connectionInProgress')
+  return t('views.modelSettings.profile')
 })
 
 watch(() => [backend.modelProfiles, backend.modelPolicy?.default_profile_id] as const, ensureSelection, { deep: true })
@@ -148,7 +151,7 @@ function duplicateProfile(profile: ModelProfileSummary) {
   draftSeed.value = {
     ...profile,
     id: nextCopyId(profile.id),
-    label: `${profile.label} 副本`,
+    label: t('views.modelSettings.duplicateProfileName', { name: profile.label }),
     enabled: true,
     api_key_configured: false,
     models: profile.models.map(model => ({ ...model, supported_reasoning_efforts: [...model.supported_reasoning_efforts] })),
@@ -158,7 +161,7 @@ function duplicateProfile(profile: ModelProfileSummary) {
 
 async function changeAutoFailover(value: string | number | boolean) {
   if (!backend.modelPolicy) return
-  await savePolicy({ ...backend.modelPolicy, auto_failover: Boolean(value) }, value ? '自动备用已开启。' : '自动备用已关闭。')
+  await savePolicy({ ...backend.modelPolicy, auto_failover: Boolean(value) }, value ? t('views.modelSettings.automaticFailoverEnabled') : t('views.modelSettings.automaticFailoverDisabled'))
 }
 
 async function setDefaultProfile(profileId: string) {
@@ -166,7 +169,7 @@ async function setDefaultProfile(profileId: string) {
   const oldDefault = backend.modelPolicy.default_profile_id
   const fallback = backend.modelPolicy.fallback_profile_ids.filter(id => id !== profileId)
   if (oldDefault && oldDefault !== profileId && !fallback.includes(oldDefault)) fallback.unshift(oldDefault)
-  await savePolicy({ ...backend.modelPolicy, default_profile_id: profileId, fallback_profile_ids: fallback }, '默认模型配置已更新。')
+  await savePolicy({ ...backend.modelPolicy, default_profile_id: profileId, fallback_profile_ids: fallback }, t('views.modelSettings.defaultProfileUpdated'))
   selectedId.value = profileId
 }
 
@@ -177,7 +180,7 @@ async function moveFallback(payload: { profileId: string; direction: -1 | 1 }) {
   const next = index + payload.direction
   if (index < 0 || next < 0 || next >= fallback.length) return
   ;[fallback[index], fallback[next]] = [fallback[next], fallback[index]]
-  await savePolicy({ ...backend.modelPolicy, fallback_profile_ids: fallback }, '备用顺序已更新。')
+  await savePolicy({ ...backend.modelPolicy, fallback_profile_ids: fallback }, t('views.modelSettings.failoverOrderUpdated'))
 }
 
 async function toggleProfile(payload: { profileId: string; enabled: boolean }) {
@@ -186,7 +189,7 @@ async function toggleProfile(payload: { profileId: string; enabled: boolean }) {
   clearFeedback()
   try {
     await backend.upsertModelProfile(toInput(profile, payload.enabled))
-    feedback.success = payload.enabled ? '配置已启用并通过连接测试。' : '配置已停用。'
+    feedback.success = payload.enabled ? t('views.modelSettings.profileEnabledAfterTest') : t('views.modelSettings.profileDisabled')
   } catch (error) {
     feedback.error = errorMessage(error)
   }
@@ -196,7 +199,7 @@ async function testExistingProfile(profile: ModelProfileSummary) {
   clearFeedback()
   try {
     const result = await backend.testModelProfile(toInput(profile, profile.enabled))
-    feedback.success = `${profile.label} 连接稳定 · ${result.latency_ms} ms`
+    feedback.success = t('views.modelSettings.connectionDescription', { name: profile.label, latencyMs: result.latency_ms })
   } catch (error) {
     feedback.error = errorMessage(error)
   }
@@ -208,7 +211,7 @@ async function deleteProfile(profileId: string) {
     await backend.deleteModelProfile(profileId)
     if (selectedId.value === profileId) selectedId.value = ''
     ensureSelection()
-    feedback.success = '模型配置已删除。'
+    feedback.success = t('views.modelSettings.profileDeleted')
   } catch (error) {
     feedback.error = errorMessage(error)
   }
@@ -218,7 +221,7 @@ async function handleSaved(profileId: string) {
   selectedId.value = profileId
   draftSeed.value = null
   if (backend.modelPolicy && backend.modelPolicy.default_profile_id !== profileId && !backend.modelPolicy.fallback_profile_ids.includes(profileId)) {
-    await savePolicy({ ...backend.modelPolicy, fallback_profile_ids: [...backend.modelPolicy.fallback_profile_ids, profileId] }, '配置已保存，并加入备用顺序。')
+    await savePolicy({ ...backend.modelPolicy, fallback_profile_ids: [...backend.modelPolicy.fallback_profile_ids, profileId] }, t('views.modelSettings.profileSavedWithFailover'))
   }
 }
 

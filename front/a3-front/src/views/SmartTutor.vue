@@ -1,34 +1,34 @@
 <template>
   <section class="page tutor-page">
     <div class="tutor-statusbar">
-      <button type="button" class="knowledge-space-button" data-testid="knowledge-space-button" @click="openKnowledgeSpace"><span>▤</span> 本空间资料 · {{ backend.boundKnowledgeCollectionIds.length }}</button>
-      <span class="status-pill" :class="backend.ready ? 'good' : 'bad'">{{ backend.ready ? '模型就绪' : '模型未就绪' }}</span>
+      <button type="button" class="knowledge-space-button" data-testid="knowledge-space-button" @click="openKnowledgeSpace"><span>▤</span> {{ t('views.tutor.sourceCountPrefix') }} {{ backend.boundKnowledgeCollectionIds.length }}</button>
+      <span class="status-pill" :class="backend.ready ? 'good' : 'bad'">{{ backend.ready ? t('views.tutor.modelReady') : t('views.tutor.modelNotReady') }}</span>
       <span class="status-pill">{{ phaseLabel }}</span>
     </div>
 
     <article class="chat-panel">
       <div ref="messageList" class="message-list">
-        <div v-if="failoverNotice" class="connection-notice" data-testid="failover-notice">↝ {{ failoverNotice }}，这次回答仍保持同一条清晰的上下文。</div>
+        <div v-if="failoverNotice" class="connection-notice" data-testid="failover-notice">↝ {{ failoverNotice }}{{ t('views.tutor.failoverContextSuffix') }}</div>
         <div v-if="!displayMessages.length && !historicalBundles.length && !pendingUser" class="welcome" :data-companion-id="companionId">
-          <div class="companion-portrait" aria-hidden="true"><span>学</span></div>
-          <h1>今天想一起学点什么？</h1>
-          <p>不用急着把目标说得很完整。先告诉我你最近在困惑什么，我们慢慢把它变成一条清晰的路。</p>
+          <div class="companion-portrait" aria-hidden="true"><span>{{ t('views.tutor.brandMark') }}</span></div>
+          <h1>{{ t('views.tutor.title') }}</h1>
+          <p>{{ t('views.tutor.intro') }}</p>
           <div class="companion-choice">
-            <button type="button" class="active"><span class="mini-avatar">学</span>学习伙伴</button>
-            <button type="button" disabled><span class="mini-avatar muted-avatar">＋</span>未来伙伴</button>
+            <button type="button" class="active"><span class="mini-avatar">{{ t('views.tutor.brandMark') }}</span>{{ t('views.tutor.partner') }}</button>
+            <button type="button" disabled><span class="mini-avatar muted-avatar">＋</span>{{ t('views.tutor.futurePartner') }}</button>
           </div>
-          <div class="workspace-memory"><span>▢ 工作空间：{{ backend.sessionId }}</span><span>◷ 学习记忆已连接</span></div>
+          <div class="workspace-memory"><span>{{ t('views.tutor.workspaceLabelPrefix') }}{{ backend.sessionId }}</span><span>{{ t('views.tutor.connection') }}</span></div>
           <div class="starter-list">
             <button v-for="starter in starters" :key="starter" type="button" @click="editor = starter">{{ starter }}</button>
           </div>
         </div>
 
         <div v-for="message in displayMessages" :key="message.seq" class="message" :class="message.role">
-          <div class="message-meta">{{ message.role === 'user' ? '你' : '学习伙伴' }}</div>
+          <div class="message-meta">{{ message.role === 'user' ? t('views.tutor.you') : t('views.tutor.partner') }}</div>
           <pre>{{ message.content }}</pre>
         </div>
         <div v-if="resourceProgress" class="resource-progress" role="status">
-          <span>资源生成进度</span>
+          <span>{{ t('views.tutor.resourceProgress') }}</span>
           <strong>{{ resourceProgress.completed }} / {{ resourceProgress.total }}</strong>
           <span>{{ resourceProgress.currentType }}</span>
         </div>
@@ -46,61 +46,61 @@
           @retry-artifact="artifactType => retryArtifact(visibleActiveBundle?.bundle_id || '', artifactType)"
         />
         <div v-for="item in retainedInterruptions" :key="item.id" class="message assistant retained-interruption">
-          <div class="message-meta">学习伙伴 · 中断前保留</div><pre>{{ item.content }}</pre>
+          <div class="message-meta">{{ t('views.tutor.learningPartner') }}</div><pre>{{ item.content }}</pre>
         </div>
-        <div v-if="pendingUser" class="message user transient"><div class="message-meta">你</div><pre>{{ pendingUser }}</pre></div>
+        <div v-if="pendingUser" class="message user transient"><div class="message-meta">{{ t('views.tutor.you') }}</div><pre>{{ pendingUser }}</pre></div>
         <div v-if="generating || streamText" class="message assistant transient">
-          <div class="message-meta">{{ activePhase }} Agent <span v-if="generating" class="typing">正在组织思绪…</span></div>
-          <pre>{{ streamText || '让我想一想…' }}</pre>
+          <div class="message-meta">{{ activePhase }} Agent <span v-if="generating" class="typing">{{ t('views.tutor.organizing') }}</span></div>
+          <pre>{{ streamText || t('views.tutor.thinking') }}</pre>
         </div>
         <div v-if="streamError && isLearningDiagnosisError" class="stream-error diagnosis-help" data-testid="learning-diagnosis-help" role="alert">
           <div>
-            <strong>需要先完成学习诊断</strong>
-            <p>学习诊断不是电脑故障检测，而是画像 Agent 通过几轮对话了解你的学习目标、当前基础和薄弱点。</p>
-            <p>{{ diagnosisCompleted ? '当前画像已经完成，可以重新尝试刚才的请求。' : '请先继续回答学习助手的问题，画像完成后即可生成练习和学习资源。' }}</p>
+            <strong>{{ t('views.tutor.diagnosisRequired.title') }}</strong>
+            <p>{{ t('views.tutor.diagnosisRequired.description') }}</p>
+            <p>{{ diagnosisCompleted ? t('views.tutor.diagnosisRequired.completedDescription') : t('views.tutor.diagnosisRequired.pendingDescription') }}</p>
           </div>
           <el-button data-testid="continue-learning-diagnosis" text type="primary" @click="recoverLearningDiagnosis">
-            {{ diagnosisCompleted ? '重新尝试刚才请求' : '继续学习诊断' }}
+            {{ diagnosisCompleted ? t('views.tutor.diagnosisRequired.retry') : t('views.tutor.continueDiagnosis') }}
           </el-button>
         </div>
         <div v-else-if="streamError" class="stream-error" role="alert">
-          <div><strong>本次请求未完成</strong><p>{{ streamError }}</p></div>
-          <el-button text type="primary" @click="restoreFailedMessage">重新编辑</el-button>
+          <div><strong>{{ t('views.tutor.requestFailed') }}</strong><p>{{ streamError }}</p></div>
+          <el-button text type="primary" @click="restoreFailedMessage">{{ t('views.tutor.editAgain') }}</el-button>
         </div>
         <div v-if="routeKnowledgeBindingError" class="stream-error" role="alert" data-testid="route-knowledge-error">
-          <div><strong>教材资料尚未绑定</strong><p>{{ routeKnowledgeBindingError }}</p></div>
+          <div><strong>{{ t('views.tutor.knowledgeBindingRequired') }}</strong><p>{{ routeKnowledgeBindingError }}</p></div>
         </div>
         <div v-if="streamInterrupted" class="stream-interruption" role="status">
-          <div><strong>连接在回答途中轻轻断开了</strong><p>已经出现的文字会留在这里，不会与另一个模型的内容静默拼接。</p></div>
-          <el-button v-if="canContinueWithBackup" text type="primary" data-testid="continue-with-backup" @click="continueWithBackup">使用备用配置继续</el-button>
+          <div><strong>{{ t('views.tutor.connectionInterrupted.title') }}</strong><p>{{ t('views.tutor.connectionInterrupted.description') }}</p></div>
+          <el-button v-if="canContinueWithBackup" text type="primary" data-testid="continue-with-backup" @click="continueWithBackup">{{ t('views.tutor.connectionInterrupted.useBackup') }}</el-button>
         </div>
         <div v-if="sources.length" class="inline-sources">
-          <span>这次参考了</span>
+          <span>{{ t('views.tutor.sources') }}</span>
           <a v-for="source in sources" :key="source.url" :href="source.url" target="_blank" rel="noreferrer">{{ source.title }}</a>
         </div>
         <KnowledgeSourceList v-if="knowledgeSources.length" :sources="knowledgeSources" @open="openKnowledgeSource" />
         <div v-if="evidenceStatus === 'insufficient'" class="evidence-recovery" data-testid="evidence-recovery">
-          <div><strong>教材证据不足</strong><p>当前页码范围没有检索到足够依据。你可以按原范围重新检索，或扩大到相邻页面。</p></div>
+          <div><strong>{{ t('views.tutor.evidence.insufficient') }}</strong><p>{{ t('views.tutor.evidence.description') }}</p></div>
           <div class="evidence-actions">
-            <button type="button" :disabled="generating" data-testid="retry-evidence" @click="retryEvidence(false)">重新检索</button>
-            <button v-if="evidenceRecoveryActions.includes('expand_range')" type="button" :disabled="generating" data-testid="expand-evidence-range" @click="retryEvidence(true)">扩大范围</button>
+            <button type="button" :disabled="generating" data-testid="retry-evidence" @click="retryEvidence(false)">{{ t('views.tutor.evidence.retry') }}</button>
+            <button v-if="evidenceRecoveryActions.includes('expand_range')" type="button" :disabled="generating" data-testid="expand-evidence-range" @click="retryEvidence(true)">{{ t('views.tutor.evidence.expand') }}</button>
           </div>
         </div>
       </div>
 
       <div class="composer-wrap">
         <div class="composer">
-          <el-input v-model="editor" type="textarea" :rows="3" maxlength="8000" show-word-limit resize="none" placeholder="说点什么…" @keydown.ctrl.enter.prevent="send" />
+          <el-input v-model="editor" type="textarea" :rows="3" maxlength="8000" show-word-limit resize="none" :placeholder="t('views.tutor.inputPlaceholder')" @keydown.ctrl.enter.prevent="send" />
           <div v-if="canGenerateResources" class="knowledge-scope-controls">
-            <label>教材范围
+            <label>{{ t('views.tutor.scope.title') }}
               <select v-model.number="scopeDocumentId" data-testid="knowledge-scope-document">
-                <option value="">全部已绑定资料</option>
+                <option value="">{{ t('views.tutor.scope.all') }}</option>
                 <option v-for="document in backend.knowledgeDocuments" :key="document.id" :value="document.id">{{ document.display_name }}</option>
               </select>
             </label>
-            <label>起始页<input v-model.number="scopePageStart" data-testid="knowledge-scope-start" type="number" min="1" :max="selectedScopePageCount || 9999" placeholder="可选"></label>
-            <label>结束页<input v-model.number="scopePageEnd" data-testid="knowledge-scope-end" type="number" min="1" :max="selectedScopePageCount || 9999" placeholder="可选"></label>
-            <span>{{ scopeSearchMode === 'expanded' ? '已扩大相邻页检索' : '按所选页码精确检索' }}</span>
+            <label>{{ t('views.tutor.scope.startPage') }}<input v-model.number="scopePageStart" data-testid="knowledge-scope-start" type="number" min="1" :max="selectedScopePageCount || 9999" :placeholder="t('common.form.optional')"></label>
+            <label>{{ t('views.tutor.scope.endPage') }}<input v-model.number="scopePageEnd" data-testid="knowledge-scope-end" type="number" min="1" :max="selectedScopePageCount || 9999" :placeholder="t('common.form.optional')"></label>
+            <span>{{ scopeSearchMode === 'expanded' ? t('views.tutor.scope.expanded') : t('views.tutor.scope.exact') }}</span>
           </div>
           <div class="composer-actions">
             <div class="composer-left">
@@ -115,28 +115,29 @@
                 @save="saveModelPreference"
               />
               <ResourceMenu v-if="canGenerateResources" v-model="resourceSelection" />
-              <span class="gentle-tip">写下目标、问题，或此刻的困惑</span><span class="stream-toggle">流式 <el-switch v-model="useStream" /></span>
+              <span class="gentle-tip">{{ t('views.tutor.inputHint') }}</span><span class="stream-toggle">{{ t('views.tutor.streamingBadge') }} <el-switch v-model="useStream" /></span>
             </div>
             <div class="toolbar">
-              <el-button v-if="generating" type="danger" plain :icon="Close" @click="cancel">取消</el-button>
-              <el-button data-testid="send" type="primary" :icon="Promotion" :loading="generating" :disabled="!editor.trim() || !backend.modelConfigured || routeKnowledgeBindingBusy || Boolean(routeKnowledgeBindingError)" @click="send">发送</el-button>
+              <el-button v-if="generating" type="danger" plain :icon="Close" @click="cancel">{{ t('common.actions.cancel') }}</el-button>
+              <el-button data-testid="send" type="primary" :icon="Promotion" :loading="generating" :disabled="!editor.trim() || !backend.modelConfigured || routeKnowledgeBindingBusy || Boolean(routeKnowledgeBindingError)" @click="send">{{ t('common.actions.send') }}</el-button>
             </div>
           </div>
         </div>
       </div>
     </article>
-    <div v-if="knowledgeSpaceOpen" class="knowledge-space-modal" role="dialog" aria-modal="true" aria-label="本空间资料">
-      <div class="knowledge-space-card"><header><div><span>LEARNING SPACE</span><h2>让哪些资料陪你学习？</h2></div><button type="button" aria-label="关闭本空间资料" @click="knowledgeSpaceOpen=false">×</button></header>
-        <p class="privacy-notice">选择“允许模型参考”时，命中的少量资料片段会发送给当前模型服务；原文件始终留在本机。</p>
-        <div class="binding-collections"><label v-for="collection in backend.knowledgeCollections" :key="collection.id"><input v-model="bindingIds" type="checkbox" :value="collection.id" :data-testid="`collection-check-${collection.id}`"><span><strong>{{ collection.name }}</strong><small>{{ collection.document_count || 0 }} 份资料</small></span></label><p v-if="!backend.knowledgeCollections.length">还没有资料集合，可以先去知识库建一座小书房。</p></div>
-        <fieldset><legend>隐私方式</legend><label><input v-model="bindingPrivacy" type="radio" value="allow_model_context" data-testid="privacy-allow-model">允许模型参考相关片段</label><label><input v-model="bindingPrivacy" type="radio" value="local_search_only" data-testid="privacy-local-only">仅本机检索，不发送片段</label></fieldset>
-        <footer><span>账号同步功能预留，当前只保存到这台设备。</span><button type="button" data-testid="save-knowledge-binding" @click="saveKnowledgeBinding">保存到本空间</button></footer>
+    <div v-if="knowledgeSpaceOpen" class="knowledge-space-modal" role="dialog" aria-modal="true" :aria-label="t('views.tutor.workspaceDocumentsAriaLabel')">
+      <div class="knowledge-space-card"><header><div><span>LEARNING SPACE</span><h2>{{ t('views.tutor.knowledgeSpace.title') }}</h2></div><button type="button" :aria-label="t('views.tutor.closeWorkspaceDocuments')" @click="knowledgeSpaceOpen=false">×</button></header>
+        <p class="privacy-notice">{{ t('views.tutor.modelReferencePrivacyNotice') }}</p>
+        <div class="binding-collections"><label v-for="collection in backend.knowledgeCollections" :key="collection.id"><input v-model="bindingIds" type="checkbox" :value="collection.id" :data-testid="`collection-check-${collection.id}`"><span><strong>{{ collection.name }}</strong><small>{{ collection.document_count || 0 }} {{ t('views.tutor.documentUnit') }}</small></span></label><p v-if="!backend.knowledgeCollections.length">{{ t('views.tutor.knowledgeSpace.empty') }}</p></div>
+        <fieldset><legend>{{ t('views.tutor.knowledgeSpace.privacy') }}</legend><label><input v-model="bindingPrivacy" type="radio" value="allow_model_context" data-testid="privacy-allow-model">{{ t('views.tutor.knowledgeSpace.allowModel') }}</label><label><input v-model="bindingPrivacy" type="radio" value="local_search_only" data-testid="privacy-local-only">{{ t('views.tutor.knowledgeSpace.localOnly') }}</label></fieldset>
+        <footer><span>{{ t('views.tutor.knowledgeSpace.localNotice') }}</span><button type="button" data-testid="save-knowledge-binding" @click="saveKnowledgeBinding">{{ t('views.tutor.knowledgeSpace.save') }}</button></footer>
       </div>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -149,6 +150,8 @@ import ResourceBundle from '@/components/learning/ResourceBundle.vue'
 import ResourceMenu from '@/components/learning/ResourceMenu.vue'
 import { petTaskState, type PetTaskTicket } from '@/pet/task-state'
 
+const { t } = useI18n()
+
 const backend = useBackendStore()
 const route = useRoute()
 const router = useRouter()
@@ -158,7 +161,7 @@ const useStream = ref(true)
 const generating = ref(false)
 const generationId = ref('')
 const activeSessionId = ref('')
-const activePhase = ref('诊断')
+const activePhase = ref(t('views.tutor.diagnosis'))
 const streamText = ref('')
 const pendingUser = ref('')
 const streamError = ref('')
@@ -208,8 +211,8 @@ const canGenerateResources = computed(() => ['PROFILED', 'GENERATING'].includes(
 const isLearningDiagnosisError = computed(() => ['RESOURCE_NOT_READY', 'PROFILE_MISSING'].includes(streamErrorCode.value))
 const diagnosisCompleted = computed(() => backend.session?.state === 'PROFILED')
 const selectedScopePageCount = computed(() => backend.knowledgeDocuments.find(item => item.id === scopeDocumentId.value)?.page_count || null)
-const phaseLabel = computed(() => generating.value ? `${activePhase.value}中` : backend.session?.state || '等待开始')
-const starters = ['我想学习一次函数，请先了解我的基础。', '我正在准备英语考试，希望制定复习计划。', '根据我的薄弱点生成一份笔记和分层练习。']
+const phaseLabel = computed(() => generating.value ? t('views.tutor.activePhaseStatus', { phase: activePhase.value }) : backend.session?.state || t('views.tutor.waitingStart'))
+const starters = [t('views.tutor.linearFunctionExamplePrompt'), t('views.tutor.reviewInProgress'), t('views.tutor.weaknessPracticePrompt')]
 
 async function scrollBottom() {
   await nextTick()
@@ -219,7 +222,7 @@ async function scrollBottom() {
 function handleEvent(event: StreamEvent) {
   if (event.generation_id) generationId.value = event.generation_id
   if (event.phase) {
-    activePhase.value = event.phase === 'profile' ? '画像' : event.phase === 'resource' ? '资源' : '诊断'
+    activePhase.value = event.phase === 'profile' ? t('views.tutor.profile') : event.phase === 'resource' ? t('views.tutor.resource') : t('views.tutor.diagnosis')
     activePetTask?.update('running')
   }
   if (event.event === 'validation') activePetTask?.update('review')
@@ -229,7 +232,7 @@ function handleEvent(event: StreamEvent) {
     effectiveProfileId.value = event.profile_id || ''
     effectiveModelId.value = event.model_id || ''
     effectiveReasoningEffort.value = event.effective_reasoning_effort
-    failoverNotice.value = event.failover_used ? '已自动切换到备用连接' : ''
+    failoverNotice.value = event.failover_used ? t('views.tutor.automaticFailoverNotice') : ''
   }
   if (event.event === 'sources') sources.value = (event.sources || []).filter((item): item is SourceItem => 'url' in item)
   if (event.event === 'knowledge_sources') knowledgeSources.value = (event.sources || []).filter((item): item is KnowledgeSource => 'reference_id' in item)
@@ -242,7 +245,7 @@ function handleEvent(event: StreamEvent) {
     evidenceRecoveryActions.value = event.recovery_actions || []
     activeBundle.value = provisionalBundle(
       event.bundle_id,
-      event.topic || '正在生成资源',
+      event.topic || t('views.tutor.generatingResource'),
       event.requested_types || [],
     )
     resourceProgress.value = {
@@ -264,7 +267,7 @@ function handleEvent(event: StreamEvent) {
       if (!activeBundle.value) {
         activeBundle.value = provisionalBundle(
           `pending-${generationId.value || Date.now()}`,
-          '正在生成资源',
+          t('views.tutor.generatingResource'),
           [artifact.type],
         )
       }
@@ -278,7 +281,7 @@ function handleEvent(event: StreamEvent) {
   }
   if (event.event === 'error') {
     streamErrorCode.value = event.code || event.error_code || ''
-    streamError.value = event.message || event.code || '生成失败，请检查后重试。'
+    streamError.value = event.message || event.code || t('views.tutor.generationFailure')
     ElMessage.error(streamError.value)
   }
   if (event.event === 'interrupted') {
@@ -302,7 +305,7 @@ function recoverLearningDiagnosis() {
   streamText.value = ''
   editor.value = diagnosisCompleted.value
     ? failedMessage.value
-    : '我想继续完成学习诊断，请根据我的学习目标、当前基础和薄弱点继续提问。'
+    : t('views.tutor.continueDiagnosisPrompt')
 }
 
 async function send() {
@@ -346,7 +349,7 @@ async function send() {
       streamText.value = response.reply
       sources.value = response.sources
       knowledgeSources.value = response.knowledge_sources || []
-      activePhase.value = response.phase === 'profile' ? '画像' : response.phase === 'resource' ? '资源' : '诊断'
+      activePhase.value = response.phase === 'profile' ? t('views.tutor.profile') : response.phase === 'resource' ? t('views.tutor.resource') : t('views.tutor.diagnosis')
       activeBundle.value = response.bundle || null
       evidenceStatus.value = response.evidence_status || response.bundle?.evidence_status || ''
       evidenceRecoveryActions.value = response.recovery_actions || response.bundle?.recovery_actions || []
@@ -503,15 +506,15 @@ function preserveInterruptedText() {
 }
 
 async function continueWithBackup() {
-  const original = failedMessage.value || pendingUser.value || '刚才的问题'
+  const original = failedMessage.value || pendingUser.value || t('views.tutor.previousQuestion')
   const partial = streamText.value.trim().slice(-1200)
   preserveInterruptedText()
-  editor.value = `刚才的回答因连接中断而停止。请继续完成对“${original}”的解答，避免重复已经给出的内容。\n已给出的内容：${partial}`
+  editor.value = t('views.tutor.resumeInterruptedAnswerPrompt', { original: original, partial: partial })
   await send()
 }
 
 async function saveModelPreference(input: SessionModelPreferenceInput) {
-  try { await backend.saveSessionModelPreference(input); ElMessage.success('本空间模型偏好已保存') }
+  try { await backend.saveSessionModelPreference(input); ElMessage.success(t('views.tutor.modelPreferenceSaved')) }
   catch (error) { ElMessage.error(errorMessage(error)) }
 }
 
@@ -520,7 +523,7 @@ function isCancellationError(error: unknown) {
 }
 
 async function openKnowledgeSpace(){await backend.refreshKnowledge();bindingIds.value=[...backend.boundKnowledgeCollectionIds];bindingPrivacy.value=backend.knowledgePrivacyMode;knowledgeSpaceOpen.value=true}
-async function saveKnowledgeBinding(){try{await backend.saveSessionKnowledgeCollections(bindingIds.value,bindingPrivacy.value);knowledgeSpaceOpen.value=false;ElMessage.success('本空间资料已保存')}catch(error){ElMessage.error(errorMessage(error))}}
+async function saveKnowledgeBinding(){try{await backend.saveSessionKnowledgeCollections(bindingIds.value,bindingPrivacy.value);knowledgeSpaceOpen.value=false;ElMessage.success(t('views.tutor.workspaceDocumentsSaved'))}catch(error){ElMessage.error(errorMessage(error))}}
 async function openKnowledgeSource(source:KnowledgeSource){await router.push({path:'/knowledge',query:{document:String(source.document_id),type:source.locator.type,start:String(source.locator.start),end:String(source.locator.end),...(source.locator.sheet_name?{sheet:source.locator.sheet_name}:{})}})}
 
 async function cancel() {
@@ -528,7 +531,7 @@ async function cancel() {
   const cancelSessionId = activeSessionId.value || backend.sessionId
   controller?.abort()
   if (!cancelGenerationId) return
-  try { await backendApi.cancelGeneration(cancelGenerationId, cancelSessionId); ElMessage.info('已请求取消生成') }
+  try { await backendApi.cancelGeneration(cancelGenerationId, cancelSessionId); ElMessage.info(t('views.tutor.generationCancellationRequested')) }
   catch (error) { ElMessage.error(errorMessage(error)) }
 }
 
@@ -553,7 +556,7 @@ watch(() => route.fullPath, async () => {
   }
   if (!Number.isSafeInteger(collectionId) || collectionId < 1) {
     editor.value = ''
-    routeKnowledgeBindingError.value = '教材集合参数无效，请从知识库重新发起。'
+    routeKnowledgeBindingError.value = t('views.tutor.invalidTextbookCollection')
     return
   }
 

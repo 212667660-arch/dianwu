@@ -2,36 +2,39 @@
   <main class="onboarding-page">
     <section class="onboarding-card">
       <span class="kicker">WELCOME TO A3</span>
-      <h1>第一次见面，先把学习环境安顿好</h1>
-      <p>所有资料默认保存在本机。你可以现在配置在线模型，也可以先进入内置离线演示。</p>
-      <div v-if="loading" class="loading" role="status">正在检查桌面环境…</div>
+      <h1>{{ t('views.onboarding.environmentFirstTime') }}</h1>
+      <p>{{ t('views.onboarding.localFirstModelChoice') }}</p>
+      <div v-if="loading" class="loading" role="status">{{ t('views.onboarding.checkingDesktopEnvironment') }}</div>
       <div v-else class="checks">
-        <article><i :class="{ ok: info?.backend_ready }" /><div><strong>本地后端</strong><span>{{ info?.backend_ready ? '已就绪' : '需要诊断' }}</span></div></article>
-        <article><i :class="{ ok: info?.data_directory_ready }" /><div><strong>本地数据目录</strong><span>{{ info?.data_directory_ready ? '可安全写入' : '不可写' }}</span></div></article>
-        <article><i :class="{ ok: info?.model_configured }" /><div><strong>在线模型</strong><span>{{ info?.model_configured ? '已配置' : '可稍后配置' }}</span></div></article>
-        <article><i :class="{ ok: info?.ocr_available }" /><div><strong>离线 OCR</strong><span>{{ info?.ocr_available ? '中文扫描教材可识别' : '组件不可用' }}</span></div></article>
+        <article><i :class="{ ok: info?.backend_ready }" /><div><strong>{{ t('views.onboarding.backendLocal') }}</strong><span>{{ info?.backend_ready ? t('views.onboarding.ready') : t('views.onboarding.diagnosis') }}</span></div></article>
+        <article><i :class="{ ok: info?.data_directory_ready }" /><div><strong>{{ t('views.onboarding.directoryLocal') }}</strong><span>{{ info?.data_directory_ready ? t('views.onboarding.security') : t('views.onboarding.notWritable') }}</span></div></article>
+        <article><i :class="{ ok: info?.model_configured }" /><div><strong>{{ t('views.onboarding.modelOnline') }}</strong><span>{{ info?.model_configured ? t('views.onboarding.profile') : t('views.onboarding.profileTitle') }}</span></div></article>
+        <article><i :class="{ ok: info?.ocr_available }" /><div><strong>{{ t('views.onboarding.offlineOcr') }}</strong><span>{{ info?.ocr_available ? t('views.onboarding.chineseTextbookRecognition') : t('views.onboarding.ocrUnavailable') }}</span></div></article>
       </div>
-      <div class="version">桌面版本 {{ info?.app_version || '—' }} · {{ updateLabel }}</div>
+      <div class="version">{{ t('views.onboarding.desktopVersion') }} {{ info?.app_version || '—' }} · {{ updateLabel }}</div>
       <div v-if="error" class="error" role="alert">{{ error }}</div>
       <div class="actions">
-        <button data-testid="offline-demo-onboarding" type="button" :disabled="busy" @click="finish(true)">先看离线演示</button>
-        <button data-testid="complete-onboarding" class="primary" type="button" :disabled="busy" @click="finish(false)">进入应用</button>
+        <button data-testid="offline-demo-onboarding" type="button" :disabled="busy" @click="finish(true)">{{ t('views.onboarding.offline') }}</button>
+        <button data-testid="complete-onboarding" class="primary" type="button" :disabled="busy" @click="finish(false)">{{ t('views.onboarding.application') }}</button>
       </div>
     </section>
   </main>
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { backendApi, type DesktopInfo } from '@/api'
+
+const { t } = useI18n()
 
 const router = useRouter()
 const info = ref<DesktopInfo | null>(null)
 const loading = ref(true)
 const busy = ref(false)
 const error = ref('')
-const updateLabel = computed(() => info.value?.update_status === 'offline_build' ? '当前为离线构建' : '可检查更新')
+const updateLabel = computed(() => info.value?.update_status === 'offline_build' ? t('views.onboarding.offlineCurrent') : t('views.onboarding.updateCheck'))
 
 async function finish(offlineDemo: boolean) {
   busy.value = true
@@ -40,7 +43,7 @@ async function finish(offlineDemo: boolean) {
     await backendApi.completeDesktopOnboarding({ offlineDemo })
     await router.replace({ path: '/dashboard', query: offlineDemo ? { demo: 'offline' } : {} })
   } catch (reason) {
-    error.value = reason instanceof Error ? reason.message : '无法保存首次启动设置。'
+    error.value = reason instanceof Error ? reason.message : t('views.onboarding.settingsSaveFailure')
   } finally {
     busy.value = false
   }
@@ -50,7 +53,7 @@ onMounted(async () => {
   try {
     info.value = await backendApi.desktopInfo()
   } catch (reason) {
-    error.value = reason instanceof Error ? reason.message : '桌面环境检查失败。'
+    error.value = reason instanceof Error ? reason.message : t('views.onboarding.environmentCheckFailure')
   } finally {
     loading.value = false
   }

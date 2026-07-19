@@ -1,5 +1,6 @@
 {
   "title": "练习评估",
+  "masteryLabel": "掌握度",
   "subtitle": "用适量练习确认理解，再决定下一步。",
   "question": "第 {current}/{total} 题",
   "answerPlaceholder": "写下你的答案",

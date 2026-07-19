@@ -1,5 +1,9 @@
 {
   "title": "知识库",
+  "completed": "已完成",
+  "size": "大小",
+  "deleteCollection": "删除集合",
+  "reparse": "重新解析",
   "subtitle": "把讲义、笔记和教材整理成可检索的学习资料。",
   "allDocuments": "全部资料",
   "favorites": "收藏",

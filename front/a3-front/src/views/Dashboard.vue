@@ -2,52 +2,52 @@
   <section class="page">
     <div class="page-heading">
       <div>
-        <h1>学习总览</h1>
-        <p>基于当前会话的画像、掌握度与复习安排</p>
+        <h1>{{ t('views.dashboard.title') }}</h1>
+        <p>{{ t('views.dashboard.currentSessionLearningSummary') }}</p>
       </div>
       <div class="toolbar">
-        <el-button data-testid="start-demo" :loading="demoBusy" @click="startDemo(false)">一键演示</el-button>
-        <el-button :icon="Refresh" :loading="backend.loading" @click="backend.refreshAll()">同步</el-button>
-        <el-button type="primary" :icon="ChatLineRound" @click="router.push('/tutor')">继续学习</el-button>
+        <el-button data-testid="start-demo" :loading="demoBusy" @click="startDemo(false)">{{ t('views.dashboard.runDemo') }}</el-button>
+        <el-button :icon="Refresh" :loading="backend.loading" @click="backend.refreshAll()">{{ t('views.dashboard.sync') }}</el-button>
+        <el-button type="primary" :icon="ChatLineRound" @click="router.push('/tutor')">{{ t('views.dashboard.continueLearning') }}</el-button>
       </div>
     </div>
 
     <article v-if="backend.demoSnapshot" class="panel demo-showcase" data-testid="demo-showcase">
       <div class="demo-heading">
-        <div><span class="eyebrow">COMPETITION DEMO</span><h2>{{ backend.demoSnapshot.dataset.title }}</h2><p>{{ backend.demoSnapshot.dataset.license }} · {{ backend.demoSnapshot.dataset.original ? '项目原创数据' : '外部数据' }}</p></div>
-        <span class="status-pill" :class="backend.demoSnapshot.mode === 'offline' ? 'warn' : 'good'">{{ backend.demoSnapshot.mode === 'offline' ? '真实离线降级' : '在线模型可用' }}</span>
+        <div><span class="eyebrow">COMPETITION DEMO</span><h2>{{ backend.demoSnapshot.dataset.title }}</h2><p>{{ backend.demoSnapshot.dataset.license }} · {{ backend.demoSnapshot.dataset.original ? t('views.dashboard.originalProjectData') : t('views.dashboard.externalData') }}</p></div>
+        <span class="status-pill" :class="backend.demoSnapshot.mode === 'offline' ? 'warn' : 'good'">{{ backend.demoSnapshot.mode === 'offline' ? t('views.dashboard.offline') : t('views.dashboard.modelOnlineAvailable') }}</span>
       </div>
       <p v-if="backend.demoSnapshot.degradation_message" class="demo-degradation">{{ backend.demoSnapshot.degradation_message }}</p>
       <div class="demo-grid">
-        <div class="demo-agents"><h3>多智能体步骤</h3><div v-for="step in backend.demoSnapshot.agent_steps" :key="step.agent" class="demo-step"><span>✓</span><div><strong>{{ step.agent }}</strong><p>{{ step.detail }}</p></div></div></div>
-        <div class="demo-mastery"><h3>学习前后掌握度</h3><div v-for="item in masteryComparisons" :key="item.name"><strong>{{ item.name }}</strong><span>{{ Math.round(item.before * 100) }}% → {{ Math.round(item.after * 100) }}%</span><div class="mastery-track"><i :style="{ width: `${item.before * 100}%` }"></i><b :style="{ width: `${item.after * 100}%` }"></b></div></div></div>
+        <div class="demo-agents"><h3>{{ t('views.dashboard.multiAgent') }}</h3><div v-for="step in backend.demoSnapshot.agent_steps" :key="step.agent" class="demo-step"><span>✓</span><div><strong>{{ step.agent }}</strong><p>{{ step.detail }}</p></div></div></div>
+        <div class="demo-mastery"><h3>{{ t('views.dashboard.masteryTitle') }}</h3><div v-for="item in masteryComparisons" :key="item.name"><strong>{{ item.name }}</strong><span>{{ displayPercent(item.before) }} → {{ displayPercent(item.after) }}</span><div class="mastery-track"><i :style="{ width: `${item.before * 100}%` }"></i><b :style="{ width: `${item.after * 100}%` }"></b></div></div></div>
       </div>
-      <footer><el-button @click="startDemo(true)">重置演示</el-button><el-button @click="router.push('/agents')">查看 Agent 状态</el-button><el-button type="primary" @click="router.push('/tutor')">打开演示学习助手</el-button></footer>
+      <footer><el-button @click="startDemo(true)">{{ t('views.dashboard.resetDemo') }}</el-button><el-button @click="router.push('/agents')">{{ t('views.dashboard.statusAgent') }}</el-button><el-button type="primary" @click="router.push('/tutor')">{{ t('views.dashboard.tutorOpen') }}</el-button></footer>
     </article>
 
     <div class="metric-grid">
-      <div class="metric"><span>会话阶段</span><strong>{{ stateLabel }}</strong></div>
-      <div class="metric"><span>知识点</span><strong>{{ backend.progress?.knowledge_points.length || 0 }}</strong></div>
-      <div class="metric"><span>答题正确率</span><strong>{{ accuracyLabel }}</strong></div>
-      <div class="metric"><span>已生成资源</span><strong>{{ backend.resources.length }}</strong></div>
+      <div class="metric"><span>{{ t('views.dashboard.sessionPhase') }}</span><strong>{{ stateLabel }}</strong></div>
+      <div class="metric"><span>{{ t('views.dashboard.knowledgePoint') }}</span><strong>{{ backend.progress?.knowledge_points.length || 0 }}</strong></div>
+      <div class="metric"><span>{{ t('views.dashboard.answer') }}</span><strong>{{ accuracyLabel }}</strong></div>
+      <div class="metric"><span>{{ t('views.dashboard.resourceGenerate') }}</span><strong>{{ backend.resources.length }}</strong></div>
     </div>
 
     <div v-if="backend.nextAction" class="next-action">
       <div>
-        <span class="eyebrow">推荐下一步</span>
+        <span class="eyebrow">{{ t('views.dashboard.recommendedNextStep') }}</span>
         <h2>{{ actionLabel(backend.nextAction.action) }}</h2>
         <p>{{ backend.nextAction.reason }}</p>
       </div>
       <div class="action-meta">
-        <span>{{ backend.nextAction.knowledge_point || '学习诊断' }}</span>
+        <span>{{ backend.nextAction.knowledge_point || t('views.dashboard.diagnosisLabel') }}</span>
         <el-tag effect="plain">{{ backend.nextAction.recommended_difficulty }}</el-tag>
-        <el-button type="primary" @click="startSuggested">开始</el-button>
+        <el-button type="primary" @click="startSuggested">{{ t('views.dashboard.start') }}</el-button>
       </div>
     </div>
 
     <div class="grid-2 content-grid">
       <article class="panel">
-        <div class="panel-header"><h2>知识点掌握度</h2><span class="muted">按薄弱程度排序</span></div>
+        <div class="panel-header"><h2>{{ t('views.dashboard.knowledgePointMastery') }}</h2><span class="muted">{{ t('views.dashboard.sortWeak') }}</span></div>
         <div class="panel-body">
           <template v-if="knowledgePoints.length">
             <div v-for="point in knowledgePoints" :key="point.id" class="knowledge-row">
@@ -59,24 +59,24 @@
             </div>
           </template>
           <div v-else class="empty-block">
-            <div><p>完成诊断后显示知识点掌握度</p><el-button text type="primary" @click="router.push('/tutor')">开始诊断</el-button></div>
+            <div><p>{{ t('views.dashboard.masteryAvailableAfterDiagnosis') }}</p><el-button text type="primary" @click="router.push('/tutor')">{{ t('views.dashboard.diagnosisStart') }}</el-button></div>
           </div>
         </div>
       </article>
 
       <article class="panel">
-        <div class="panel-header"><h2>最近资源</h2><span class="muted">质量校验结果</span></div>
+        <div class="panel-header"><h2>{{ t('views.dashboard.resourceRecent') }}</h2><span class="muted">{{ t('views.dashboard.qualityResult') }}</span></div>
         <div class="panel-body resource-list">
           <template v-if="recentResources.length">
             <div v-for="resource in recentResources" :key="resource.id" class="list-row resource-row">
               <div>
                 <strong>{{ resource.topic }}</strong>
-                <p>画像 v{{ resource.profile_version }} · {{ resource.questions.length }} 道练习</p>
+                <p>{{ t('views.dashboard.profile') }}{{ resource.profile_version }} · {{ resource.questions.length }} {{ t('views.dashboard.practice') }}</p>
               </div>
-              <span class="quality" :class="resource.quality_score >= 80 ? 'good' : 'warn'">{{ resource.quality_score }} 分</span>
+              <span class="quality" :class="resource.quality_score >= 80 ? 'good' : 'warn'">{{ resource.quality_score }} {{ t('views.dashboard.pointsUnit') }}</span>
             </div>
           </template>
-          <div v-else class="empty-block"><p>暂无已生成资源</p></div>
+          <div v-else class="empty-block"><p>{{ t('views.dashboard.noGeneratedResources') }}</p></div>
         </div>
       </article>
     </div>
@@ -84,18 +84,23 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ChatLineRound, Refresh } from '@element-plus/icons-vue'
 import { useBackendStore } from '@/stores/backend'
 import { actionLabel, masteryLabel } from '@/utils/protocol'
+import { formatPercent } from '@/i18n/formatters'
+
+const { t } = useI18n()
 
 const backend = useBackendStore()
 const router = useRouter()
 const route = useRoute()
 const demoBusy = ref(false)
-const stateLabel = computed(() => backend.session?.state || (backend.live ? '等待开始' : '服务离线'))
-const accuracyLabel = computed(() => backend.progress?.total_attempts ? `${Math.round(backend.progress.accuracy * 100)}%` : '--')
+const stateLabel = computed(() => backend.session?.state || (backend.live ? t('views.dashboard.waitingStart') : t('views.dashboard.serviceOffline')))
+const displayPercent = (value: number) => formatPercent(value, { maximumFractionDigits: 0 })
+const accuracyLabel = computed(() => backend.progress?.total_attempts ? displayPercent(backend.progress.accuracy) : '--')
 const knowledgePoints = computed(() => backend.progress?.knowledge_points || [])
 const recentResources = computed(() => [...backend.resources].slice(-4).reverse())
 const masteryComparisons = computed(() => (backend.demoSnapshot?.mastery_before || []).map(before => ({

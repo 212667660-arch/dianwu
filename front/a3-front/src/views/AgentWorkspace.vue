@@ -1,8 +1,8 @@
 <template>
   <section class="page">
     <div class="page-heading">
-      <div><h1>智能体协作</h1><p>画像 Agent 与资源 Agent 的真实工作状态</p></div>
-      <el-button type="primary" :icon="Plus" @click="generate">发起学习任务</el-button>
+      <div><h1>{{ t('views.agents.title') }}</h1><p>{{ t('views.agents.agentStatusOverview') }}</p></div>
+      <el-button type="primary" :icon="Plus" @click="generate">{{ t('views.agents.startLearningTask') }}</el-button>
     </div>
 
     <div class="agent-strip">
@@ -14,14 +14,14 @@
     </div>
 
     <article v-if="backend.demoSnapshot" class="panel demo-agent-panel" data-testid="demo-agent-panel">
-      <div class="panel-header"><h2>一键演示 Agent 状态</h2><span class="status-pill" :class="backend.demoSnapshot.mode === 'offline' ? 'warn' : 'good'">{{ backend.demoSnapshot.mode === 'offline' ? '离线降级' : '在线辅助' }}</span></div>
+      <div class="panel-header"><h2>{{ t('views.agents.statusAgent') }}</h2><span class="status-pill" :class="backend.demoSnapshot.mode === 'offline' ? 'warn' : 'good'">{{ backend.demoSnapshot.mode === 'offline' ? t('views.agents.offline') : t('views.agents.online') }}</span></div>
       <div class="panel-body demo-agent-list"><div v-for="step in backend.demoSnapshot.agent_steps" :key="step.agent"><span>COMPLETED</span><strong>{{ step.agent }}</strong><p>{{ step.detail }}</p></div></div>
       <p v-if="backend.demoSnapshot.degradation_message" class="demo-agent-degradation">{{ backend.demoSnapshot.degradation_message }}</p>
     </article>
 
     <div class="grid-2 main-grid">
       <article class="panel">
-        <div class="panel-header"><h2>协作流程</h2><span class="muted">会话 {{ backend.sessionId }}</span></div>
+        <div class="panel-header"><h2>{{ t('views.agents.workflowTitle') }}</h2><span class="muted">{{ t('views.agents.sessionLabel') }} {{ backend.sessionId }}</span></div>
         <div class="panel-body workflow">
           <div v-for="(step, index) in workflow" :key="step.title" class="workflow-step" :class="step.state">
             <div class="step-index">{{ index + 1 }}</div>
@@ -32,39 +32,42 @@
       </article>
 
       <article class="panel">
-        <div class="panel-header"><h2>最近一次资源交付</h2><span v-if="latest" class="status-pill good">质量 {{ latest.quality_score }}</span></div>
+        <div class="panel-header"><h2>{{ t('views.agents.latestResourceDelivery') }}</h2><span v-if="latest" class="status-pill good">{{ t('views.agents.quality') }} {{ latest.quality_score }}</span></div>
         <div v-if="latest" class="panel-body latest-resource">
-          <span>主题</span><h2>{{ latest.topic }}</h2>
-          <p>{{ latest.questions.length }} 道结构化练习 · {{ latest.sources.length }} 个参考来源</p>
+          <span>{{ t('views.agents.topicLabel') }}</span><h2>{{ latest.topic }}</h2>
+          <p>{{ latest.questions.length }} {{ t('views.agents.structuredPracticeCountSuffix') }} {{ latest.sources.length }} {{ t('views.agents.reference') }}</p>
           <div class="quality-issues">
             <el-tag v-for="issue in latest.quality_issues" :key="issue" type="warning" effect="plain">{{ issue }}</el-tag>
-            <el-tag v-if="!latest.quality_issues.length" type="success" effect="plain">质量检查通过</el-tag>
+            <el-tag v-if="!latest.quality_issues.length" type="success" effect="plain">{{ t('views.agents.qualityCheck') }}</el-tag>
           </div>
-          <el-button @click="router.push('/assessment')">进入练习</el-button>
+          <el-button @click="router.push('/assessment')">{{ t('views.agents.practice') }}</el-button>
         </div>
-        <div v-else class="empty-block"><p>资源 Agent 尚未生成内容</p></div>
+        <div v-else class="empty-block"><p>{{ t('views.agents.resourceNotGenerated') }}</p></div>
       </article>
     </div>
 
     <article class="panel event-panel">
-      <div class="panel-header"><h2>会话事件</h2><span class="muted">消息与持久化资源</span></div>
+      <div class="panel-header"><h2>{{ t('views.agents.session') }}</h2><span class="muted">{{ t('views.agents.resourceMessage') }}</span></div>
       <div class="panel-body event-list">
         <div v-for="message in recentMessages" :key="message.seq" class="event-row">
           <span class="event-seq">#{{ message.seq }}</span>
-          <span class="status-pill" :class="message.role === 'assistant' ? 'good' : ''">{{ message.role === 'assistant' ? 'Agent' : '学习者' }}</span>
+          <span class="status-pill" :class="message.role === 'assistant' ? 'good' : ''">{{ message.role === 'assistant' ? 'Agent' : t('views.agents.learner') }}</span>
           <p>{{ compact(message.content) }}</p>
         </div>
-        <div v-if="!recentMessages.length" class="empty-block"><p>暂无协作事件</p></div>
+        <div v-if="!recentMessages.length" class="empty-block"><p>{{ t('views.agents.noCollaborationEvents') }}</p></div>
       </div>
     </article>
   </section>
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { CircleCheck, Document, Plus, User } from '@element-plus/icons-vue'
 import { useBackendStore } from '@/stores/backend'
+
+const { t } = useI18n()
 
 const backend = useBackendStore()
 const router = useRouter()
@@ -75,24 +78,24 @@ const resourceDone = computed(() => backend.resources.length > 0)
 
 const agents = computed(() => [
   {
-    name: '画像 Agent', role: '诊断与画像', icon: User,
-    description: '通过多轮对话识别目标、水平、风格和薄弱知识点。',
-    status: profileDone.value ? '已完成画像' : backend.session?.state === 'DIAGNOSING' ? '诊断中' : '等待任务',
+    name: t('views.agents.diagnosis'), role: t('views.agents.profileDiagnosis'), icon: User,
+    description: t('views.agents.profileAgentDescription'),
+    status: profileDone.value ? t('views.agents.profileCompleted') : backend.session?.state === 'DIAGNOSING' ? t('statuses.sessionState.DIAGNOSING') : t('views.agents.waitingTask'),
     tone: profileDone.value ? 'good' : backend.session?.state === 'DIAGNOSING' ? 'warn' : '',
   },
   {
-    name: '资源 Agent', role: '内容与练习', icon: Document,
-    description: '结合画像、掌握度和来源生成笔记、分层练习与解析。',
-    status: resourceDone.value ? `已交付 ${backend.resources.length} 项` : profileDone.value ? '可以生成' : '等待画像',
+    name: t('views.agents.resourceAgent'), role: t('views.agents.practiceContent'), icon: Document,
+    description: t('views.agents.resourceAgentDescription'),
+    status: resourceDone.value ? t('views.agents.deliveredItemCount', { length: backend.resources.length }) : profileDone.value ? t('views.agents.generate') : t('views.agents.profileWaiting'),
     tone: resourceDone.value ? 'good' : profileDone.value ? 'warn' : '',
   },
 ])
 
 const workflow = computed(() => [
-  { title: '诊断对话', description: '收集学习目标与薄弱点', state: backend.session ? 'done' : 'current' },
-  { title: '学习画像', description: '生成 learner-profile/v1', state: profileDone.value ? 'done' : backend.session ? 'current' : 'pending' },
-  { title: '个性化资源', description: '生成笔记、分层练习和来源', state: resourceDone.value ? 'done' : profileDone.value ? 'current' : 'pending' },
-  { title: '答题反馈', description: '更新掌握度与复习计划', state: (backend.progress?.total_attempts || 0) > 0 ? 'done' : resourceDone.value ? 'current' : 'pending' },
+  { title: t('views.agents.diagnosisConversation'), description: t('views.agents.collectGoalsAndWeaknesses'), state: backend.session ? 'done' : 'current' },
+  { title: t('views.agents.profileTitle'), description: t('views.agents.generateProfileProtocol'), state: profileDone.value ? 'done' : backend.session ? 'current' : 'pending' },
+  { title: t('views.agents.resource'), description: t('views.agents.generateNotesPracticeAndSources'), state: resourceDone.value ? 'done' : profileDone.value ? 'current' : 'pending' },
+  { title: t('views.agents.answer'), description: t('views.agents.updateMasteryAndReviewPlan'), state: (backend.progress?.total_attempts || 0) > 0 ? 'done' : resourceDone.value ? 'current' : 'pending' },
 ])
 
 function compact(content: string) {

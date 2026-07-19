@@ -1,4 +1,5 @@
 import axios, { type AxiosInstance } from 'axios'
+import { i18n } from '@/i18n'
 
 import type { StreamEvent } from './types'
 import {
@@ -57,7 +58,7 @@ export function createWebTransport({ httpClient = http, fetchImpl = fetch }: Web
         throw backendUnavailableError()
       }
       if (!response.ok) throw await parseError(response)
-      if (!response.body) throw new Error('浏览器不支持流式响应')
+      if (!response.body) throw new Error(i18n.global.t('errors.streamingUnsupported'))
       await readSseBody(response.body, onEvent)
     },
   }
@@ -91,7 +92,7 @@ export function parseSseBlock(block: string): StreamEvent | null {
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('invalid payload')
     return { event: eventName, ...(payload as Omit<StreamEvent, 'event'>) }
   } catch {
-    throw new Error('流式响应数据格式错误，请重新发送请求。')
+    throw new Error(i18n.global.t('errors.STREAM_INVALID'))
   }
 }
 

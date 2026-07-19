@@ -1,6 +1,11 @@
 import { i18n } from '@/i18n'
 import { isMastery, isNextAction, masteryKey, nextActionKey } from '@/i18n/display-maps'
 
+export const LEARNER_PROFILE_PROTOCOL_PREFIX = '\u3010\u534f\u8bae:learner-profile/v1\u3011'
+export const TEXTBOOK_MATH_SUBJECT = '\u6570\u5b66' as const
+export const PEOPLE_EDUCATION_PRESS_PUBLISHER = '\u4eba\u6c11\u6559\u80b2\u51fa\u7248\u793e'
+export const LEGACY_DEFAULT_MODEL_LABEL = '\u9ed8\u8ba4\u6a21\u578b'
+
 export function protocolFields(text?: string | null): Record<string, string> {
   if (!text) return {}
   const fields: Record<string, string> = {}

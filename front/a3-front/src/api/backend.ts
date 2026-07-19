@@ -1,6 +1,8 @@
 import { createDesktopTransport } from './desktop-transport'
 import { BackendApiError, desktopEnvelope, type BackendTransport } from './transport'
 import { createWebTransport, parseSseBlock, readSseBody } from './web-transport'
+import { i18n } from '@/i18n'
+import { LEGACY_DEFAULT_MODEL_LABEL } from '@/utils/protocol'
 import type {
   AttemptResponse,
   ChatResponse,
@@ -22,6 +24,7 @@ import type {
   KnowledgeLocator,
   KnowledgeStatus,
   TextbookCatalog,
+  TextbookCatalogItem,
   KnowledgeSearchResult,
   MistakeItem,
   ModelConfigInput,
@@ -102,7 +105,7 @@ export const backendApi = {
     return desktopEnvelope(await window.a3Desktop.desktopExportDiagnostics())
   },
   async checkDesktopUpdates(): Promise<DesktopUpdateResult> {
-    if (!window.a3Desktop?.desktopCheckUpdates) return { status: 'offline_build', message: '浏览器版本不执行桌面更新检查。' }
+    if (!window.a3Desktop?.desktopCheckUpdates) return { status: 'offline_build', message: i18n.global.t('errors.desktopVersionUpdateCheck') }
     return desktopEnvelope<DesktopUpdateResult>(await window.a3Desktop.desktopCheckUpdates())
   },
   async live() {
@@ -266,7 +269,7 @@ export const backendApi = {
     })
   },
   async knowledgeStatus() { return activeTransport().request<KnowledgeStatus>({ method: 'GET', path: '/api/knowledge/status' }) },
-  async textbookCatalog(query: { stage?: '初中' | '高中'; subject?: '数学'; publisher?: string } = {}) { return activeTransport().request<TextbookCatalog>({ method: 'GET', path: '/api/knowledge/textbooks', query }) },
+  async textbookCatalog(query: { stage?: TextbookCatalogItem['stage']; subject?: TextbookCatalogItem['subject']; publisher?: string } = {}) { return activeTransport().request<TextbookCatalog>({ method: 'GET', path: '/api/knowledge/textbooks', query }) },
   async knowledgeCollections() { return activeTransport().request<KnowledgeCollection[]>({ method: 'GET', path: '/api/knowledge/collections' }) },
   async createKnowledgeCollection(input: KnowledgeCollectionInput) { return activeTransport().request<KnowledgeCollection>({ method: 'POST', path: '/api/knowledge/collections', body: input }) },
   async updateKnowledgeCollection(collectionId: number, input: Partial<KnowledgeCollectionInput>) { return activeTransport().request<KnowledgeCollection>({ method: 'PUT', path: `/api/knowledge/collections/${collectionId}`, body: input }) },
@@ -297,11 +300,11 @@ export const backendApi = {
   async sessionKnowledgeCollections(sessionId: string) { return activeTransport().request<KnowledgeBinding>({ method: 'GET', path: `/api/sessions/${encodeURIComponent(sessionId)}/knowledge-collections` }) },
   async saveSessionKnowledgeCollections(sessionId: string, collectionIds: number[], privacyMode: KnowledgeBinding['privacy_mode'] = 'allow_model_context') { return activeTransport().request<KnowledgeBinding>({ method: 'PUT', path: `/api/sessions/${encodeURIComponent(sessionId)}/knowledge-collections`, body: { collection_ids: collectionIds, privacy_mode: privacyMode } }) },
   async chooseKnowledgeFiles(collectionId: number) {
-    if (!window.a3Desktop?.knowledgeChooseFiles) throw new Error('文件导入仅桌面版可用。')
+    if (!window.a3Desktop?.knowledgeChooseFiles) throw new Error(i18n.global.t('errors.desktopFileImportAvailable'))
     return desktopEnvelope<KnowledgeImportBatch>(await window.a3Desktop.knowledgeChooseFiles(collectionId))
   },
   async importDroppedKnowledgeFiles(files: FileList | File[], collectionId: number) {
-    if (!window.a3Desktop?.knowledgeImportDroppedFiles) throw new Error('文件导入仅桌面版可用。')
+    if (!window.a3Desktop?.knowledgeImportDroppedFiles) throw new Error(i18n.global.t('errors.desktopFileImportAvailable'))
     return desktopEnvelope<KnowledgeImportBatch>(await window.a3Desktop.knowledgeImportDroppedFiles(files, collectionId))
   },
   async cancelKnowledgeImport(jobId: number) { return activeTransport().request<KnowledgeImportJob>({ method: 'DELETE', path: `/api/knowledge/imports/${jobId}` }) },
@@ -309,15 +312,15 @@ export const backendApi = {
   async deleteKnowledgeDocument(documentId: number) { return activeTransport().request<void>({ method: 'DELETE', path: `/api/knowledge/documents/${documentId}` }) },
   async rebuildKnowledgeDocument(documentId: number) { return activeTransport().request<KnowledgeImportJob>({ method: 'POST', path: `/api/knowledge/documents/${documentId}/rebuild` }) },
   async revealKnowledgeSource(documentId: number) {
-    if (!window.a3Desktop?.knowledgeRevealSource) throw new Error('来源定位仅桌面版可用。')
+    if (!window.a3Desktop?.knowledgeRevealSource) throw new Error(i18n.global.t('errors.desktopReferenceAvailable'))
     return desktopEnvelope<{ mode: string }>(await window.a3Desktop.knowledgeRevealSource(documentId))
   },
   async openKnowledgeSource(documentId: number, locator: KnowledgeLocator) {
-    if (!window.a3Desktop?.knowledgeOpenSource) throw new Error('来源预览仅桌面版可用。')
+    if (!window.a3Desktop?.knowledgeOpenSource) throw new Error(i18n.global.t('errors.desktopReferenceAvailableTitle'))
     return desktopEnvelope<{ mode: string; displayName: string }>(await window.a3Desktop.knowledgeOpenSource(documentId, locator))
   },
   async openOfficialTextbook(sourceId: string) {
-    if (!window.a3Desktop?.knowledgeOpenOfficialTextbook) throw new Error('官方教材在线阅读仅桌面版可用。')
+    if (!window.a3Desktop?.knowledgeOpenOfficialTextbook) throw new Error(i18n.global.t('errors.desktopOnlineTextbookReadingAvailable'))
     return desktopEnvelope<{ sourceId: string }>(await window.a3Desktop.knowledgeOpenOfficialTextbook(sourceId))
   },
   async pet(): Promise<PetSnapshot> {
@@ -354,7 +357,7 @@ export const backendApi = {
 
 function legacyConfig(input: ModelProfileInput): ModelConfigInput {
   const model = input.models.find(value => value.id === input.default_model_id)
-  if (!model) throw new BackendApiError(400, 'MODEL_PROFILE_DEFAULT_MODEL_INVALID', '默认模型配置无效。')
+  if (!model) throw new BackendApiError(400, 'MODEL_PROFILE_DEFAULT_MODEL_INVALID', i18n.global.t('errors.MODEL_PROFILE_DEFAULT_MODEL_INVALID'))
   return {
     provider: input.provider,
     api_key: input.api_key,
@@ -373,7 +376,7 @@ function legacyVault(settings: ModelSettings): ModelProfileVault {
     version: 2,
     global: { default_profile_id: 'web-default', auto_failover: false, fallback_profile_ids: [] },
     profiles: [{
-      id: 'web-default', label: '默认模型', enabled: true, provider: settings.provider,
+      id: 'web-default', label: LEGACY_DEFAULT_MODEL_LABEL, enabled: true, provider: settings.provider,
       base_url: settings.base_url, api_key_configured: true,
       anthropic_version: settings.anthropic_version,
       request_timeout_seconds: settings.request_timeout_seconds,
@@ -405,11 +408,11 @@ function legacyMutation(settings: ModelSettings): ModelProfileMutationResult {
 }
 
 function desktopOnlyError() {
-  return new BackendApiError(400, 'DESKTOP_ONLY', '多模型配置管理仅桌面版可用。')
+  return new BackendApiError(400, 'DESKTOP_ONLY', i18n.global.t('errors.modelProfileDesktopAvailable'))
 }
 
 function desktopBridgeUnavailableError() {
-  return new BackendApiError(503, 'DESKTOP_BRIDGE_UNAVAILABLE', '桌面模型配置桥接尚未就绪，请重启应用。', true)
+  return new BackendApiError(503, 'DESKTOP_BRIDGE_UNAVAILABLE', i18n.global.t('errors.modelProfileDesktopNotReadyApplication'), true)
 }
 
 function unavailablePetSnapshot(): PetSnapshot {

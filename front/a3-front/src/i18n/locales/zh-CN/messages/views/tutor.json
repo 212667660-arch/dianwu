@@ -1,5 +1,10 @@
 {
   "title": "今天想一起学点什么？",
+  "modelReady": "模型就绪",
+  "continueDiagnosis": "继续学习诊断",
+  "documentUnit": "份资料",
+  "waitingStart": "等待开始",
+  "generatingResource": "正在生成资源",
   "intro": "不用急着把目标说得很完整。先告诉我你最近在困惑什么，我们慢慢把它变成一条清晰的路。",
   "partner": "学习伙伴",
   "futurePartner": "未来伙伴",

@@ -1,5 +1,11 @@
 {
   "title": "学习画像",
+  "profileVersionPrefix": "画像 v",
+  "sync": "同步",
+  "itemUnit": "条",
+  "learner": "学习者",
+  "profileAgent": "画像 Agent",
+  "startDiagnosis": "开始诊断",
   "subtitle": "通过对话了解你的目标、基础与薄弱点。",
   "start": "开始学习诊断",
   "continue": "继续学习诊断",

@@ -1,5 +1,8 @@
 {
   "welcome": "欢迎来到智学协作台",
+  "backendLocal": "本地后端",
+  "ready": "已就绪",
+  "offlineOcr": "离线 OCR",
   "intro": "先完成几个简单设置，就可以开始本地优先的个性化学习。",
   "model": {
     "title": "连接模型服务",

@@ -1,11 +1,11 @@
 <template>
   <section class="page">
     <div class="page-heading">
-      <div><h1>学习画像</h1><p>画像 Agent 根据诊断对话生成的结构化学习者信息</p></div>
+      <div><h1>{{ t('views.profile.title') }}</h1><p>{{ t('views.profile.structuredProfileDescription') }}</p></div>
       <div class="toolbar">
-        <el-tag v-if="backend.profileReady" type="success" effect="plain">画像 v{{ backend.session?.profile_version }}</el-tag>
-        <el-button :icon="Refresh" @click="backend.refreshSession()">同步</el-button>
-        <el-button v-if="backend.session" type="danger" plain :icon="RefreshLeft" @click="restart">重新诊断</el-button>
+        <el-tag v-if="backend.profileReady" type="success" effect="plain">{{ t('views.profile.profileVersionPrefix') }}{{ backend.session?.profile_version }}</el-tag>
+        <el-button :icon="Refresh" @click="backend.refreshSession()">{{ t('views.profile.sync') }}</el-button>
+        <el-button v-if="backend.session" type="danger" plain :icon="RefreshLeft" @click="restart">{{ t('views.profile.restart') }}</el-button>
       </div>
     </div>
 
@@ -14,32 +14,32 @@
         <article class="profile-main panel">
           <div class="profile-heading">
             <div class="profile-avatar"><el-icon><User /></el-icon></div>
-            <div><span>{{ fields['年级'] || '年级未明确' }}</span><h2>{{ fields['学科'] || '学习画像' }}</h2><p>{{ fields['学习目标'] }}</p></div>
+            <div><span>{{ fields['\u5e74\u7ea7'] || t('views.profile.grade') }}</span><h2>{{ fields['\u5b66\u79d1'] || t('views.profile.title') }}</h2><p>{{ fields['\u5b66\u4e60\u76ee\u6807'] }}</p></div>
           </div>
           <div class="field-grid">
             <div v-for="item in primaryFields" :key="item.label" class="field-item">
-              <span>{{ item.label }}</span><strong>{{ item.value || '未明确' }}</strong>
+              <span>{{ item.label }}</span><strong>{{ item.value || t('views.profile.unspecified') }}</strong>
             </div>
           </div>
-          <div class="profile-section"><span>薄弱知识点</span><div class="tags"><el-tag v-for="item in weaknesses" :key="item" type="warning" effect="plain">{{ item }}</el-tag></div></div>
-          <div class="profile-section"><span>推荐难度</span><div class="tags"><el-tag v-for="item in difficulties" :key="item" effect="plain">{{ item }}</el-tag></div></div>
+          <div class="profile-section"><span>{{ t('views.profile.knowledgePointWeak') }}</span><div class="tags"><el-tag v-for="item in weaknesses" :key="item" type="warning" effect="plain">{{ item }}</el-tag></div></div>
+          <div class="profile-section"><span>{{ t('views.profile.difficulty') }}</span><div class="tags"><el-tag v-for="item in difficulties" :key="item" effect="plain">{{ item }}</el-tag></div></div>
         </article>
 
         <article class="panel">
-          <div class="panel-header"><h2>画像依据</h2></div>
+          <div class="panel-header"><h2>{{ t('views.profile.profile') }}</h2></div>
           <div class="panel-body evidence-list">
-            <div><span>学习风格证据</span><p>{{ fields['学习风格证据'] }}</p></div>
-            <div><span>模型置信度</span><p>{{ confidence }}</p></div>
-            <div><span>待确认问题</span><p>{{ fields['待确认问题'] || '无' }}</p></div>
+            <div><span>{{ t('views.profile.style') }}</span><p>{{ fields['\u5b66\u4e60\u98ce\u683c\u8bc1\u636e'] }}</p></div>
+            <div><span>{{ t('views.profile.modelConfidence') }}</span><p>{{ confidence }}</p></div>
+            <div><span>{{ t('views.profile.pendingQuestions') }}</span><p>{{ fields['\u5f85\u786e\u8ba4\u95ee\u9898'] || t('views.profile.noPendingQuestions') }}</p></div>
           </div>
         </article>
       </div>
 
       <article class="panel dialogue-panel">
-        <div class="panel-header"><h2>诊断对话记录</h2><span class="muted">{{ diagnosticMessages.length }} 条</span></div>
+        <div class="panel-header"><h2>{{ t('views.profile.diagnosisConversation') }}</h2><span class="muted">{{ diagnosticMessages.length }} {{ t('views.profile.itemUnit') }}</span></div>
         <div class="panel-body dialogue-list">
           <div v-for="message in diagnosticMessages" :key="message.seq" class="dialogue-row" :class="message.role">
-            <span>{{ message.role === 'user' ? '学习者' : '画像 Agent' }}</span>
+            <span>{{ message.role === 'user' ? t('views.profile.learner') : t('views.profile.profileAgent') }}</span>
             <p>{{ message.content }}</p>
           </div>
         </div>
@@ -47,49 +47,53 @@
     </template>
 
     <div v-else class="panel empty-block">
-      <div><el-icon :size="34"><User /></el-icon><p>当前会话尚未生成学习画像</p><el-button type="primary" @click="router.push('/tutor')">开始诊断</el-button></div>
+      <div><el-icon :size="34"><User /></el-icon><p>{{ t('views.profile.profileNotGenerated') }}</p><el-button type="primary" @click="router.push('/tutor')">{{ t('views.profile.startDiagnosis') }}</el-button></div>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, RefreshLeft, User } from '@element-plus/icons-vue'
 import { backendApi } from '@/api'
 import { useBackendStore } from '@/stores/backend'
-import { protocolFields } from '@/utils/protocol'
+import { LEARNER_PROFILE_PROTOCOL_PREFIX, protocolFields } from '@/utils/protocol'
+import { formatPercent } from '@/i18n/formatters'
+
+const { t } = useI18n()
 
 const backend = useBackendStore()
 const router = useRouter()
 const fields = computed(() => protocolFields(backend.session?.profile_text))
 const primaryFields = computed(() => [
-  { label: '当前水平', value: fields.value['当前水平'] },
-  { label: '学习风格', value: fields.value['学习风格偏好'] },
-  { label: '认知层次', value: fields.value['认知层次'] },
-  { label: '画像版本', value: fields.value['画像版本'] },
+  { label: t('views.profile.current'), value: fields.value['\u5f53\u524d\u6c34\u5e73'] },
+  { label: t('views.profile.styleTitle'), value: fields.value['\u5b66\u4e60\u98ce\u683c\u504f\u597d'] },
+  { label: t('views.profile.level'), value: fields.value['\u8ba4\u77e5\u5c42\u6b21'] },
+  { label: t('views.profile.profileVersion'), value: fields.value['\u753b\u50cf\u7248\u672c'] },
 ])
-const weaknesses = computed(() => (fields.value['薄弱知识点'] || '').split('｜').filter(Boolean))
-const difficulties = computed(() => (fields.value['推荐难度'] || '').split('｜').filter(Boolean))
-const confidence = computed(() => `${Math.round(Number(fields.value['置信度'] || 0) * 100)}%`)
+const weaknesses = computed(() => (fields.value['\u8584\u5f31\u77e5\u8bc6\u70b9'] || '').split('｜').filter(Boolean))
+const difficulties = computed(() => (fields.value['\u63a8\u8350\u96be\u5ea6'] || '').split('｜').filter(Boolean))
+const confidence = computed(() => formatPercent(Number(fields.value['\u7f6e\u4fe1\u5ea6'] || 0), { maximumFractionDigits: 0 }))
 const diagnosticMessages = computed(() => {
   const history = backend.session?.messages || []
   const profileIndex = history.findIndex(message => (
-    message.role === 'assistant' && message.content.startsWith('【协议:learner-profile/v1】')
+    message.role === 'assistant' && message.content.startsWith(LEARNER_PROFILE_PROTOCOL_PREFIX)
   ))
   return (profileIndex >= 0 ? history.slice(0, profileIndex + 1) : history).slice(0, 8)
 })
 
 async function restart() {
   try {
-    await ElMessageBox.confirm('将进入重新诊断状态，已有资源和答题记录仍会保留。', '重新诊断', { type: 'warning' })
+    await ElMessageBox.confirm(t('views.profile.restartPreservesLearningData'), t('views.profile.restart'), { type: 'warning' })
     await backendApi.rediagnose(backend.sessionId)
     await backend.refreshSession()
-    ElMessage.success('已进入重新诊断')
+    ElMessage.success(t('views.profile.diagnosisRestarted'))
     router.push('/tutor')
   } catch (error) {
-    if (error !== 'cancel') ElMessage.error('重新诊断失败')
+    if (error !== 'cancel') ElMessage.error(t('views.profile.diagnosisRestartFailure'))
   }
 }
 </script>

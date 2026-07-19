@@ -250,11 +250,11 @@ describe('repository production source inventory', () => {
     const mappedEntries = inventory.entries.filter((entry: InventoryEntry) => entry.mode === 'mapped')
     const classifiedEntries = inventory.entries.filter((entry: InventoryEntry) => entry.mode === 'classified')
 
-    expect(rendererCandidates).toHaveLength(408)
+    expect(rendererCandidates).toHaveLength(10)
     expect(electronCandidates).toHaveLength(120)
-    expect(candidates).toHaveLength(528)
-    expect(mappedEntries).toHaveLength(457)
-    expect(classifiedEntries).toHaveLength(71)
+    expect(candidates).toHaveLength(130)
+    expect(mappedEntries).toHaveLength(56)
+    expect(classifiedEntries).toHaveLength(74)
     expect(inventory.entries.map((entry: InventoryEntry) => entry.id)).toEqual(
       inventory.entries.map((entry: InventoryEntry) => entry.id).sort(),
     )
@@ -264,7 +264,10 @@ describe('repository production source inventory', () => {
       reason: entry.mode === 'classified' ? entry.reason : undefined,
     }))).toEqual(expect.arrayContaining([
       ...Array.from({ length: 6 }, () => ({ source: 'src/api/types.ts', reason: 'canonical_enum' })),
-      { source: 'src/views/ProfileBuilder.vue', reason: 'protocol_token' },
+      { source: 'src/utils/protocol.ts', reason: 'canonical_enum' },
+      { source: 'src/utils/protocol.ts', reason: 'protocol_token' },
+      { source: 'src/utils/protocol.ts', reason: 'non_user_data' },
+      { source: 'src/utils/protocol.ts', reason: 'compatibility_fallback' },
     ]))
     expect(classifiedEntries.filter((entry: InventoryEntry) => entry.mode === 'classified' && entry.reason === 'protocol_token')).toHaveLength(1)
     const electronIds = new Set(electronCandidates.map(candidate => candidate.id))
@@ -309,10 +312,7 @@ describe('repository production source inventory', () => {
     expect(electronMapped.filter((entry: InventoryEntry) => entry.mode === 'mapped'
       && !/^(?:common\.|desktop\.|errors\.[A-Z][A-Z0-9_]+$|pet\.)/.test(entry.catalog_key)
     ).map((entry: InventoryEntry) => entry.id)).toEqual([])
-    for (const prefix of [
-      'views.dashboard', 'views.profile', 'views.agents', 'views.learningPath', 'views.tutor', 'views.assessment',
-      'views.knowledge', 'views.modelSettings', 'views.desktopSettings', 'views.onboarding',
-    ]) expect(mappedEntries.some((entry: InventoryEntry) => entry.mode === 'mapped' && entry.catalog_key.startsWith(`${prefix}.`)), prefix).toBe(true)
+    expect(mappedEntries.filter((entry: InventoryEntry) => entry.mode === 'mapped' && entry.catalog_key.startsWith('views.'))).toEqual([])
 
     expect({
       complete: result.complete,

@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { reactive } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, expect, it, vi } from 'vitest'
+import { activateLocale, installLocaleMessages } from '@/i18n'
 
 const demo = {
   session_id: 'demo_offline_v1', seeded: true, mode: 'offline' as const,
@@ -47,4 +48,21 @@ it('starts one-click demo and shows truthful offline agents and mastery comparis
   expect(wrapper.text()).toContain('CC0-1.0')
   expect(wrapper.text()).toContain('25% → 62%')
   expect(wrapper.text()).toContain('答案复核 Agent')
+})
+
+it('switches dashboard shell copy at runtime without translating demo content', async () => {
+  installLocaleMessages('en-US', { views: { dashboard: { title: 'Learning overview', runDemo: 'Run demo' } } })
+  activateLocale('en-US')
+  store.demoSnapshot = demo
+  const router = createRouter({ history: createMemoryHistory(), routes: [
+    { path: '/dashboard', component: Dashboard }, { path: '/tutor', component: { template: '<div />' } },
+  ] })
+  await router.push('/dashboard'); await router.isReady()
+  const wrapper = mount(Dashboard, {
+    global: { plugins: [router], stubs: { ElButton: { template: '<button><slot /></button>' }, ElProgress: true, ElTag: true, ElIcon: true } },
+  })
+
+  expect(wrapper.text()).toContain('Learning overview')
+  expect(wrapper.text()).toContain('Run demo')
+  expect(wrapper.text()).toContain('一次函数探究课')
 })

@@ -1,46 +1,47 @@
 <template>
   <section class="knowledge-page">
-    <header class="knowledge-header"><div><span class="knowledge-kicker">LOCAL LIBRARY</span><h1>把学过的风，收进一座小书房</h1><p>资料只留在这台设备。需要模型协助时，也只取与你问题相关的少量片段。</p></div><div class="knowledge-toolbar"><span class="mode-badge">{{ backend.knowledgeStatus?.semantic_pack.available?'混合检索':'关键词检索' }}</span><button data-testid="import-knowledge-files" type="button" :disabled="!desktopAvailable||!activeCollectionId" @click="importFiles">{{ desktopAvailable?'导入资料':'导入仅桌面版可用' }}</button></div></header>
+    <header class="knowledge-header"><div><span class="knowledge-kicker">LOCAL LIBRARY</span><h1>{{ t('views.knowledge.heroTitle') }}</h1><p>{{ t('views.knowledge.modelDocument') }}</p></div><div class="knowledge-toolbar"><span class="mode-badge">{{ backend.knowledgeStatus?.semantic_pack.available?t('views.knowledge.search'):t('views.knowledge.searchTitle') }}</span><button data-testid="import-knowledge-files" type="button" :disabled="!desktopAvailable||!activeCollectionId" @click="importFiles">{{ desktopAvailable?t('views.knowledge.documentImport'):t('views.knowledge.desktopImportAvailable') }}</button></div></header>
     <TextbookCatalog :items="textbookItems" :desktop-available="desktopAvailable" @open="openOfficialTextbook" />
     <div v-if="backend.knowledgeError" class="knowledge-error" role="alert">{{ backend.knowledgeError }}</div>
-    <div class="knowledge-mobile-tools"><button type="button" @click="collectionDrawer=true">集合</button><button type="button" :disabled="!selectedDocument" @click="inspectorDrawer=true">资料详情</button></div>
+    <div class="knowledge-mobile-tools"><button type="button" @click="collectionDrawer=true">{{ t('views.knowledge.collection') }}</button><button type="button" :disabled="!selectedDocument" @click="inspectorDrawer=true">{{ t('views.knowledge.documentDetails') }}</button></div>
     <div class="knowledge-workspace" :class="{ 'is-drop-active': dropActive }">
       <CollectionRail :collections="backend.knowledgeCollections" :selected-id="activeCollectionId" @select="selectCollection" @create="createCollection" @rename="renameCollection" @delete="deleteCollection" />
       <div class="knowledge-center">
         <div class="center-heading">
-          <div><strong>{{ trashOnly ? '回收站' : (activeCollection?.name||'全部资料') }}</strong><span>{{ filteredDocuments.length }} 份资料</span></div>
-          <input v-model="filter" aria-label="筛选知识库资料" placeholder="寻找一份记得的资料…">
+          <div><strong>{{ trashOnly ? t('views.knowledge.trash') : (activeCollection?.name||t('views.knowledge.allDocuments')) }}</strong><span>{{ filteredDocuments.length }} {{ t('views.knowledge.document') }}</span></div>
+          <input v-model="filter" :aria-label="t('views.knowledge.documentFilterAriaLabel')" :placeholder="t('views.knowledge.documentTitle')">
         </div>
-        <div class="advanced-filters" aria-label="知识库高级筛选">
-          <label><input v-model="trashOnly" data-testid="trash-filter" type="checkbox"> 回收站</label>
-          <label><input v-model="favoriteOnly" type="checkbox"> 仅收藏</label>
-          <input v-model="tagFilter" aria-label="按标签筛选" placeholder="标签">
-          <select v-model="statusFilter" aria-label="按状态筛选"><option value="">全部状态</option><option value="COMPLETED">已完成</option><option value="PARSING">解析中</option><option value="OCR_RUNNING">OCR 中</option><option value="FAILED">失败</option></select>
-          <select v-model="sortFilter" data-testid="sort-filter" aria-label="资料排序"><option value="created">导入时间</option><option value="updated">更新时间</option><option value="name">名称</option><option value="size">大小</option></select>
-          <select v-model="directionFilter" aria-label="排序方向"><option value="desc">降序</option><option value="asc">升序</option></select>
+        <div class="advanced-filters" :aria-label="t('views.knowledge.advancedFilterAriaLabel')">
+          <label><input v-model="trashOnly" data-testid="trash-filter" type="checkbox"> {{ t('views.knowledge.trash') }}</label>
+          <label><input v-model="favoriteOnly" type="checkbox"> {{ t('views.knowledge.favorite') }}</label>
+          <input v-model="tagFilter" :aria-label="t('views.knowledge.tagFilter')" :placeholder="t('views.knowledge.tag')">
+          <select v-model="statusFilter" :aria-label="t('views.knowledge.statusFilter')"><option value="">{{ t('views.knowledge.statusAll') }}</option><option value="COMPLETED">{{ t('views.knowledge.completed') }}</option><option value="PARSING">{{ t('views.knowledge.parse') }}</option><option value="OCR_RUNNING">{{ t('views.knowledge.ocrInProgress') }}</option><option value="FAILED">{{ t('views.knowledge.failure') }}</option></select>
+          <select v-model="sortFilter" data-testid="sort-filter" :aria-label="t('views.knowledge.documentSort')"><option value="created">{{ t('views.knowledge.importTime') }}</option><option value="updated">{{ t('views.knowledge.updateTime') }}</option><option value="name">{{ t('views.knowledge.name') }}</option><option value="size">{{ t('views.knowledge.size') }}</option></select>
+          <select v-model="directionFilter" :aria-label="t('views.knowledge.sortTitle')"><option value="desc">{{ t('views.knowledge.descending') }}</option><option value="asc">{{ t('views.knowledge.ascending') }}</option></select>
         </div>
-        <div class="bulk-toolbar" aria-label="批量资料操作">
-          <button data-testid="select-all-documents" type="button" @click="toggleSelectAll">{{ allVisibleSelected ? '取消全选' : '全选当前结果' }}</button>
-          <span data-testid="bulk-selection-count">已选 {{ selectedDocumentIds.length }} 项</span>
-          <select v-model.number="targetCollectionId" aria-label="批量操作目标集合"><option :value="null">选择集合</option><option v-for="collection in backend.knowledgeCollections" :key="collection.id" :value="collection.id">{{ collection.name }}</option></select>
-          <button type="button" :disabled="!canMutateSelection||!targetCollectionId" @click="bulkCollections('add_to_collections')">加入集合</button>
-          <button type="button" :disabled="!canMutateSelection||!targetCollectionId" @click="bulkCollections('remove_from_collections')">移出集合</button>
-          <input v-model="tagEditor" aria-label="批量设置标签" placeholder="标签用逗号分隔">
-          <button type="button" :disabled="!canMutateSelection" @click="bulkSetTags">设置标签</button>
-          <button type="button" :disabled="!canMutateSelection" @click="bulkFavorite(true)">收藏</button>
-          <button v-if="!trashOnly" data-testid="bulk-trash" type="button" :disabled="!canMutateSelection" @click="bulkTrash">移入回收站</button>
-          <button v-else data-testid="bulk-restore" type="button" :disabled="!canMutateSelection" @click="runBulk('restore')">恢复</button>
-          <button v-if="trashOnly" data-testid="bulk-purge" class="danger" type="button" :disabled="!canMutateSelection" @click="bulkPurge">永久删除</button>
+        <div class="bulk-toolbar" :aria-label="t('views.knowledge.documentBulk')">
+          <button data-testid="select-all-documents" type="button" @click="toggleSelectAll">{{ allVisibleSelected ? t('views.knowledge.cancel') : t('views.knowledge.resultCurrent') }}</button>
+          <span data-testid="bulk-selection-count">{{ t('views.knowledge.selectedLabel') }} {{ selectedDocumentIds.length }} {{ t('views.knowledge.itemUnit') }}</span>
+          <select v-model.number="targetCollectionId" :aria-label="t('views.knowledge.collectionBulkGoal')"><option :value="null">{{ t('views.knowledge.collectionSelect') }}</option><option v-for="collection in backend.knowledgeCollections" :key="collection.id" :value="collection.id">{{ collection.name }}</option></select>
+          <button type="button" :disabled="!canMutateSelection||!targetCollectionId" @click="bulkCollections('add_to_collections')">{{ t('views.knowledge.collectionTitle') }}</button>
+          <button type="button" :disabled="!canMutateSelection||!targetCollectionId" @click="bulkCollections('remove_from_collections')">{{ t('views.knowledge.collectionDescription') }}</button>
+          <input v-model="tagEditor" :aria-label="t('views.knowledge.settingsTagBulk')" :placeholder="t('views.knowledge.tagTitle')">
+          <button type="button" :disabled="!canMutateSelection" @click="bulkSetTags">{{ t('views.knowledge.settingsTag') }}</button>
+          <button type="button" :disabled="!canMutateSelection" @click="bulkFavorite(true)">{{ t('views.knowledge.favorites') }}</button>
+          <button v-if="!trashOnly" data-testid="bulk-trash" type="button" :disabled="!canMutateSelection" @click="bulkTrash">{{ t('views.knowledge.recycleBin') }}</button>
+          <button v-else data-testid="bulk-restore" type="button" :disabled="!canMutateSelection" @click="runBulk('restore')">{{ t('views.knowledge.restoreTitle') }}</button>
+          <button v-if="trashOnly" data-testid="bulk-purge" class="danger" type="button" :disabled="!canMutateSelection" @click="bulkPurge">{{ t('views.knowledge.purge') }}</button>
         </div>
         <DocumentGrid :documents="filteredDocuments" :jobs="backend.knowledgeJobs" :selected-id="selectedDocumentId" :selected-ids="selectedDocumentIds" :favorite-pending-ids="favoritePendingIds" :cancel-job="backend.cancelKnowledgeJob" :retry-job="backend.retryKnowledgeJob" @select="selectDocument" @toggle-selection="toggleDocumentSelection" @toggle-favorite="toggleFavorite" @drag-active="dropActive=$event" @drop="handleDrop" />
       </div>
       <DocumentInspector :document="selectedDocument" :desktop-available="desktopAvailable" @summarize="summarizeDocument" @worked-example="workedExampleDocument" @open="openDocument" @rebuild="rebuildDocument" @delete="deleteDocument" />
     </div>
-    <el-drawer v-model="collectionDrawer" direction="ltr" size="280px" title="资料集合"><CollectionRail :collections="backend.knowledgeCollections" :selected-id="activeCollectionId" @select="selectCollection" @create="createCollection" @rename="renameCollection" @delete="deleteCollection" /></el-drawer>
-    <el-drawer v-model="inspectorDrawer" direction="rtl" size="330px" title="资料详情"><DocumentInspector :document="selectedDocument" :desktop-available="desktopAvailable" @summarize="summarizeDocument" @worked-example="workedExampleDocument" @open="openDocument" @rebuild="rebuildDocument" @delete="deleteDocument" /></el-drawer>
+    <el-drawer v-model="collectionDrawer" direction="ltr" size="280px" :title="t('views.knowledge.collections')"><CollectionRail :collections="backend.knowledgeCollections" :selected-id="activeCollectionId" @select="selectCollection" @create="createCollection" @rename="renameCollection" @delete="deleteCollection" /></el-drawer>
+    <el-drawer v-model="inspectorDrawer" direction="rtl" size="330px" :title="t('views.knowledge.documentDetails')"><DocumentInspector :document="selectedDocument" :desktop-available="desktopAvailable" @summarize="summarizeDocument" @worked-example="workedExampleDocument" @open="openDocument" @rebuild="rebuildDocument" @delete="deleteDocument" /></el-drawer>
   </section>
 </template>
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { routeLocationKey, routerKey } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -57,10 +58,13 @@ import {
   type TextbookCatalogItem,
 } from '@/api'
 import { useBackendStore } from '@/stores/backend'
+import { PEOPLE_EDUCATION_PRESS_PUBLISHER, TEXTBOOK_MATH_SUBJECT } from '@/utils/protocol'
 import CollectionRail from '@/components/knowledge/CollectionRail.vue'
 import DocumentGrid from '@/components/knowledge/DocumentGrid.vue'
 import DocumentInspector from '@/components/knowledge/DocumentInspector.vue'
 import TextbookCatalog from '@/components/knowledge/TextbookCatalog.vue'
+
+const { t } = useI18n()
 
 const activeJobStatuses = new Set(['QUEUED', 'VALIDATING', 'PARSING', 'OCR_RUNNING', 'INDEXING'])
 const locatorTypes = new Set<KnowledgeLocator['type']>(['page', 'slide', 'sheet_rows', 'paragraph'])
@@ -226,7 +230,7 @@ async function runBulk(action: KnowledgeBulkAction, fields: Partial<KnowledgeBul
   try {
     const result = await backend.bulkKnowledgeDocuments(input)
     const failures = result.items.filter(item => !item.ok)
-    if (failures.length) ElMessage.warning(`${failures.length} 份资料未完成操作，请重试。`)
+    if (failures.length) ElMessage.warning(t('views.knowledge.bulkOperationFailure', { length: failures.length }))
     if (action === 'favorite' && typeof fields.favorite === 'boolean') {
       const nextOverrides = { ...favoriteOverrides.value }
       for (const item of result.items) {
@@ -274,7 +278,7 @@ async function toggleFavorite(id: number, favorite: boolean) {
       favorite,
     }, { refresh: false })
     if (!result.items.some(item => item.document_id === id && item.ok)) {
-      throw new Error('收藏状态未保存，请重试。')
+      throw new Error(t('views.knowledge.favoriteSaveFailure'))
     }
     saved = true
     favoriteInvalidatedThroughVersion = Math.max(favoriteInvalidatedThroughVersion, favoriteReadCutoff)
@@ -311,14 +315,14 @@ async function toggleFavorite(id: number, favorite: boolean) {
 
 async function bulkTrash() {
   try {
-    await ElMessageBox.confirm('所选资料将移入回收站，可随时恢复。', '移入回收站', { type: 'warning' })
+    await ElMessageBox.confirm(t('views.knowledge.moveToTrashNotice'), t('views.knowledge.recycleBin'), { type: 'warning' })
     await runBulk('move_to_trash')
   } catch (error) { reportMutationError(error) }
 }
 
 async function bulkPurge() {
   try {
-    await ElMessageBox.confirm('永久删除后无法恢复，原文件副本和索引都会被清理。', '永久删除', { type: 'warning' })
+    await ElMessageBox.confirm(t('views.knowledge.permanentDeleteWarning'), t('views.knowledge.purge'), { type: 'warning' })
     await runBulk('purge')
   } catch (error) { reportMutationError(error) }
 }
@@ -328,8 +332,9 @@ function reportDuplicates(result: KnowledgeImportBatch) {
   if (!duplicates.length) return
   const names = duplicates.slice(0, 3).map(item => `《${item.display_name}》`).join('、')
   const linked = duplicates.filter(item => item.action === 'linked_existing').length
-  const suffix = duplicates.length > 3 ? `等 ${duplicates.length} 份资料` : names
-  ElMessage.warning(`${suffix} 已存在，${linked ? `${linked} 份已直接加入当前集合，` : ''}没有重复解析。`)
+  const suffix = duplicates.length > 3 ? t('views.knowledge.documentDescription', { length: duplicates.length }) : names
+  const duplicateNotice = linked ? t('views.knowledge.collectionCurrent', { linked }) : ''
+  ElMessage.warning(t('views.knowledge.parseTitle', { suffix, duplicateNotice }))
 }
 
 function selectDocument(id: number) {
@@ -359,7 +364,7 @@ async function handleDrop(event: DragEvent) {
 }
 
 async function createCollection() {
-  const name = window.prompt('给这个资料集合取一个名字')
+  const name = window.prompt(t('views.knowledge.documentCollection'))
   if (!name?.trim()) return
   try {
     await backendApi.createKnowledgeCollection({ name: name.trim(), description: '', color: '#c98f65' })
@@ -370,7 +375,7 @@ async function createCollection() {
 }
 
 async function renameCollection(item: KnowledgeCollection) {
-  const name = window.prompt('给集合换一个名字', item.name)
+  const name = window.prompt(t('views.knowledge.collectionLabel'), item.name)
   if (!name?.trim() || name.trim() === item.name) return
   try {
     await backendApi.updateKnowledgeCollection(item.id, { name: name.trim() })
@@ -386,7 +391,7 @@ function reportMutationError(error: unknown) {
 
 async function deleteCollection(item: KnowledgeCollection) {
   try {
-    await ElMessageBox.confirm(`删除集合“${item.name}”？资料仍会保留在其他集合中。`, '删除集合', { type: 'warning' })
+    await ElMessageBox.confirm(t('views.knowledge.documentCollectionDelete', { name: item.name }), t('views.knowledge.deleteCollection'), { type: 'warning' })
     await backendApi.deleteKnowledgeCollection(item.id)
     if (activeCollectionId.value === item.id) activeCollectionId.value = null
     await backend.refreshKnowledge()
@@ -398,7 +403,7 @@ async function deleteCollection(item: KnowledgeCollection) {
 async function openDocument(id: number) {
   try {
     await backendApi.openKnowledgeSource(id, routedLocator.value || { type: 'paragraph', start: 1, end: 1 })
-    ElMessage.success('已用本地阅读器打开只读预览。')
+    ElMessage.success(t('views.knowledge.openLocalReading'))
   } catch (error) {
     ElMessage.error(errorMessage(error))
   }
@@ -416,16 +421,16 @@ function launchDocumentLearning(id: number, mode: 'summary' | 'worked-example') 
   const document = backend.knowledgeDocuments.find(item => item.id === id)
   if (!document) return
   if (!activeCollectionId.value) {
-    ElMessage.warning('请先选择包含这份资料的知识库集合，再开始总结或例题讲解。')
+    ElMessage.warning(t('views.knowledge.collectionRequiredForTutor'))
     return
   }
   if (!router) {
-    ElMessage.error('学习助手路由尚未就绪，请稍后重试。')
+    ElMessage.error(t('views.knowledge.tutorRouteUnavailable'))
     return
   }
   const prompt = mode === 'summary'
-    ? `请基于已绑定的教材《${document.display_name}》总结知识点。请包含核心概念、公式及适用条件、知识依赖、常见题型、易错点，并引用实际检索到的[资料N]。`
-    : `请基于已绑定的教材《${document.display_name}》生成一道有代表性的数学例题，并按已知条件与目标、所用知识点、分步推导、最终答案、结果检查完整讲解；引用实际检索到的[资料N]。`
+    ? t('views.knowledge.knowledgeSummaryPrompt', { name: document.display_name })
+    : t('views.knowledge.workedExamplePrompt', { name: document.display_name })
   void router.push({
     name: 'SmartTutor',
     query: { knowledge_collection: String(activeCollectionId.value), prompt },
@@ -437,7 +442,7 @@ function workedExampleDocument(id: number) { launchDocumentLearning(id, 'worked-
 
 async function rebuildDocument(id: number) {
   try {
-    await ElMessageBox.confirm('重新解析会更新这份资料的检索片段。', '重新解析')
+    await ElMessageBox.confirm(t('views.knowledge.reparseNotice'), t('views.knowledge.reparse'))
     await backend.rebuildKnowledgeDocument(id)
   } catch (error) {
     reportMutationError(error)
@@ -446,7 +451,7 @@ async function rebuildDocument(id: number) {
 
 async function deleteDocument(id: number) {
   try {
-    await ElMessageBox.confirm('这份资料会移入回收站，可在 30 天内恢复。', '移入回收站', { type: 'warning' })
+    await ElMessageBox.confirm(t('views.knowledge.trashRetentionNotice'), t('views.knowledge.recycleBin'), { type: 'warning' })
     await backend.deleteKnowledgeDocument(id)
     selectedDocumentId.value = null
   } catch (error) {
@@ -470,7 +475,7 @@ async function applyImportProgress(jobs: KnowledgeImportJob[]) {
 onMounted(async () => {
   disposeImportProgress = window.a3Desktop?.knowledgeOnImportProgress?.(jobs => { void applyImportProgress(jobs) })
   try {
-    textbookItems.value = (await backendApi.textbookCatalog({ subject: '数学', publisher: '人民教育出版社' })).items
+    textbookItems.value = (await backendApi.textbookCatalog({ subject: TEXTBOOK_MATH_SUBJECT, publisher: PEOPLE_EDUCATION_PRESS_PUBLISHER })).items
   } catch (error) {
     ElMessage.error(errorMessage(error))
   }

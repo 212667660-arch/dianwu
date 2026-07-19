@@ -1,5 +1,9 @@
 {
   "title": "智能体协作",
+  "sessionLabel": "会话",
+  "learner": "学习者",
+  "waitingTask": "等待任务",
+  "profileTitle": "学习画像",
   "subtitle": "查看每位智能体如何接力完成学习任务。",
   "diagnosis": "画像 Agent",
   "planning": "规划 Agent",

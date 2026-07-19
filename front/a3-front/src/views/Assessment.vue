@@ -1,46 +1,46 @@
 <template>
   <section class="page">
     <div class="page-heading">
-      <div><h1>练习评估</h1><p>提交答案后更新掌握度、错题与复习计划</p></div>
-      <div class="toolbar"><el-button :icon="Refresh" @click="backend.refreshSession()">同步题目</el-button><el-button type="primary" @click="router.push('/tutor')">生成新练习</el-button></div>
+      <div><h1>{{ t('views.assessment.title') }}</h1><p>{{ t('views.assessment.answerSubmissionEffects') }}</p></div>
+      <div class="toolbar"><el-button :icon="Refresh" @click="backend.refreshSession()">{{ t('views.assessment.sync') }}</el-button><el-button type="primary" @click="router.push('/tutor')">{{ t('views.assessment.practiceGenerate') }}</el-button></div>
     </div>
 
     <div class="assessment-layout">
       <article class="panel question-panel">
-        <div class="panel-header"><h2>当前练习</h2><span class="muted">{{ questionRows.length }} 题</span></div>
+        <div class="panel-header"><h2>{{ t('views.assessment.practiceCurrent') }}</h2><span class="muted">{{ questionRows.length }} {{ t('views.assessment.questionUnit') }}</span></div>
         <div class="panel-body">
           <div v-for="row in questionRows" :key="row.question.id" class="question-row">
             <div class="question-heading">
-              <div><span>题目 {{ row.question.ordinal }}</span><h3>{{ row.question.prompt }}</h3></div>
-              <div class="toolbar"><el-tag effect="plain">{{ row.question.difficulty }}</el-tag><span class="quality-label">资源质量 {{ row.quality }}</span></div>
+              <div><span>{{ t('views.assessment.questionTitle') }} {{ row.question.ordinal }}</span><h3>{{ row.question.prompt }}</h3></div>
+              <div class="toolbar"><el-tag effect="plain">{{ row.question.difficulty }}</el-tag><span class="quality-label">{{ t('views.assessment.resourceQuality') }} {{ row.quality }}</span></div>
             </div>
             <div class="answer-row">
-              <el-input v-model="answers[row.question.id]" :data-testid="`assessment-answer-${row.question.id}`" placeholder="输入你的答案" @keyup.enter="submit(row.question.id)" />
-              <el-button :data-testid="`assessment-submit-${row.question.id}`" type="primary" :loading="submitting === row.question.id" @click="submit(row.question.id)">提交</el-button>
+              <el-input v-model="answers[row.question.id]" :data-testid="`assessment-answer-${row.question.id}`" :placeholder="t('views.assessment.answer')" @keyup.enter="submit(row.question.id)" />
+              <el-button :data-testid="`assessment-submit-${row.question.id}`" type="primary" :loading="submitting === row.question.id" @click="submit(row.question.id)">{{ t('views.assessment.submitTitle') }}</el-button>
             </div>
             <div v-if="results[row.question.id]" class="result-box" :class="results[row.question.id].correct ? 'correct' : 'incorrect'">
-              <div><strong>{{ results[row.question.id].correct ? '回答正确' : '需要巩固' }}</strong><span>掌握度 {{ Math.round(results[row.question.id].mastery_score * 100) }}%</span></div>
+              <div><strong>{{ results[row.question.id].correct ? t('views.assessment.correct') : t('views.assessment.needsReinforcement') }}</strong><span>{{ t('views.assessment.masteryLabel') }} {{ formatPercent(results[row.question.id].mastery_score, { maximumFractionDigits: 0 }) }}</span></div>
               <p>{{ results[row.question.id].feedback }}</p>
-              <dl><dt>参考答案</dt><dd>{{ results[row.question.id].expected_answer }}</dd><dt>解析</dt><dd>{{ results[row.question.id].explanation }}</dd></dl>
+              <dl><dt>{{ t('views.assessment.expected') }}</dt><dd>{{ results[row.question.id].expected_answer }}</dd><dt>{{ t('views.assessment.explanation') }}</dt><dd>{{ results[row.question.id].explanation }}</dd></dl>
             </div>
           </div>
-          <div v-if="!questionRows.length" class="empty-block"><div><p>当前会话还没有可作答的练习题</p><el-button text type="primary" @click="router.push('/tutor')">生成学习资源</el-button></div></div>
+          <div v-if="!questionRows.length" class="empty-block"><div><p>{{ t('views.assessment.noQuestionsInCurrentSession') }}</p><el-button text type="primary" @click="router.push('/tutor')">{{ t('views.assessment.resourceGenerate') }}</el-button></div></div>
         </div>
       </article>
 
       <aside class="side-stack">
         <article class="panel">
-          <div class="panel-header"><h2>待复习</h2><span class="muted">{{ backend.reviews.length }}</span></div>
+          <div class="panel-header"><h2>{{ t('views.assessment.review') }}</h2><span class="muted">{{ backend.reviews.length }}</span></div>
           <div class="panel-body compact-list">
-            <div v-for="review in backend.reviews" :key="review.id" class="list-row"><strong>{{ review.knowledge_point }}</strong><p>{{ review.reason === 'ANSWER_INCORRECT' ? '答错后立即复习' : formatDate(review.due_at) }}</p></div>
-            <p v-if="!backend.reviews.length" class="muted">暂无待复习任务</p>
+            <div v-for="review in backend.reviews" :key="review.id" class="list-row"><strong>{{ review.knowledge_point }}</strong><p>{{ review.reason === 'ANSWER_INCORRECT' ? t('views.assessment.reviewTitle') : formatReviewDate(review.due_at) }}</p></div>
+            <p v-if="!backend.reviews.length" class="muted">{{ t('views.assessment.noReviewTasks') }}</p>
           </div>
         </article>
         <article class="panel">
-          <div class="panel-header"><h2>最近错题</h2><span class="muted">{{ backend.mistakes.length }}</span></div>
+          <div class="panel-header"><h2>{{ t('views.assessment.mistakeRecent') }}</h2><span class="muted">{{ backend.mistakes.length }}</span></div>
           <div class="panel-body compact-list">
-            <div v-for="mistake in backend.mistakes.slice(0, 6)" :key="mistake.attempt_id" class="list-row"><strong>{{ mistake.prompt }}</strong><p>你的答案：{{ mistake.submitted_answer }}</p><span>{{ mistake.knowledge_point }}</span></div>
-            <p v-if="!backend.mistakes.length" class="muted">暂无错题记录</p>
+            <div v-for="mistake in backend.mistakes.slice(0, 6)" :key="mistake.attempt_id" class="list-row"><strong>{{ mistake.prompt }}</strong><p>{{ t('views.assessment.answerTitle') }}{{ mistake.submitted_answer }}</p><span>{{ mistake.knowledge_point }}</span></div>
+            <p v-if="!backend.mistakes.length" class="muted">{{ t('views.assessment.noMistakeRecords') }}</p>
           </div>
         </article>
       </aside>
@@ -49,12 +49,16 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { errorMessage, type AttemptResponse } from '@/api'
 import { useBackendStore } from '@/stores/backend'
+import { formatDateTime, formatPercent } from '@/i18n/formatters'
+
+const { t } = useI18n()
 
 const backend = useBackendStore()
 const router = useRouter()
@@ -65,7 +69,7 @@ const questionRows = computed(() => backend.resources.flatMap(resource => resour
 
 async function submit(questionId: number) {
   const answer = (answers[questionId] || '').trim()
-  if (!answer) return ElMessage.warning('请输入答案')
+  if (!answer) return ElMessage.warning(t('views.assessment.answerDescription'))
   submitting.value = questionId
   try {
     results[questionId] = await backend.submitAnswer(questionId, answer, 0)
@@ -76,7 +80,7 @@ async function submit(questionId: number) {
     submitting.value = null
   }
 }
-function formatDate(value: string) { return new Date(value).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) }
+function formatReviewDate(value: string) { return formatDateTime(value, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) }
 </script>
 
 <style scoped lang="scss">

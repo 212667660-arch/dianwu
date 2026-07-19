@@ -1,5 +1,7 @@
 {
   "title": "学习总览",
+  "diagnosisLabel": "学习诊断",
+  "serviceOffline": "服务离线",
   "welcome": "欢迎回来，今天也一起稳稳地向前走。",
   "currentGoal": "当前学习目标",
   "progress": "学习进度",

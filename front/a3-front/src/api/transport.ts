@@ -1,4 +1,5 @@
 import type { KnowledgeImportBatch, KnowledgeLocator, ModelConfigInput, ModelProfileInput, ModelProfilePolicy, PetSettings, PetTaskState, StreamEvent } from './types'
+import { i18n } from '@/i18n'
 
 export interface TransportRequest {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE'
@@ -94,7 +95,7 @@ export function backendApiErrorFromEnvelope(status: number, value: unknown): Bac
   return new BackendApiError(
     status,
     'BACKEND_HTTP_ERROR',
-    '服务请求未成功，请稍后重试。',
+    i18n.global.t('errors.serviceRequestFailure'),
     status >= 500,
   )
 }
@@ -103,7 +104,7 @@ export function backendUnavailableError(): BackendApiError {
   return new BackendApiError(
     503,
     'BACKEND_UNAVAILABLE',
-    '服务暂时不可用，请稍后重试。',
+    i18n.global.t('errors.serviceUnavailable'),
     true,
   )
 }
