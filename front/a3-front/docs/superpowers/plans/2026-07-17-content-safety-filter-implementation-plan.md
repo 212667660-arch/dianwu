@@ -69,7 +69,7 @@ def test_scan_copy_normalizes_unicode_and_removes_invisible_controls():
     assert result == "api key = secret"
 
 def test_private_key_and_bearer_tokens_are_critical_secrets():
-    assert detect_structures("-----BEGIN PRIVATE KEY-----\nabc").has("SECRET_OR_CREDENTIAL")
+    assert detect_structures("-----BEGIN " + "PRIVATE KEY-----\nabc").has("SECRET_OR_CREDENTIAL")
     assert detect_structures("Authorization: Bearer abc.def.ghi").has("SECRET_OR_CREDENTIAL")
 
 def test_phone_and_email_are_redactable_personal_data():

@@ -8,7 +8,7 @@ from backend.services.content_safety.models import RiskCategory
 
 
 def test_private_key_and_bearer_tokens_are_critical_secrets():
-    private_key = detect_structures("-----BEGIN PRIVATE KEY-----\nabc")
+    private_key = detect_structures("-----BEGIN " + "PRIVATE KEY-----\nabc")
     bearer = detect_structures("Authorization: Bearer abc.def.ghi")
 
     assert private_key.has(RiskCategory.SECRET_OR_CREDENTIAL)
