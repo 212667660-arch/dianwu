@@ -18,15 +18,6 @@ jobs:
     runs-on: windows-2022
     environment: windows-signing
     timeout-minutes: 120
-    env:
-      A3_SIGNED_RELEASE: '1'
-      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-      AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ vars.AZURE_TRUSTED_SIGNING_ENDPOINT }}
-      AZURE_CODE_SIGNING_ACCOUNT_NAME: ${{ vars.AZURE_CODE_SIGNING_ACCOUNT_NAME }}
-      AZURE_CERTIFICATE_PROFILE_NAME: ${{ vars.AZURE_CERTIFICATE_PROFILE_NAME }}
-      A3_EXPECTED_PUBLISHER: ${{ vars.A3_EXPECTED_PUBLISHER }}
     steps:
       - name: Check out immutable source
         uses: actions/checkout@v4
@@ -111,10 +102,21 @@ jobs:
 
       - name: Build signed Windows installer
         working-directory: front/a3-front
+        env:
+          A3_SIGNED_RELEASE: '1'
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ vars.AZURE_TRUSTED_SIGNING_ENDPOINT }}
+          AZURE_CODE_SIGNING_ACCOUNT_NAME: ${{ vars.AZURE_CODE_SIGNING_ACCOUNT_NAME }}
+          AZURE_CERTIFICATE_PROFILE_NAME: ${{ vars.AZURE_CERTIFICATE_PROFILE_NAME }}
+          A3_EXPECTED_PUBLISHER: ${{ vars.A3_EXPECTED_PUBLISHER }}
         run: npm run desktop:dist:signed
 
       - name: Verify signed Windows release
         shell: pwsh
+        env:
+          A3_EXPECTED_PUBLISHER: ${{ vars.A3_EXPECTED_PUBLISHER }}
         run: |
           $ErrorActionPreference = 'Stop'
           $version = (Get-Content -Raw front/a3-front/package.json | ConvertFrom-Json).version

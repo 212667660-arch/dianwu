@@ -64,7 +64,7 @@ function parseWorkflowSteps(workflow) {
   let collectingRun = false
   for (const line of workflow.split(/\r?\n/)) {
     if (/^ {6}- name:/.test(line)) {
-      current = { if: '', uses: '', run: '' }
+      current = { if: '', uses: '', run: '', env: {} }
       steps.push(current)
       collectingRun = false
       continue
@@ -74,6 +74,11 @@ function parseWorkflowSteps(workflow) {
     if (property) {
       current[property[1]] = property[2].trim()
       collectingRun = false
+      continue
+    }
+    const environment = line.match(/^ {10}([A-Z][A-Z0-9_]+):\s*(.+)$/)
+    if (environment) {
+      current.env[environment[1]] = environment[2].trim()
       continue
     }
     if (/^ {8}run:\s*\|?\s*$/.test(line)) {
@@ -96,10 +101,18 @@ function parseWorkflowSteps(workflow) {
   return steps.map((step) => ({ ...step, run: sanitizePowerShell(step.run) }))
 }
 
+function invokesVerification(step) {
+  return step.run.split('\n').some((line) => /^\s*(?:[.&]\s*)?(?:\.?[\\/])?scripts[\\/]release[\\/]verify-windows-signatures\.ps1(?:\s|$)/i.test(line))
+}
+
+function invokesReleasePublishing(step) {
+  return step.run.split('\n').some((line) => /^\s*(?:[.&]\s*)?gh\s+release(?:\s|$)/i.test(line))
+}
+
 function assertVerificationPrecedesPublishing(steps) {
-  const verification = steps.findIndex((step) => step.run.includes('scripts/release/verify-windows-signatures.ps1'))
+  const verification = steps.findIndex(invokesVerification)
   const upload = steps.findIndex((step) => step.uses === 'actions/upload-artifact@v4')
-  const publish = steps.findIndex((step) => step.run.includes('gh release'))
+  const publish = steps.findIndex(invokesReleasePublishing)
   assert.ok(verification >= 0, 'signature verification execution step is required')
   assert.ok(verification < upload, 'artifact upload must occur after signature verification')
   assert.ok(verification < publish, 'tag publishing must occur after signature verification')
@@ -133,9 +146,43 @@ test('workflow execution parsing rejects verification text hidden in PowerShell 
   )
 })
 
+test('workflow execution parsing rejects uninvoked command-path decoys', () => {
+  const maliciousWorkflow = `jobs:
+  signed-release:
+    steps:
+      - name: Decoy paths
+        run: |
+          Write-Host scripts/release/verify-windows-signatures.ps1
+          $fake = scripts/release/verify-windows-signatures.ps1
+          $joined = 'scripts/release/' + 'verify-windows-signatures.ps1'
+      - name: Publish too early
+        run: gh release upload v1 artifact.exe
+      - name: Real verification too late
+        run: & ./scripts/release/verify-windows-signatures.ps1 -InstallAndVerify
+      - name: Upload too late
+        uses: actions/upload-artifact@v4
+`
+  assert.throws(
+    () => assertVerificationPrecedesPublishing(parseWorkflowSteps(maliciousWorkflow)),
+    /tag publishing must occur after signature verification/,
+  )
+})
+
 test('the signed Windows release workflow is protected and verifies before publishing', async () => {
   const workflow = await readFile(new URL('../../../.github/workflows/windows-signed-release.yml', import.meta.url), 'utf8')
   const steps = parseWorkflowSteps(workflow)
+
+  const jobScope = workflow.slice(0, workflow.indexOf('    steps:'))
+  for (const secretName of [
+    'AZURE_TENANT_ID',
+    'AZURE_CLIENT_ID',
+    'AZURE_CLIENT_SECRET',
+    'AZURE_TRUSTED_SIGNING_ENDPOINT',
+    'AZURE_CODE_SIGNING_ACCOUNT_NAME',
+    'AZURE_CERTIFICATE_PROFILE_NAME',
+  ]) {
+    assert.doesNotMatch(jobScope, new RegExp(`^\\s+${secretName}:`, 'm'))
+  }
 
   assert.match(workflow, /environment:\s*windows-signing/)
   assert.match(workflow, /permissions:\s*[\s\S]*contents:\s*write/)
@@ -172,7 +219,7 @@ test('the signed Windows release workflow is protected and verifies before publi
   assert.match(workflow, /gh release/)
   assert.match(workflow, /if:\s*github\.event_name == 'push' && startsWith\(github\.ref, 'refs\/tags\/v'\)/)
 
-  for (const name of [
+  const signingNames = [
     'AZURE_TENANT_ID',
     'AZURE_CLIENT_ID',
     'AZURE_CLIENT_SECRET',
@@ -180,9 +227,7 @@ test('the signed Windows release workflow is protected and verifies before publi
     'AZURE_CODE_SIGNING_ACCOUNT_NAME',
     'AZURE_CERTIFICATE_PROFILE_NAME',
     'A3_EXPECTED_PUBLISHER',
-  ]) {
-    assert.match(workflow, new RegExp(`^\\s{6}${name}:`, 'm'))
-  }
+  ]
 
   const orderedGates = [
     'python -m pip install --upgrade pip',
@@ -207,6 +252,11 @@ test('the signed Windows release workflow is protected and verifies before publi
   }
 
   const { verification, upload, publish } = assertVerificationPrecedesPublishing(steps)
+  const signedBuild = steps.find((step) => step.run.includes('npm run desktop:dist:signed'))
+  assert.ok(signedBuild, 'signed installer build step is required')
+  assert.equal(signedBuild.env.A3_SIGNED_RELEASE, "'1'")
+  for (const name of signingNames) assert.ok(signedBuild.env[name], `${name} must be scoped to the signed build step`)
+  assert.deepEqual(steps[verification].env, { A3_EXPECTED_PUBLISHER: '${{ vars.A3_EXPECTED_PUBLISHER }}' })
   assert.equal(steps[upload].if, "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'")
   assert.equal(steps[publish].if, "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')")
   assert.match(workflow, /retention-days:\s*7/)

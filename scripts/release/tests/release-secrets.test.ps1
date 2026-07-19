@@ -55,7 +55,9 @@ try {
         @{ Path = 'config\win-csc.env'; Content = "$winCscLinkName = https://example.invalid/signing.pfx"; Rule = 'Windows CSC link' },
         @{ Path = 'config\password.env'; Content = "$cscPasswordName = real-password"; Rule = 'CSC password' },
         @{ Path = 'config\export.env'; Content = "export $azureSecretName=real-secret"; Rule = 'exported Azure secret' },
-        @{ Path = 'config\list.yml'; Content = "- $($winCscLinkName): https://example.invalid/signing.pfx"; Rule = 'YAML list secret' }
+        @{ Path = 'config\list.yml'; Content = "- $($winCscLinkName): https://example.invalid/signing.pfx"; Rule = 'YAML list secret' },
+        @{ Path = 'config\quoted.json'; Content = "`"$azureSecretName`":`"real-secret`""; Rule = 'JSON secret' },
+        @{ Path = 'config\powershell.ps1'; Content = "`$env:$azureSecretName='real-secret'"; Rule = 'PowerShell environment secret' }
     )
     foreach ($unsafeCase in $unsafeCases) {
         Write-Utf8File -LiteralPath (Join-Path $testRoot $unsafeCase.Path) -Content $unsafeCase.Content
@@ -63,6 +65,18 @@ try {
             & $scannerPath -RepositoryRoot $testRoot -TrackedFiles @($safePath, $unsafeCase.Path)
         } 'A3_RELEASE_SECRET_DETECTED'
     }
+
+    $utf16LePath = 'config\utf16le.txt'
+    [IO.File]::WriteAllText((Join-Path $testRoot $utf16LePath), "$azureSecretName=real-secret", [Text.UnicodeEncoding]::new($false, $true))
+    Assert-ThrowsCode {
+        & $scannerPath -RepositoryRoot $testRoot -TrackedFiles @($utf16LePath)
+    } 'A3_RELEASE_SECRET_DETECTED'
+
+    $utf16BePath = 'config\utf16be.txt'
+    [IO.File]::WriteAllText((Join-Path $testRoot $utf16BePath), "$azureSecretName=real-secret", [Text.UnicodeEncoding]::new($true, $true))
+    Assert-ThrowsCode {
+        & $scannerPath -RepositoryRoot $testRoot -TrackedFiles @($utf16BePath)
+    } 'A3_RELEASE_SECRET_DETECTED'
 
     $placeholderPath = 'docs\workflow-placeholder.yml'
     Write-Utf8File -LiteralPath (Join-Path $testRoot $placeholderPath) -Content "${azureSecretName}: `${{ secrets.AZURE_CLIENT_SECRET }}"
