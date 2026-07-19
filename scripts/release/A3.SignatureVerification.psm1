@@ -1085,96 +1085,148 @@ function New-A3ReleaseManifest {
     }
 
     $manifestEntries = [Collections.Generic.List[pscustomobject]]::new()
+    $lockedArtifacts = [Collections.Generic.List[pscustomobject]]::new()
+    $artifactStreams = [Collections.Generic.List[IO.FileStream]]::new()
     $seenRecordPaths = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-    foreach ($artifact in $Artifacts) {
-        if ($artifact -isnot [pscustomobject] -or
-            $artifact.Scope -isnot [string] -or [string]::IsNullOrWhiteSpace($artifact.Scope) -or
-            $artifact.RelativePath -isnot [string] -or [string]::IsNullOrWhiteSpace($artifact.RelativePath) -or
-            $artifact.Path -isnot [string] -or [string]::IsNullOrWhiteSpace($artifact.Path)) {
-            throw (New-A3SignatureError 'A3_SIGNATURE_RECORD_INVALID' 'The release artifact descriptor is invalid.')
+    $temporaryPath = $null
+    $backupPath = $null
+
+    $streamHashProvider = {
+        param([IO.Stream]$ArtifactStream)
+        $sha256 = [Security.Cryptography.SHA256]::Create()
+        try {
+            return -join @($sha256.ComputeHash($ArtifactStream) | ForEach-Object { $_.ToString('X2') })
         }
-        $artifactPath = Resolve-A3FileSystemPath -Path $artifact.Path
-        if (-not (Test-Path -LiteralPath $artifactPath -PathType Leaf)) {
-            throw (New-A3SignatureError 'A3_ARTIFACT_MISSING' 'A required release artifact is missing.')
-        }
-
-        $canonicalArtifactPath = ConvertTo-A3CanonicalWindowsPath -Path $artifactPath
-        $matchingRecords = @($Records | Where-Object {
-            $_ -is [pscustomobject] -and
-            $null -ne $_.PSObject.Properties['Path'] -and
-            $_.Path -is [string] -and
-            (ConvertTo-A3CanonicalWindowsPath -Path $_.Path) -ceq $canonicalArtifactPath
-        })
-        if ($matchingRecords.Count -ne 1 -or -not $seenRecordPaths.Add($canonicalArtifactPath)) {
-            throw (New-A3SignatureError 'A3_HASH_MAP_MISMATCH' 'Release artifacts and signature records must match one-to-one.')
-        }
-        $record = $matchingRecords[0]
-        $rawSha256 = (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256 -ErrorAction Stop).Hash
-        $recordSha256 = Get-A3RecordString -Record $record -Name 'Sha256'
-        if (-not (Test-A3Sha256Text -Value $recordSha256) -or $recordSha256.ToUpperInvariant() -cne $rawSha256) {
-            throw (New-A3SignatureError 'A3_HASH_MISMATCH' 'A release artifact changed after signature verification.')
-        }
-        $subject = Get-A3RecordString -Record $record -Name 'Subject'
-        $timestamp = ConvertTo-A3CanonicalUtcText -Value (ConvertTo-A3UtcDate -Value (Get-A3RecordString -Record $record -Name 'TimestampUtc'))
-        $size = ([IO.FileInfo]::new($artifactPath)).Length
-        $manifestEntries.Add([pscustomobject][ordered]@{
-            scope = $artifact.Scope
-            relative_path = $artifact.RelativePath.Replace('\', '/')
-            size = $size
-            sha256 = $rawSha256
-            subject = $subject
-            timestamp_utc = $timestamp
-            verified_at_utc = $verifiedAt
-        })
-    }
-
-    if ($seenRecordPaths.Count -ne $Records.Count) {
-        throw (New-A3SignatureError 'A3_HASH_MAP_MISMATCH' 'Release artifacts and signature records must match one-to-one.')
-    }
-
-    $manifest = [pscustomobject][ordered]@{
-        schema = 'a3-windows-release-manifest/v1'
-        source_commit = $SourceCommit
-        app_version = $AppVersion
-        artifacts = @($manifestEntries | Sort-Object -Property scope, relative_path)
-    }
-    $json = $manifest | ConvertTo-Json -Depth 6
-
-    $resolvedManifestPath = Resolve-A3FileSystemPath -Path $ManifestPath
-    $manifestDirectory = Split-Path -Parent $resolvedManifestPath
-    if (-not (Test-Path -LiteralPath $manifestDirectory -PathType Container)) {
-        throw (New-A3SignatureError 'A3_PATH_INVALID' 'The release manifest directory does not exist.')
-    }
-    $temporaryPath = Join-Path $manifestDirectory ('.{0}.{1}.tmp' -f ([IO.Path]::GetFileName($resolvedManifestPath)), [guid]::NewGuid().ToString('N'))
-    $backupPath = Join-Path $manifestDirectory ('.{0}.{1}.bak' -f ([IO.Path]::GetFileName($resolvedManifestPath)), [guid]::NewGuid().ToString('N'))
-
-    if ($null -eq $WriteProvider) {
-        $WriteProvider = {
-            param([string]$LiteralPath, [string]$Content)
-            $encoding = [Text.UTF8Encoding]::new($false)
-            $stream = [IO.FileStream]::new($LiteralPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
-            try {
-                $writer = [IO.StreamWriter]::new($stream, $encoding)
-                try {
-                    $writer.Write($Content)
-                    $writer.Flush()
-                    $stream.Flush($true)
-                }
-                finally {
-                    $writer.Dispose()
-                }
-            }
-            finally {
-                $stream.Dispose()
-            }
+        finally {
+            $sha256.Dispose()
         }
     }
 
     try {
+        foreach ($artifact in $Artifacts) {
+            if ($artifact -isnot [pscustomobject] -or
+                $artifact.Scope -isnot [string] -or [string]::IsNullOrWhiteSpace($artifact.Scope) -or
+                $artifact.RelativePath -isnot [string] -or [string]::IsNullOrWhiteSpace($artifact.RelativePath) -or
+                $artifact.Path -isnot [string] -or [string]::IsNullOrWhiteSpace($artifact.Path)) {
+                throw (New-A3SignatureError 'A3_SIGNATURE_RECORD_INVALID' 'The release artifact descriptor is invalid.')
+            }
+            $artifactPath = Resolve-A3FileSystemPath -Path $artifact.Path
+            if (-not (Test-Path -LiteralPath $artifactPath -PathType Leaf)) {
+                throw (New-A3SignatureError 'A3_ARTIFACT_MISSING' 'A required release artifact is missing.')
+            }
+
+            try {
+                $artifactStream = [IO.File]::Open(
+                    $artifactPath,
+                    [IO.FileMode]::Open,
+                    [IO.FileAccess]::Read,
+                    [IO.FileShare]::Read
+                )
+            }
+            catch {
+                throw (New-A3SignatureError 'A3_ARTIFACT_LOCK_FAILED' 'A release artifact could not be locked for manifest construction.')
+            }
+            $artifactStreams.Add($artifactStream)
+
+            $identity = Get-A3ArtifactIdentity -SafePath $artifactPath -ArtifactStream $artifactStream
+            $null = Get-A3FinalPathFromArtifactHandle -SafePath $artifactPath -ArtifactStream $artifactStream
+            Assert-A3ArtifactPathIdentity -LiteralPath $artifactPath -ExpectedIdentity $identity
+            $rawSha256 = Invoke-A3RawSha256Provider -LiteralPath $artifactPath -ArtifactStream $artifactStream -HashProvider $streamHashProvider
+            $size = $artifactStream.Length
+
+            $canonicalArtifactPath = ConvertTo-A3CanonicalWindowsPath -Path $artifactPath
+            $matchingRecords = @($Records | Where-Object {
+                $_ -is [pscustomobject] -and
+                $null -ne $_.PSObject.Properties['Path'] -and
+                $_.Path -is [string] -and
+                (ConvertTo-A3CanonicalWindowsPath -Path $_.Path) -ceq $canonicalArtifactPath
+            })
+            if ($matchingRecords.Count -ne 1 -or -not $seenRecordPaths.Add($canonicalArtifactPath)) {
+                throw (New-A3SignatureError 'A3_HASH_MAP_MISMATCH' 'Release artifacts and signature records must match one-to-one.')
+            }
+            $record = $matchingRecords[0]
+            $recordSha256 = Get-A3RecordString -Record $record -Name 'Sha256'
+            if (-not (Test-A3Sha256Text -Value $recordSha256) -or $recordSha256.ToUpperInvariant() -cne $rawSha256) {
+                throw (New-A3SignatureError 'A3_HASH_MISMATCH' 'A release artifact changed after signature verification.')
+            }
+            $subject = Get-A3RecordString -Record $record -Name 'Subject'
+            $timestamp = ConvertTo-A3CanonicalUtcText -Value (ConvertTo-A3UtcDate -Value (Get-A3RecordString -Record $record -Name 'TimestampUtc'))
+            $manifestEntries.Add([pscustomobject][ordered]@{
+                scope = $artifact.Scope
+                relative_path = $artifact.RelativePath.Replace('\', '/')
+                size = $size
+                sha256 = $rawSha256
+                subject = $subject
+                timestamp_utc = $timestamp
+                verified_at_utc = $verifiedAt
+            })
+            $lockedArtifacts.Add([pscustomobject][ordered]@{
+                Path = $artifactPath
+                Stream = $artifactStream
+                Identity = $identity
+                Length = $size
+                Sha256 = $rawSha256
+            })
+        }
+
+        if ($seenRecordPaths.Count -ne $Records.Count) {
+            throw (New-A3SignatureError 'A3_HASH_MAP_MISMATCH' 'Release artifacts and signature records must match one-to-one.')
+        }
+
+        $manifest = [pscustomobject][ordered]@{
+            schema = 'a3-windows-release-manifest/v1'
+            source_commit = $SourceCommit
+            app_version = $AppVersion
+            artifacts = @($manifestEntries | Sort-Object -Property scope, relative_path)
+        }
+        $json = $manifest | ConvertTo-Json -Depth 6
+
+        $resolvedManifestPath = Resolve-A3FileSystemPath -Path $ManifestPath
+        $manifestDirectory = Split-Path -Parent $resolvedManifestPath
+        if (-not (Test-Path -LiteralPath $manifestDirectory -PathType Container)) {
+            throw (New-A3SignatureError 'A3_PATH_INVALID' 'The release manifest directory does not exist.')
+        }
+        $temporaryPath = Join-Path $manifestDirectory ('.{0}.{1}.tmp' -f ([IO.Path]::GetFileName($resolvedManifestPath)), [guid]::NewGuid().ToString('N'))
+        $backupPath = Join-Path $manifestDirectory ('.{0}.{1}.bak' -f ([IO.Path]::GetFileName($resolvedManifestPath)), [guid]::NewGuid().ToString('N'))
+
+        if ($null -eq $WriteProvider) {
+            $WriteProvider = {
+                param([string]$LiteralPath, [string]$Content)
+                $encoding = [Text.UTF8Encoding]::new($false)
+                $stream = [IO.FileStream]::new($LiteralPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+                try {
+                    $writer = [IO.StreamWriter]::new($stream, $encoding)
+                    try {
+                        $writer.Write($Content)
+                        $writer.Flush()
+                        $stream.Flush($true)
+                    }
+                    finally {
+                        $writer.Dispose()
+                    }
+                }
+                finally {
+                    $stream.Dispose()
+                }
+            }
+        }
+
         & $WriteProvider $temporaryPath $json
         if (-not (Test-Path -LiteralPath $temporaryPath -PathType Leaf)) {
             throw (New-A3SignatureError 'A3_MANIFEST_WRITE_FAILED' 'The release manifest temporary file was not created.')
         }
+
+        foreach ($lockedArtifact in $lockedArtifacts) {
+            Assert-A3ArtifactPathIdentity -LiteralPath $lockedArtifact.Path -ExpectedIdentity $lockedArtifact.Identity
+            if ($lockedArtifact.Stream.Length -ne $lockedArtifact.Length) {
+                throw (New-A3SignatureError 'A3_ARTIFACT_IDENTITY_CHANGED' 'A release artifact size changed during manifest construction.')
+            }
+            $finalSha256 = Invoke-A3RawSha256Provider -LiteralPath $lockedArtifact.Path -ArtifactStream $lockedArtifact.Stream -HashProvider $streamHashProvider
+            if ($finalSha256 -cne $lockedArtifact.Sha256) {
+                throw (New-A3SignatureError 'A3_HASH_MISMATCH' 'A release artifact hash changed during manifest construction.')
+            }
+        }
+
         if (Test-Path -LiteralPath $resolvedManifestPath -PathType Leaf) {
             [IO.File]::Replace($temporaryPath, $resolvedManifestPath, $backupPath, $true)
         }
@@ -1183,11 +1235,14 @@ function New-A3ReleaseManifest {
         }
     }
     finally {
-        if (Test-Path -LiteralPath $temporaryPath -PathType Leaf) {
+        if ($null -ne $temporaryPath -and (Test-Path -LiteralPath $temporaryPath -PathType Leaf)) {
             Remove-Item -LiteralPath $temporaryPath -Force -ErrorAction SilentlyContinue
         }
-        if (Test-Path -LiteralPath $backupPath -PathType Leaf) {
+        if ($null -ne $backupPath -and (Test-Path -LiteralPath $backupPath -PathType Leaf)) {
             Remove-Item -LiteralPath $backupPath -Force -ErrorAction SilentlyContinue
+        }
+        foreach ($stream in $artifactStreams) {
+            $stream.Dispose()
         }
     }
 }

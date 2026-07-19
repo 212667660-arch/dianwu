@@ -179,6 +179,109 @@ function Assert-A3ArtifactPathsSafe {
     }
 }
 
+function Get-A3LockedExecutableSnapshot {
+    param(
+        [Parameter(Mandatory)] [IO.FileStream]$ArtifactStream,
+        [Parameter(Mandatory)] [string]$SafePath
+    )
+
+    $information = New-Object A3.ByHandleFileInformation
+    if (-not [A3.SignatureNativeMethods]::GetFileInformationByHandle(
+        $ArtifactStream.SafeFileHandle.DangerousGetHandle(),
+        [ref]$information
+    )) {
+        throw (New-A3SignatureError 'A3_ARTIFACT_IDENTITY_CHANGED' 'The executable identity could not be established.')
+    }
+
+    $capacity = 32768
+    $builder = [Text.StringBuilder]::new($capacity)
+    $length = [A3.SignatureNativeMethods]::GetFinalPathNameByHandle(
+        $ArtifactStream.SafeFileHandle.DangerousGetHandle(),
+        $builder,
+        [uint32]$capacity,
+        [uint32]0
+    )
+    if ($length -eq 0 -or $length -ge $capacity) {
+        throw (New-A3SignatureError 'A3_ARTIFACT_IDENTITY_CHANGED' 'The executable final path could not be established.')
+    }
+
+    return [pscustomobject][ordered]@{
+        FinalPath = Resolve-A3WrapperPath -Path $builder.ToString()
+        VolumeSerialNumber = $information.VolumeSerialNumber
+        FileIndexHigh = $information.FileIndexHigh
+        FileIndexLow = $information.FileIndexLow
+        NumberOfLinks = $information.NumberOfLinks
+    }
+}
+
+function Assert-A3LockedExecutableSnapshot {
+    param(
+        [Parameter(Mandatory)] [pscustomobject]$Expected,
+        [Parameter(Mandatory)] [pscustomobject]$Actual
+    )
+
+    if ($Expected.FinalPath -ine $Actual.FinalPath -or
+        $Expected.VolumeSerialNumber -ne $Actual.VolumeSerialNumber -or
+        $Expected.FileIndexHigh -ne $Actual.FileIndexHigh -or
+        $Expected.FileIndexLow -ne $Actual.FileIndexLow -or
+        $Expected.NumberOfLinks -ne 1 -or $Actual.NumberOfLinks -ne 1) {
+        throw (New-A3SignatureError 'A3_ARTIFACT_IDENTITY_CHANGED' 'The executable identity changed during locked verification and execution.')
+    }
+}
+
+function Invoke-A3LockedVerifiedExecutable {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [string]$LiteralPath,
+        [Parameter(Mandatory)] [string]$ApprovedRoot,
+        [Parameter(Mandatory)] [string[]]$Arguments,
+        [Parameter(Mandatory)] [string]$ExpectedPublisher,
+        [Parameter(Mandatory)] [string]$ExpectedSha256,
+        [scriptblock]$RecordProvider,
+        [scriptblock]$NativeProcessProvider
+    )
+
+    $logicalPath = Assert-A3PathContained -CandidatePath $LiteralPath -RootPath $ApprovedRoot -FailureCode 'A3_ARTIFACT_IDENTITY_CHANGED'
+    $artifactStream = $null
+    try {
+        $artifactStream = [IO.File]::Open(
+            $logicalPath,
+            [IO.FileMode]::Open,
+            [IO.FileAccess]::Read,
+            [IO.FileShare]::Read
+        )
+    }
+    catch {
+        throw (New-A3SignatureError 'A3_ARTIFACT_LOCK_FAILED' 'The executable could not be locked for verified execution.')
+    }
+
+    try {
+        $lockedSnapshot = Get-A3LockedExecutableSnapshot -ArtifactStream $artifactStream -SafePath $logicalPath
+        if ($lockedSnapshot.NumberOfLinks -ne 1) {
+            throw (New-A3SignatureError 'A3_ARTIFACT_IDENTITY_CHANGED' 'Multiply linked executables are not permitted.')
+        }
+        $finalPath = Assert-A3PathContained -CandidatePath $lockedSnapshot.FinalPath -RootPath $ApprovedRoot -FailureCode 'A3_ARTIFACT_IDENTITY_CHANGED' -RejectReparsePoint
+
+        if ($null -eq $RecordProvider) {
+            $record = Get-A3SignatureRecord -LiteralPath $finalPath
+        }
+        else {
+            $record = & $RecordProvider $finalPath
+        }
+        Assert-A3SignatureRecord -Record $record -ExpectedPublisher $ExpectedPublisher -ExpectedSha256 $ExpectedSha256
+
+        $beforeLaunch = Get-A3LockedExecutableSnapshot -ArtifactStream $artifactStream -SafePath $logicalPath
+        Assert-A3LockedExecutableSnapshot -Expected $lockedSnapshot -Actual $beforeLaunch
+        $exitCode = Invoke-A3NativeExecutable -FilePath $finalPath -Arguments ([string[]]$Arguments) -NativeProcessProvider $NativeProcessProvider
+        $afterLaunch = Get-A3LockedExecutableSnapshot -ArtifactStream $artifactStream -SafePath $logicalPath
+        Assert-A3LockedExecutableSnapshot -Expected $lockedSnapshot -Actual $afterLaunch
+        return $exitCode
+    }
+    finally {
+        $artifactStream.Dispose()
+    }
+}
+
 function Invoke-A3NativeExecutable {
     [CmdletBinding()]
     param(
@@ -208,36 +311,126 @@ function Invoke-A3NativeExecutable {
     return [int]$result.ExitCode
 }
 
+function Initialize-A3ReleaseProcessNativeMethods {
+    if ($null -ne ('A3.ReleaseProcessNativeMethods' -as [type])) { return }
+
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+
+namespace A3 {
+    public static class ReleaseProcessNativeMethods {
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern IntPtr OpenProcess(uint desiredAccess, bool inheritHandle, uint processId);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool QueryFullProcessImageName(
+            IntPtr processHandle,
+            uint flags,
+            StringBuilder executablePath,
+            ref uint size
+        );
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool TerminateProcess(IntPtr processHandle, uint exitCode);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool CloseHandle(IntPtr handle);
+    }
+}
+'@
+}
+
 function Stop-A3ResidualProcesses {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] [string]$InstallDir,
         [scriptblock]$ProcessListProvider,
-        [scriptblock]$StopProcessProvider
+        [scriptblock]$ProcessHandleProvider,
+        [scriptblock]$ProcessImagePathProvider,
+        [scriptblock]$StopProcessProvider,
+        [scriptblock]$CloseProcessHandleProvider
     )
 
     $safeInstallDir = Assert-A3PathContained -CandidatePath $InstallDir -RootPath (Split-Path -Parent $InstallDir) -FailureCode 'A3_INSTALL_PATH_UNSAFE' -RejectReparsePoint
     if ($null -eq $ProcessListProvider) {
         $ProcessListProvider = { return @(Get-Process -ErrorAction SilentlyContinue) }
     }
-    if ($null -eq $StopProcessProvider) {
-        $StopProcessProvider = {
+    if ($null -eq $ProcessHandleProvider) {
+        $ProcessHandleProvider = {
             param($Process)
-            Stop-Process -Id $Process.Id -Force -ErrorAction Stop
+            Initialize-A3ReleaseProcessNativeMethods
+            $handle = [A3.ReleaseProcessNativeMethods]::OpenProcess(
+                [uint32]0x00101001,
+                $false,
+                [uint32]$Process.Id
+            )
+            if ($handle -eq [IntPtr]::Zero) { return $null }
+            return [pscustomobject]@{ Handle = $handle; ProcessId = [int]$Process.Id }
         }
     }
-    $installPrefix = $safeInstallDir.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
-    foreach ($process in @(& $ProcessListProvider)) {
-        try {
-            $pathProperty = $process.PSObject.Properties['Path']
-            if ($null -eq $pathProperty -or $pathProperty.Value -isnot [string] -or [string]::IsNullOrWhiteSpace($pathProperty.Value)) { continue }
-            $processPath = Resolve-A3WrapperPath -Path ([string]$pathProperty.Value)
-            if (-not $processPath.StartsWith($installPrefix, [StringComparison]::OrdinalIgnoreCase)) { continue }
-            & $StopProcessProvider $process
+    if ($null -eq $ProcessImagePathProvider) {
+        $ProcessImagePathProvider = {
+            param($HandleContext)
+            Initialize-A3ReleaseProcessNativeMethods
+            $capacity = 32768
+            $builder = [Text.StringBuilder]::new($capacity)
+            [uint32]$size = $capacity
+            if (-not [A3.ReleaseProcessNativeMethods]::QueryFullProcessImageName(
+                $HandleContext.Handle,
+                [uint32]0,
+                $builder,
+                [ref]$size
+            )) { return $null }
+            return $builder.ToString()
         }
-        catch {
-            if ($_.Exception.Data['A3Code']) { continue }
-            throw
+    }
+    if ($null -eq $StopProcessProvider) {
+        $StopProcessProvider = {
+            param($HandleContext)
+            Initialize-A3ReleaseProcessNativeMethods
+            if (-not [A3.ReleaseProcessNativeMethods]::TerminateProcess($HandleContext.Handle, [uint32]1)) {
+                throw (New-A3SignatureError 'A3_PROCESS_FAILED' 'A residual process could not be terminated through its stable handle.')
+            }
+            $waitResult = [A3.ReleaseProcessNativeMethods]::WaitForSingleObject($HandleContext.Handle, [uint32]10000)
+            if ($waitResult -ne 0) {
+                throw (New-A3SignatureError 'A3_PROCESS_FAILED' 'A residual process did not exit after stable-handle termination.')
+            }
+        }
+    }
+    if ($null -eq $CloseProcessHandleProvider) {
+        $CloseProcessHandleProvider = {
+            param($HandleContext)
+            Initialize-A3ReleaseProcessNativeMethods
+            $null = [A3.ReleaseProcessNativeMethods]::CloseHandle($HandleContext.Handle)
+        }
+    }
+    foreach ($process in @(& $ProcessListProvider)) {
+        $handleContext = $null
+        try {
+            $handleContext = & $ProcessHandleProvider $process
+            if ($null -eq $handleContext) { continue }
+            $processPath = & $ProcessImagePathProvider $handleContext
+            if ($processPath -isnot [string] -or [string]::IsNullOrWhiteSpace($processPath)) { continue }
+            try {
+                $null = Assert-A3PathContained -CandidatePath $processPath -RootPath $safeInstallDir -FailureCode 'A3_PROCESS_PATH_UNSAFE' -RejectReparsePoint
+            }
+            catch {
+                continue
+            }
+            & $StopProcessProvider $handleContext
+        }
+        finally {
+            if ($null -ne $handleContext) {
+                & $CloseProcessHandleProvider $handleContext
+            }
         }
     }
 }
@@ -278,7 +471,10 @@ function Invoke-A3WindowsSignatureVerification {
         [scriptblock]$RecordProvider,
         [scriptblock]$NativeProcessProvider,
         [scriptblock]$ProcessListProvider,
+        [scriptblock]$ProcessHandleProvider,
+        [scriptblock]$ProcessImagePathProvider,
         [scriptblock]$StopProcessProvider,
+        [scriptblock]$CloseProcessHandleProvider,
         [scriptblock]$RemoveDirectoryProvider,
         [scriptblock]$ArtifactChildProvider,
         [string]$VerifiedAtUtc
@@ -333,6 +529,8 @@ function Invoke-A3WindowsSignatureVerification {
 
     $installDir = Join-Path $resolvedRunnerTemp ("a3-signed-install-{0}" -f [guid]::NewGuid().ToString('N'))
     $uninstallerPath = $null
+    $verifiedUninstallerSha256 = $null
+    $installedArtifactsVerified = $false
     New-Item -ItemType Directory -Path $installDir -ErrorAction Stop | Out-Null
     $installDir = Assert-A3PathContained -CandidatePath $installDir -RootPath $resolvedRunnerTemp -FailureCode 'A3_INSTALL_PATH_UNSAFE' -RejectReparsePoint
     if (@(Get-ChildItem -LiteralPath $installDir -Force -ErrorAction Stop).Count -ne 0) {
@@ -341,7 +539,7 @@ function Invoke-A3WindowsSignatureVerification {
 
     try {
         $installerArguments = [string[]]@('/S', "/D=$installDir")
-        $installerExitCode = Invoke-A3NativeExecutable -FilePath $installerPath -Arguments $installerArguments -NativeProcessProvider $NativeProcessProvider
+        $installerExitCode = Invoke-A3LockedVerifiedExecutable -LiteralPath $installerPath -ApprovedRoot $resolvedReleaseDir -Arguments $installerArguments -ExpectedPublisher $ExpectedPublisher -ExpectedSha256 $preInstallRecords[3].Sha256 -RecordProvider $RecordProvider -NativeProcessProvider $NativeProcessProvider
         if ($installerExitCode -ne 0) {
             throw (New-A3SignatureError 'A3_INSTALLER_FAILED' 'The signed installer returned a nonzero exit code.')
         }
@@ -350,6 +548,8 @@ function Invoke-A3WindowsSignatureVerification {
         $allArtifacts = @(Get-A3RequiredArtifacts -ReleaseDir $resolvedReleaseDir -InstallDir $installDir -Version $Version)
         Assert-A3ArtifactPathsSafe -Artifacts $allArtifacts -ReleaseDir $resolvedReleaseDir -InstallDir $installDir
         $records = @(Assert-A3ArtifactSet -Artifacts $allArtifacts -ExpectedPublisher $ExpectedPublisher -RecordProvider $RecordProvider)
+        $verifiedUninstallerSha256 = $records[7].Sha256
+        $installedArtifactsVerified = $true
         $manifestParameters = @{
             ManifestPath = $resolvedManifestPath
             SourceCommit = $SourceCommit
@@ -362,17 +562,8 @@ function Invoke-A3WindowsSignatureVerification {
     }
     finally {
         $safeInstallDir = Assert-A3PathContained -CandidatePath $installDir -RootPath $resolvedRunnerTemp -FailureCode 'A3_INSTALL_PATH_UNSAFE' -RejectReparsePoint
-        if ($null -eq $uninstallerPath -and (Test-Path -LiteralPath $safeInstallDir -PathType Container)) {
-            try {
-                $uninstallerPath = Find-A3ExactChildArtifact -DirectoryPath $safeInstallDir -FileName 'Uninstall 智学协作台.exe' -ChildProvider $ArtifactChildProvider
-            }
-            catch {
-                if ($_.Exception.Data['A3Code'] -cne 'A3_ARTIFACT_MISSING') { throw }
-            }
-        }
-
         $safeUninstaller = $null
-        if ($null -ne $uninstallerPath) {
+        if ($installedArtifactsVerified -and $null -ne $uninstallerPath) {
             $safeUninstaller = Assert-A3PathContained -CandidatePath $uninstallerPath -RootPath $safeInstallDir -FailureCode 'A3_INSTALL_PATH_UNSAFE' -RejectReparsePoint
             if (-not (Test-Path -LiteralPath $safeUninstaller -PathType Leaf)) {
                 throw (New-A3SignatureError 'A3_INSTALL_PATH_UNSAFE' 'The installed uninstaller is unavailable.')
@@ -382,7 +573,7 @@ function Invoke-A3WindowsSignatureVerification {
         $cleanupError = $null
         try {
             if ($null -ne $safeUninstaller) {
-                $uninstallerExitCode = Invoke-A3NativeExecutable -FilePath $safeUninstaller -Arguments ([string[]]@('/S')) -NativeProcessProvider $NativeProcessProvider
+                $uninstallerExitCode = Invoke-A3LockedVerifiedExecutable -LiteralPath $safeUninstaller -ApprovedRoot $safeInstallDir -Arguments ([string[]]@('/S')) -ExpectedPublisher $ExpectedPublisher -ExpectedSha256 $verifiedUninstallerSha256 -RecordProvider $RecordProvider -NativeProcessProvider $NativeProcessProvider
                 if ($uninstallerExitCode -ne 0) {
                     throw (New-A3SignatureError 'A3_UNINSTALLER_FAILED' 'The installed uninstaller returned a nonzero exit code.')
                 }
@@ -391,7 +582,7 @@ function Invoke-A3WindowsSignatureVerification {
         catch {
             $cleanupError = $_
         }
-        Stop-A3ResidualProcesses -InstallDir $safeInstallDir -ProcessListProvider $ProcessListProvider -StopProcessProvider $StopProcessProvider
+        Stop-A3ResidualProcesses -InstallDir $safeInstallDir -ProcessListProvider $ProcessListProvider -ProcessHandleProvider $ProcessHandleProvider -ProcessImagePathProvider $ProcessImagePathProvider -StopProcessProvider $StopProcessProvider -CloseProcessHandleProvider $CloseProcessHandleProvider
         Remove-A3IsolatedInstallDirectory -InstallDir $safeInstallDir -RunnerTemp $resolvedRunnerTemp -RemoveDirectoryProvider $RemoveDirectoryProvider
         if ($null -ne $cleanupError) { throw $cleanupError }
     }

@@ -141,6 +141,69 @@ try {
     $secondManifestBytes = [IO.File]::ReadAllBytes($manifestPath)
     Assert-Equal ([Convert]::ToBase64String($secondManifestBytes)) ([Convert]::ToBase64String($firstManifestBytes)) 'Manifest output must be deterministic.'
 
+    $manifestLockState = [pscustomobject]@{
+        OverwriteDenied = $false
+        RenameDenied = $false
+        DeleteDenied = $false
+    }
+    $manifestLockedPath = $artifacts[0].Path
+    $manifestRenamedPath = $manifestLockedPath + '.renamed'
+    $manifestOriginalBytes = [IO.File]::ReadAllBytes($manifestLockedPath)
+    $manifestLockingWriter = {
+        param([string]$TemporaryPath, [string]$Json)
+        try { [IO.File]::WriteAllBytes($manifestLockedPath, [byte[]]@(7, 7, 7)) }
+        catch { $manifestLockState.OverwriteDenied = $true }
+        if (-not $manifestLockState.OverwriteDenied) { [IO.File]::WriteAllBytes($manifestLockedPath, $manifestOriginalBytes) }
+        try {
+            [IO.File]::Move($manifestLockedPath, $manifestRenamedPath)
+            [IO.File]::Move($manifestRenamedPath, $manifestLockedPath)
+        }
+        catch { $manifestLockState.RenameDenied = $true }
+        try {
+            [IO.File]::Delete($manifestLockedPath)
+            [IO.File]::WriteAllBytes($manifestLockedPath, $manifestOriginalBytes)
+        }
+        catch { $manifestLockState.DeleteDenied = $true }
+        [IO.File]::WriteAllText($TemporaryPath, $Json, [Text.UTF8Encoding]::new($false))
+    }.GetNewClosure()
+    New-A3ReleaseManifest -ManifestPath $manifestPath -SourceCommit '0123456789abcdef' -AppVersion '1.0.0' -Artifacts $artifacts -Records $records -VerifiedAtUtc '2026-07-19T01:02:03.0000000Z' -WriteProvider $manifestLockingWriter
+    Assert-True $manifestLockState.OverwriteDenied 'Manifest snapshot must deny artifact overwrite until atomic replacement completes.'
+    Assert-True $manifestLockState.RenameDenied 'Manifest snapshot must deny artifact rename until atomic replacement completes.'
+    Assert-True $manifestLockState.DeleteDenied 'Manifest snapshot must deny artifact deletion until atomic replacement completes.'
+
+    $manifestMismatchRecords = @($records)
+    $manifestMismatchRecords[0] = New-ValidRecord -LiteralPath $artifacts[0].Path
+    $manifestMismatchRecords[0].Sha256 = ('C' * 64)
+    [IO.File]::WriteAllText($manifestPath, 'old-before-mismatch', [Text.UTF8Encoding]::new($false))
+    Assert-ThrowsCode { New-A3ReleaseManifest -ManifestPath $manifestPath -SourceCommit '0123456789abcdef' -AppVersion '1.0.0' -Artifacts $artifacts -Records $manifestMismatchRecords -VerifiedAtUtc '2026-07-19T01:02:03.0000000Z' } 'A3_HASH_MISMATCH' | Out-Null
+    Assert-Equal ([IO.File]::ReadAllText($manifestPath, [Text.Encoding]::UTF8)) 'old-before-mismatch' 'Manifest hash/size mismatch must preserve the old target.'
+
+    $manifestJunctionRoot = Join-Path $releaseDir 'manifest-junction'
+    $manifestTargetA = Join-Path $manifestJunctionRoot 'target-a'
+    $manifestTargetB = Join-Path $manifestJunctionRoot 'target-b'
+    $manifestCurrent = Join-Path $manifestJunctionRoot 'current'
+    New-Item -ItemType Directory -Path $manifestTargetA -Force | Out-Null
+    New-Item -ItemType Directory -Path $manifestTargetB -Force | Out-Null
+    $manifestPathA = Join-Path $manifestTargetA 'artifact.exe'
+    $manifestPathB = Join-Path $manifestTargetB 'artifact.exe'
+    Write-DummyFile -LiteralPath $manifestPathA -Seed 81
+    Write-DummyFile -LiteralPath $manifestPathB -Seed 82
+    New-Item -ItemType Junction -Path $manifestCurrent -Target $manifestTargetA | Out-Null
+    $manifestLogicalArtifact = Join-Path $manifestCurrent 'artifact.exe'
+    $junctionArtifact = [pscustomobject]@{ Scope = 'package'; RelativePath = 'manifest-junction/current/artifact.exe'; Path = $manifestLogicalArtifact }
+    $junctionRecord = New-ValidRecord -LiteralPath $manifestLogicalArtifact
+    $junctionManifestPath = Join-Path $releaseDir 'junction-manifest.json'
+    [IO.File]::WriteAllText($junctionManifestPath, 'old-junction-manifest', [Text.UTF8Encoding]::new($false))
+    $junctionManifestWriter = {
+        param([string]$TemporaryPath, [string]$Json)
+        [IO.Directory]::Delete($manifestCurrent)
+        New-Item -ItemType Junction -Path $manifestCurrent -Target $manifestTargetB | Out-Null
+        [IO.File]::WriteAllText($TemporaryPath, $Json, [Text.UTF8Encoding]::new($false))
+    }.GetNewClosure()
+    Assert-ThrowsCode { New-A3ReleaseManifest -ManifestPath $junctionManifestPath -SourceCommit '0123456789abcdef' -AppVersion '1.0.0' -Artifacts @($junctionArtifact) -Records @($junctionRecord) -VerifiedAtUtc '2026-07-19T01:02:03.0000000Z' -WriteProvider $junctionManifestWriter } 'A3_ARTIFACT_IDENTITY_CHANGED' | Out-Null
+    Assert-Equal ([IO.File]::ReadAllText($junctionManifestPath, [Text.Encoding]::UTF8)) 'old-junction-manifest' 'Junction rebinding must preserve the old manifest.'
+    Assert-Equal @(Get-ChildItem -LiteralPath $releaseDir -File | Where-Object Name -Like '.junction-manifest.json.*.tmp').Count 0 'Junction rebinding failure must clean the sibling temporary file.'
+
     Remove-Item -LiteralPath $artifacts[2].Path -Force
     $missingProviderState = [pscustomobject]@{ Calls = 0 }
     $missingProvider = {
@@ -225,6 +288,103 @@ New-Item -ItemType Directory -Path $wrapperReleaseDir -Force | Out-Null
 New-Item -ItemType Directory -Path $runnerTemp -Force | Out-Null
 
 try {
+    $lockedExecutionRoot = Join-Path $repositoryRoot 'locked-execution'
+    New-Item -ItemType Directory -Path $lockedExecutionRoot -Force | Out-Null
+    $lockedExecutable = Join-Path $lockedExecutionRoot 'locked-installer.exe'
+    Write-DummyFile -LiteralPath $lockedExecutable -Seed 92
+    $lockedSha256 = (Get-FileHash -LiteralPath $lockedExecutable -Algorithm SHA256).Hash
+    $lockedExecutionState = [pscustomobject]@{
+        OverwriteDenied = $false
+        LaunchedPath = $null
+        LaunchedSha256 = $null
+        Arguments = $null
+        Hidden = $false
+    }
+    $lockedNativeProvider = {
+        param([string]$FilePath, [string[]]$Arguments, [bool]$Hidden)
+        try { [IO.File]::WriteAllBytes($lockedExecutable, [byte[]]@(9, 9, 9)) }
+        catch { $lockedExecutionState.OverwriteDenied = $true }
+        $lockedExecutionState.LaunchedPath = $FilePath
+        $lockedExecutionState.LaunchedSha256 = (Get-FileHash -LiteralPath $FilePath -Algorithm SHA256).Hash
+        $lockedExecutionState.Arguments = @($Arguments)
+        $lockedExecutionState.Hidden = $Hidden
+        return [pscustomobject]@{ ExitCode = 0 }
+    }.GetNewClosure()
+    Invoke-A3LockedVerifiedExecutable -LiteralPath $lockedExecutable -ApprovedRoot $lockedExecutionRoot -Arguments ([string[]]@('/S', '/D=C:\isolated')) -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256 $lockedSha256 -RecordProvider { param([string]$LiteralPath) New-ValidRecord -LiteralPath $LiteralPath } -NativeProcessProvider $lockedNativeProvider | Out-Null
+    Assert-True $lockedExecutionState.OverwriteDenied 'The locked execution window must deny overwriting the executable.'
+    Assert-Equal $lockedExecutionState.LaunchedSha256 $lockedSha256 'The launched executable bytes must match the verified locked bytes.'
+    Assert-Equal ($lockedExecutionState.Arguments -join '|') '/S|/D=C:\isolated' 'Locked execution must preserve the exact argument array.'
+    Assert-True $lockedExecutionState.Hidden 'Locked execution must use a hidden window.'
+
+    $hardLinkPath = Join-Path $lockedExecutionRoot 'locked-installer-hardlink.exe'
+    New-Item -ItemType HardLink -Path $hardLinkPath -Target $lockedExecutable | Out-Null
+    $hardLinkNativeCalls = [pscustomobject]@{ Count = 0 }
+    Assert-ThrowsCode {
+        Invoke-A3LockedVerifiedExecutable -LiteralPath $lockedExecutable -ApprovedRoot $lockedExecutionRoot -Arguments ([string[]]@('/S')) -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256 $lockedSha256 -RecordProvider { param([string]$LiteralPath) New-ValidRecord -LiteralPath $LiteralPath } -NativeProcessProvider { param($FilePath, $Arguments, $Hidden) $hardLinkNativeCalls.Count++; [pscustomobject]@{ ExitCode = 0 } }
+    } 'A3_ARTIFACT_IDENTITY_CHANGED' | Out-Null
+    Assert-Equal $hardLinkNativeCalls.Count 0 'A multiply linked executable must be rejected before launch.'
+    Remove-Item -LiteralPath $hardLinkPath -Force
+
+    $junctionExecutionRoot = Join-Path $repositoryRoot 'junction-execution'
+    $junctionTargetA = Join-Path $junctionExecutionRoot 'target-a'
+    $junctionTargetB = Join-Path $junctionExecutionRoot 'target-b'
+    $junctionCurrent = Join-Path $junctionExecutionRoot 'current'
+    New-Item -ItemType Directory -Path $junctionTargetA -Force | Out-Null
+    New-Item -ItemType Directory -Path $junctionTargetB -Force | Out-Null
+    $junctionExecutableA = Join-Path $junctionTargetA 'setup.exe'
+    $junctionExecutableB = Join-Path $junctionTargetB 'setup.exe'
+    Write-DummyFile -LiteralPath $junctionExecutableA -Seed 93
+    Write-DummyFile -LiteralPath $junctionExecutableB -Seed 94
+    New-Item -ItemType Junction -Path $junctionCurrent -Target $junctionTargetA | Out-Null
+    $junctionLogicalExecutable = Join-Path $junctionCurrent 'setup.exe'
+    $junctionSha256A = (Get-FileHash -LiteralPath $junctionExecutableA -Algorithm SHA256).Hash
+    $junctionSha256B = (Get-FileHash -LiteralPath $junctionExecutableB -Algorithm SHA256).Hash
+    $junctionLaunchState = [pscustomobject]@{ Path = $null; Sha256 = $null }
+    $junctionNativeProvider = {
+        param([string]$FilePath, [string[]]$Arguments, [bool]$Hidden)
+        [IO.Directory]::Delete($junctionCurrent)
+        New-Item -ItemType Junction -Path $junctionCurrent -Target $junctionTargetB | Out-Null
+        $junctionLaunchState.Path = $FilePath
+        $junctionLaunchState.Sha256 = (Get-FileHash -LiteralPath $FilePath -Algorithm SHA256).Hash
+        return [pscustomobject]@{ ExitCode = 0 }
+    }.GetNewClosure()
+    Invoke-A3LockedVerifiedExecutable -LiteralPath $junctionLogicalExecutable -ApprovedRoot $junctionExecutionRoot -Arguments ([string[]]@('/S')) -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256 $junctionSha256A -RecordProvider { param([string]$LiteralPath) New-ValidRecord -LiteralPath $LiteralPath } -NativeProcessProvider $junctionNativeProvider | Out-Null
+    Assert-Equal $junctionLaunchState.Sha256 $junctionSha256A 'Junction rebinding must still execute the locked target A bytes.'
+    Assert-True ($junctionLaunchState.Sha256 -cne $junctionSha256B) 'Junction rebinding must never execute target B.'
+
+    $processInstallDir = Join-Path $runnerTemp 'a3-signed-install-process-handles'
+    $processInsidePath = Join-Path $processInstallDir 'resources\backend\api.exe'
+    $processOutsidePath = Join-Path $wrapperTestRoot 'outside-process.exe'
+    $processJunctionTarget = Join-Path $wrapperTestRoot 'outside-process-target'
+    $processJunction = Join-Path $processInstallDir 'linked'
+    New-Item -ItemType Directory -Path $processInstallDir -Force | Out-Null
+    New-Item -ItemType Directory -Path $processJunctionTarget -Force | Out-Null
+    Write-DummyFile -LiteralPath $processInsidePath -Seed 95
+    Write-DummyFile -LiteralPath $processOutsidePath -Seed 96
+    Write-DummyFile -LiteralPath (Join-Path $processJunctionTarget 'worker.exe') -Seed 97
+    New-Item -ItemType Junction -Path $processJunction -Target $processJunctionTarget | Out-Null
+    $processCandidates = @(
+        [pscustomobject]@{ Id = 801; Path = $processOutsidePath },
+        [pscustomobject]@{ Id = 802; Path = $processInsidePath },
+        [pscustomobject]@{ Id = 803; Path = $processInsidePath }
+    )
+    $processHandles = @{
+        801 = [pscustomobject]@{ Token = 'inside-handle'; ImagePath = $processInsidePath }
+        802 = [pscustomobject]@{ Token = 'reused-outside-handle'; ImagePath = $processOutsidePath }
+        803 = [pscustomobject]@{ Token = 'junction-outside-handle'; ImagePath = (Join-Path $processJunction 'worker.exe') }
+    }
+    $terminatedHandles = [Collections.Generic.List[string]]::new()
+    $closedHandles = [Collections.Generic.List[string]]::new()
+    Stop-A3ResidualProcesses `
+        -InstallDir $processInstallDir `
+        -ProcessListProvider ({ $processCandidates }.GetNewClosure()) `
+        -ProcessHandleProvider ({ param($Process) $processHandles[[int]$Process.Id] }.GetNewClosure()) `
+        -ProcessImagePathProvider { param($HandleContext) $HandleContext.ImagePath } `
+        -StopProcessProvider ({ param($HandleContext) $terminatedHandles.Add($HandleContext.Token) }.GetNewClosure()) `
+        -CloseProcessHandleProvider ({ param($HandleContext) $closedHandles.Add($HandleContext.Token) }.GetNewClosure())
+    Assert-Equal ($terminatedHandles -join ',') 'inside-handle' 'Only the stable handle whose queried image is physically inside the install directory may be terminated.'
+    Assert-Equal ((@($closedHandles | Sort-Object)) -join ',') 'inside-handle,junction-outside-handle,reused-outside-handle' 'Every opened process handle must be closed exactly once.'
+
     $artifactSafetyRoot = Join-Path $repositoryRoot 'artifact-safety'
     $artifactOutsideRoot = Join-Path $wrapperTestRoot 'artifact-outside'
     $artifactJunction = Join-Path $artifactSafetyRoot 'linked'
@@ -281,10 +441,16 @@ try {
         return New-ValidRecord -LiteralPath $LiteralPath
     }
     $processListProvider = { return @($insideProcess, $outsideProcess) }.GetNewClosure()
-    $stopProvider = {
+    $workflowProcessHandleProvider = {
         param($Process)
-        $stoppedProcesses.Add([int]$Process.Id)
+        return [pscustomobject]@{ ProcessId = [int]$Process.Id; ImagePath = [string]$Process.Path }
+    }
+    $workflowProcessImagePathProvider = { param($HandleContext) return $HandleContext.ImagePath }
+    $stopProvider = {
+        param($HandleContext)
+        $stoppedProcesses.Add([int]$HandleContext.ProcessId)
     }.GetNewClosure()
+    $workflowCloseProcessHandleProvider = { param($HandleContext) }
     $removeProvider = {
         param([string]$LiteralPath)
         $removedDirectories.Add($LiteralPath)
@@ -326,7 +492,10 @@ try {
         -RecordProvider $recordProvider `
         -NativeProcessProvider $nativeProvider `
         -ProcessListProvider $processListProvider `
+        -ProcessHandleProvider $workflowProcessHandleProvider `
+        -ProcessImagePathProvider $workflowProcessImagePathProvider `
         -StopProcessProvider $stopProvider `
+        -CloseProcessHandleProvider $workflowCloseProcessHandleProvider `
         -RemoveDirectoryProvider $removeProvider `
         -VerifiedAtUtc '2026-07-19T02:03:04.0000000Z'
 
@@ -365,12 +534,16 @@ try {
     $nonzeroProvider = {
         param([string]$FilePath, [string[]]$Arguments, [bool]$Hidden)
         $nonzeroCalls.Add($FilePath)
+        if ([IO.Path]::GetFileName($FilePath) -ceq '智学协作台 Setup 1.0.0.exe') {
+            $installPath = (@($Arguments | Where-Object { $_.StartsWith('/D=', [StringComparison]::Ordinal) })[0]).Substring(3)
+            Write-DummyFile -LiteralPath (Join-Path $installPath 'Uninstall 智学协作台.exe') -Seed 199
+        }
         return [pscustomobject]@{ ExitCode = 23 }
     }.GetNewClosure()
     Assert-ThrowsCode {
         Invoke-A3WindowsSignatureVerification -ReleaseDir $wrapperReleaseDir -Version '1.0.0' -ExpectedPublisher 'CN=A3 Learning Project' -SourceCommit '0123456789abcdef' -ManifestPath (Join-Path $wrapperReleaseDir 'nonzero.json') -InstallAndVerify -RepositoryRoot $repositoryRoot -RunnerTemp $runnerTemp -RecordProvider $recordProvider -NativeProcessProvider $nonzeroProvider -ProcessListProvider { @() } -StopProcessProvider { param($Process) } -RemoveDirectoryProvider $removeProvider
     } 'A3_INSTALLER_FAILED' | Out-Null
-    Assert-Equal $nonzeroCalls.Count 1 'A nonzero installer must stop before verification or uninstaller execution.'
+    Assert-Equal $nonzeroCalls.Count 1 'A nonzero installer must never execute a partially written uninstaller.'
 
     $finallyCalls = [Collections.Generic.List[string]]::new()
     $installThenFailProvider = {
@@ -395,7 +568,35 @@ try {
     Assert-ThrowsCode {
         Invoke-A3WindowsSignatureVerification -ReleaseDir $wrapperReleaseDir -Version '1.0.0' -ExpectedPublisher 'CN=A3 Learning Project' -SourceCommit '0123456789abcdef' -ManifestPath (Join-Path $wrapperReleaseDir 'publisher-failure.json') -InstallAndVerify -RepositoryRoot $repositoryRoot -RunnerTemp $runnerTemp -RecordProvider $publisherFailureProvider -NativeProcessProvider $installThenFailProvider -ProcessListProvider { @() } -StopProcessProvider { param($Process) } -RemoveDirectoryProvider $removeProvider
     } 'A3_PUBLISHER_MISMATCH' | Out-Null
-    Assert-Equal ($finallyCalls -join ',') '智学协作台 Setup 1.0.0.exe,Uninstall 智学协作台.exe' 'Verification failure must still execute the exact uninstaller in finally.'
+    Assert-Equal ($finallyCalls -join ',') '智学协作台 Setup 1.0.0.exe' 'Post-install publisher failure must never execute the unverified uninstaller.'
+
+    $finallyCalls.Clear()
+    $hashFailureProvider = {
+        param([string]$LiteralPath)
+        $record = New-ValidRecord -LiteralPath $LiteralPath
+        if ($LiteralPath.StartsWith($runnerTemp.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
+            $record.Sha256 = ('E' * 64)
+        }
+        return $record
+    }.GetNewClosure()
+    Assert-ThrowsCode {
+        Invoke-A3WindowsSignatureVerification -ReleaseDir $wrapperReleaseDir -Version '1.0.0' -ExpectedPublisher 'CN=A3 Learning Project' -SourceCommit '0123456789abcdef' -ManifestPath (Join-Path $wrapperReleaseDir 'hash-failure.json') -InstallAndVerify -RepositoryRoot $repositoryRoot -RunnerTemp $runnerTemp -RecordProvider $hashFailureProvider -NativeProcessProvider $installThenFailProvider -ProcessListProvider { @() } -StopProcessProvider { param($Process) } -RemoveDirectoryProvider $removeProvider
+    } 'A3_HASH_MISMATCH' | Out-Null
+    Assert-Equal ($finallyCalls -join ',') '智学协作台 Setup 1.0.0.exe' 'Post-install hash failure must never execute the unverified uninstaller.'
+
+    $finallyCalls.Clear()
+    $signatureFailureProvider = {
+        param([string]$LiteralPath)
+        $record = New-ValidRecord -LiteralPath $LiteralPath
+        if ($LiteralPath.StartsWith($runnerTemp.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
+            $record.Status = 'NotSigned'
+        }
+        return $record
+    }.GetNewClosure()
+    Assert-ThrowsCode {
+        Invoke-A3WindowsSignatureVerification -ReleaseDir $wrapperReleaseDir -Version '1.0.0' -ExpectedPublisher 'CN=A3 Learning Project' -SourceCommit '0123456789abcdef' -ManifestPath (Join-Path $wrapperReleaseDir 'signature-failure.json') -InstallAndVerify -RepositoryRoot $repositoryRoot -RunnerTemp $runnerTemp -RecordProvider $signatureFailureProvider -NativeProcessProvider $installThenFailProvider -ProcessListProvider { @() } -StopProcessProvider { param($Process) } -RemoveDirectoryProvider $removeProvider
+    } 'A3_SIGNATURE_INVALID' | Out-Null
+    Assert-Equal ($finallyCalls -join ',') '智学协作台 Setup 1.0.0.exe' 'Post-install signature failure must never execute the unverified uninstaller.'
 
     Assert-ThrowsCode { Assert-A3PathContained -CandidatePath $wrapperReleaseDir -RootPath $runnerTemp -FailureCode 'A3_INSTALL_PATH_UNSAFE' } 'A3_INSTALL_PATH_UNSAFE' | Out-Null
     Assert-ThrowsCode { Invoke-A3WindowsSignatureVerification -ReleaseDir $runnerTemp -Version '1.0.0' -ExpectedPublisher 'CN=A3 Learning Project' -SourceCommit '0123456789abcdef' -RepositoryRoot $repositoryRoot -RecordProvider $recordProvider } 'A3_RELEASE_OUTSIDE_REPOSITORY' | Out-Null
@@ -429,7 +630,7 @@ try {
     Assert-ThrowsCode {
         Invoke-A3WindowsSignatureVerification -ReleaseDir $wrapperReleaseDir -Version '1.0.0' -ExpectedPublisher 'CN=A3 Learning Project' -SourceCommit '0123456789abcdef' -InstallAndVerify -RepositoryRoot $repositoryRoot -RunnerTemp $runnerTemp -RecordProvider $recordProvider -NativeProcessProvider $ambiguousInstallProvider -ProcessListProvider { @() } -StopProcessProvider { param($Process) } -RemoveDirectoryProvider $ambiguousCleanupProvider -ArtifactChildProvider $ambiguousLifecycleChildProvider
     } 'A3_ARTIFACT_AMBIGUOUS' | Out-Null
-    Assert-Equal $ambiguousCleanupState.Calls 0 'Ambiguous uninstaller discovery must leave the isolated directory untouched.'
+    Assert-Equal $ambiguousCleanupState.Calls 1 'Ambiguous uninstaller discovery must skip execution but remove the already-contained isolated directory.'
 
     $ambiguousProvider = {
         param([string]$DirectoryPath)
