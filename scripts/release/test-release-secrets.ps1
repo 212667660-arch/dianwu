@@ -59,7 +59,7 @@ if (-not $PSBoundParameters.ContainsKey('TrackedFiles')) {
 
 $unsafeExtensions = @('.pfx', '.p12', '.pem', '.key')
 $assignmentPattern = [regex]::new(
-    '(?im)^\s*(AZURE_CLIENT_SECRET|CSC_LINK|WIN_CSC_LINK|CSC_KEY_PASSWORD|WIN_CSC_KEY_PASSWORD)\s*(?:=|:)\s*(?<value>.+?)\s*$',
+    '(?im)^\s*(?:-\s*)?(?:export\s+)?(AZURE_CLIENT_SECRET|CSC_LINK|WIN_CSC_LINK|CSC_KEY_PASSWORD|WIN_CSC_KEY_PASSWORD)\s*(?:=|:)\s*(?<value>.+?)\s*$',
     [Text.RegularExpressions.RegexOptions]::CultureInvariant
 )
 $placeholderPattern = [regex]::new('^\$\{\{\s*secrets\.[A-Za-z0-9_]+\s*\}\}$', [Text.RegularExpressions.RegexOptions]::CultureInvariant)

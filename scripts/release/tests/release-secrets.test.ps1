@@ -53,7 +53,9 @@ try {
         @{ Path = 'config\azure.env'; Content = "$azureSecretName = real-secret"; Rule = 'Azure secret' },
         @{ Path = 'config\csc.env'; Content = "$($cscLinkName): https://example.invalid/signing.pfx"; Rule = 'CSC link' },
         @{ Path = 'config\win-csc.env'; Content = "$winCscLinkName = https://example.invalid/signing.pfx"; Rule = 'Windows CSC link' },
-        @{ Path = 'config\password.env'; Content = "$cscPasswordName = real-password"; Rule = 'CSC password' }
+        @{ Path = 'config\password.env'; Content = "$cscPasswordName = real-password"; Rule = 'CSC password' },
+        @{ Path = 'config\export.env'; Content = "export $azureSecretName=real-secret"; Rule = 'exported Azure secret' },
+        @{ Path = 'config\list.yml'; Content = "- $($winCscLinkName): https://example.invalid/signing.pfx"; Rule = 'YAML list secret' }
     )
     foreach ($unsafeCase in $unsafeCases) {
         Write-Utf8File -LiteralPath (Join-Path $testRoot $unsafeCase.Path) -Content $unsafeCase.Content

@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   signed-release:
-    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: windows-2022
     environment: windows-signing
     timeout-minutes: 120
@@ -54,11 +54,15 @@ jobs:
           $commit = git rev-parse HEAD
           if ($commit -cne $env:GITHUB_SHA) { throw 'Checked out commit does not match GITHUB_SHA.' }
           $version = (Get-Content -Raw front/a3-front/package.json | ConvertFrom-Json).version
-          if ($env:GITHUB_REF -like 'refs/tags/*') {
+          if ($env:GITHUB_EVENT_NAME -ceq 'push') {
+            if ($env:GITHUB_REF -notlike 'refs/tags/v*') { throw 'Push signed releases require a version tag.' }
             if ($env:GITHUB_REF_NAME -cne "v$version") { throw 'Release tag does not match package version.' }
           }
-          elseif ($env:GITHUB_EVENT_NAME -ne 'workflow_dispatch' -or $env:GITHUB_REF -cne 'refs/heads/main') {
-            throw 'Manual signed releases are restricted to main.'
+          elseif ($env:GITHUB_EVENT_NAME -ceq 'workflow_dispatch') {
+            if ($env:GITHUB_REF -cne 'refs/heads/main') { throw 'Manual signed releases are restricted to main.' }
+          }
+          else {
+            throw 'Unsupported signed release event.'
           }
           Write-Host "commit=$commit"
           Write-Host "version=$version"
@@ -130,7 +134,7 @@ jobs:
           retention-days: 7
 
       - name: Publish verified tag release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
