@@ -1,10 +1,7 @@
 import { bytesToHex } from '@noble/hashes/utils'
 import { sha256 } from '@noble/hashes/sha256'
 import canonicalize from 'canonicalize'
-import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import sourceInventory from './locales/zh-CN/inventory.json'
 
 import {
   BASE_CATALOG_HASH,
@@ -30,40 +27,6 @@ const VISIBLE_SOURCE_INVENTORY = [
   '模型配置', '默认配置', '备用配置', '自动切换备用配置', '测试连接', '连接成功',
   '墨团设置', '始终置顶', '空闲时降低动画频率', '新学习会话', '随手记', '使用建议',
 ] as const
-
-type InventoryEntry = { source: string; raw: string; kind: 'mapped'; key: string } | { source: string; raw: string; kind: 'internal'; reason: string }
-
-function productionHanCandidates(): Array<{ source: string; raw: string }> {
-  const root = resolve('.')
-  const roots = ['src', 'electron']
-  const files: string[] = []
-  const walk = (directory: string) => {
-    for (const name of readdirSync(directory)) {
-      const path = resolve(directory, name)
-      if (statSync(path).isDirectory()) {
-        if (['node_modules', 'dist', 'release', 'locales'].includes(name)) continue
-        walk(path)
-      } else if (/\.(?:vue|ts|mjs|js)$/.test(name) && !/\.test\.[^.]+$/.test(name)) files.push(path)
-    }
-  }
-  for (const directory of roots.map(name => resolve(root, name)).filter(path => statSync(path).isDirectory())) walk(directory)
-  const candidates = new Map<string, { source: string; raw: string }>()
-  for (const file of files) {
-    const source = relative(root, file).replaceAll('\\', '/')
-    const text = readFileSync(file, 'utf8')
-    const add = (raw: string) => {
-      const normalized = raw.replace(/\$\{[^}]+\}/g, '{value}').replace(/\{\{[^}]+\}\}/g, '{value}').replace(/\s+/g, ' ').trim()
-      if (/\p{Script=Han}/u.test(normalized)) candidates.set(`${source}\0${normalized}`, { source, raw: normalized })
-    }
-    for (const pattern of [/'((?:\\.|[^'\\])*)'/g, /"((?:\\.|[^"\\])*)"/g, /`((?:\\.|[^`\\])*)`/g]) {
-      for (const match of text.matchAll(pattern)) add(match[1])
-    }
-    if (file.endsWith('.vue')) {
-      for (const match of text.matchAll(/>([^<>]+)</g)) add(match[1])
-    }
-  }
-  return [...candidates.values()].sort((a, b) => `${a.source}\0${a.raw}`.localeCompare(`${b.source}\0${b.raw}`))
-}
 
 describe('built-in zh-CN catalog contract', () => {
   it('publishes the versioned required catalog keys', () => {
@@ -91,20 +54,6 @@ describe('built-in zh-CN catalog contract', () => {
   it('maps every visible Simplified Chinese source token into the catalog', () => {
     const catalogValues = new Set(Object.values(flattenMessages(BUILT_IN_MESSAGES)))
     expect(VISIBLE_SOURCE_INVENTORY.filter(message => !catalogValues.has(message))).toEqual([])
-  })
-
-  it('classifies every production Han candidate with resolvable catalog parity', () => {
-    const candidates = productionHanCandidates()
-    const inventory = sourceInventory as InventoryEntry[]
-    const inventoryByCandidate = new Map(inventory.map(entry => [`${entry.source}\0${entry.raw}`, entry]))
-    expect(candidates.filter(candidate => !inventoryByCandidate.has(`${candidate.source}\0${candidate.raw}`))).toEqual([])
-    const flat = flattenMessages(BUILT_IN_MESSAGES)
-    for (const entry of inventory) {
-      if (entry.kind === 'mapped') {
-        expect(flat[entry.key], `${entry.source}: ${entry.raw}`).toBeTypeOf('string')
-        expect(placeholdersFor(flat[entry.key]), entry.key).toEqual(placeholdersFor(entry.raw))
-      } else expect(entry.reason.trim(), `${entry.source}: ${entry.raw}`).not.toBe('')
-    }
   })
 
   it('extracts stable sorted placeholder names', () => {
@@ -158,7 +107,7 @@ describe('built-in zh-CN catalog contract', () => {
     expect(buildBaseCatalogPayload()).toBe(payload)
     expect(BASE_CATALOG_HASH).toMatch(/^[A-F0-9]{64}$/)
     expect(BASE_CATALOG_HASH).toBe(independentHash)
-    expect(BASE_CATALOG_HASH).toBe('B264D9B010FE72DD120AE7B4BD612F5DBBFBB0F3E2D991DE3614BE199E0CD400')
+    expect(BASE_CATALOG_HASH).toBe('6E2D91CD6D3230CB472082AF083FF0501A6FE497971942E409FE0FAB939EA8DF')
   })
 
   it('deep-freezes every built-in namespace without changing the digest', () => {

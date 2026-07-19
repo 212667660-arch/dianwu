@@ -41,6 +41,8 @@
     "@types/node": "^24.13.2",
     "@types/yauzl": "^2.10.3",
     "@vitejs/plugin-vue": "^5.2.4",
+    "@vue/compiler-dom": "^3.5.39",
+    "@vue/compiler-sfc": "^3.5.39",
     "@vue/test-utils": "^2.4.6",
     "@vue/tsconfig": "^0.9.1",
     "electron": "32.3.3",
