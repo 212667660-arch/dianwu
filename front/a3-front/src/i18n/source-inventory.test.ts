@@ -250,10 +250,10 @@ describe('repository production source inventory', () => {
     const mappedEntries = inventory.entries.filter((entry: InventoryEntry) => entry.mode === 'mapped')
     const classifiedEntries = inventory.entries.filter((entry: InventoryEntry) => entry.mode === 'classified')
 
-    expect(rendererCandidates).toHaveLength(752)
+    expect(rendererCandidates).toHaveLength(751)
     expect(electronCandidates).toHaveLength(120)
-    expect(candidates).toHaveLength(872)
-    expect(mappedEntries).toHaveLength(800)
+    expect(candidates).toHaveLength(871)
+    expect(mappedEntries).toHaveLength(799)
     expect(classifiedEntries).toHaveLength(72)
     expect(inventory.entries.map((entry: InventoryEntry) => entry.id)).toEqual(
       inventory.entries.map((entry: InventoryEntry) => entry.id).sort(),

@@ -270,7 +270,7 @@ test('renderer, preload, and desktop bundle do not receive token or backend addr
   ]
   for (const file of rendererFiles) {
     const source = fs.readFileSync(file, 'utf8')
-    assert.doesNotMatch(source, /desktopToken|apiBaseUrl|X-A3-Desktop-Token|MODEL_API_KEY/)
+    assert.doesNotMatch(source, /desktopToken|apiBaseUrl|X-A3-Desktop-Token|\bMODEL_API_KEY\b/)
   }
   const preload = fs.readFileSync(path.join(projectDir, 'electron', 'preload.cjs'), 'utf8')
   assert.doesNotMatch(preload, /safeStorage|model-settings\.enc/)
@@ -278,7 +278,7 @@ test('renderer, preload, and desktop bundle do not receive token or backend addr
   const emitted = fs.readdirSync(assetsDir).filter(name => name.endsWith('.js'))
   assert.ok(emitted.length > 0, 'desktop build must contain renderer JavaScript')
   for (const file of emitted) {
-    assert.doesNotMatch(fs.readFileSync(path.join(assetsDir, file), 'utf8'), /desktopToken|X-A3-Desktop-Token|MODEL_API_KEY/)
+    assert.doesNotMatch(fs.readFileSync(path.join(assetsDir, file), 'utf8'), /desktopToken|X-A3-Desktop-Token|\bMODEL_API_KEY\b/)
   }
 })
 

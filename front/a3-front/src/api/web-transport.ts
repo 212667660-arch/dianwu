@@ -121,11 +121,6 @@ export async function readSseBody(body: ReadableStream<Uint8Array>, onEvent: (ev
   }
 }
 
-export function errorMessage(error: unknown): string {
-  if (error instanceof BackendApiError) return error.message
-  return '请求失败，请稍后重试'
-}
-
 function isAbortError(error: unknown): boolean {
   return (error as { name?: unknown } | undefined)?.name === 'AbortError'
 }

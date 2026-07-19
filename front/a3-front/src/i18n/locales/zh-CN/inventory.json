@@ -4759,13 +4759,6 @@
       "expression_bindings": []
     },
     {
-      "id": "c5cf1248261e57e3b36fc292",
-      "mode": "mapped",
-      "catalog_key": "errors.failure",
-      "template": "请求失败，请稍后重试",
-      "expression_bindings": []
-    },
-    {
       "id": "c5d952054faecefac4492158",
       "mode": "mapped",
       "catalog_key": "components.conversationRail.workspaceNavigation",

@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { BackendApiError, backendApiErrorFromEnvelope } from './transport'
-import { createWebTransport, errorMessage } from './web-transport'
+import { errorMessage } from './client'
+import { createWebTransport } from './web-transport'
 
 const missingSession = {
   code: 'SESSION_NOT_FOUND',
@@ -57,7 +58,7 @@ describe('Web transport error contract', () => {
       retryable: true,
     })
     expect(malformed.message).not.toContain('private upstream')
-    expect(errorMessage(new Error('private transport details'))).toBe('请求失败，请稍后重试')
+    expect(errorMessage(new Error('private transport details'))).toBe('请求失败，请稍后重试。')
   })
 
   it('exposes the canonical error as a real BackendApiError instance', () => {
