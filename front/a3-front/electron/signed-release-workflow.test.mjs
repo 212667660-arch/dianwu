@@ -2,6 +2,62 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
+function sanitizePowerShell(script) {
+  let blockComment = false
+  let hereTerminator = ''
+  const cleaned = []
+  for (const line of script.split(/\r?\n/)) {
+    if (hereTerminator) {
+      if (line.trim() === hereTerminator) hereTerminator = ''
+      cleaned.push('')
+      continue
+    }
+    let output = ''
+    let quote = ''
+    for (let index = 0; index < line.length; index += 1) {
+      const pair = line.slice(index, index + 2)
+      if (blockComment) {
+        if (pair === '#>') {
+          blockComment = false
+          index += 1
+        }
+        continue
+      }
+      if (!quote && pair === '<#') {
+        blockComment = true
+        index += 1
+        continue
+      }
+      if (!quote && (pair === "@'" || pair === '@"') && line.slice(index + 2).trim() === '') {
+        hereTerminator = pair === "@'" ? "'@" : '"@'
+        break
+      }
+      const character = line[index]
+      if (!quote && character === '#') break
+      if (!quote && (character === "'" || character === '"')) {
+        quote = character
+        output += ' '
+        continue
+      }
+      if (quote) {
+        if (quote === "'" && character === "'" && line[index + 1] === "'") {
+          index += 1
+          continue
+        }
+        if (quote === '"' && character === '`') {
+          index += 1
+          continue
+        }
+        if (character === quote) quote = ''
+        continue
+      }
+      output += character
+    }
+    cleaned.push(output)
+  }
+  return cleaned.join('\n')
+}
+
 function parseWorkflowSteps(workflow) {
   const steps = []
   let current
@@ -37,8 +93,45 @@ function parseWorkflowSteps(workflow) {
       collectingRun = false
     }
   }
-  return steps
+  return steps.map((step) => ({ ...step, run: sanitizePowerShell(step.run) }))
 }
+
+function assertVerificationPrecedesPublishing(steps) {
+  const verification = steps.findIndex((step) => step.run.includes('scripts/release/verify-windows-signatures.ps1'))
+  const upload = steps.findIndex((step) => step.uses === 'actions/upload-artifact@v4')
+  const publish = steps.findIndex((step) => step.run.includes('gh release'))
+  assert.ok(verification >= 0, 'signature verification execution step is required')
+  assert.ok(verification < upload, 'artifact upload must occur after signature verification')
+  assert.ok(verification < publish, 'tag publishing must occur after signature verification')
+  return { verification, upload, publish }
+}
+
+test('workflow execution parsing rejects verification text hidden in PowerShell non-execution contexts', () => {
+  const maliciousWorkflow = `jobs:
+  signed-release:
+    steps:
+      - name: Fake verification references
+        run: |
+          Write-Host 'scripts/release/verify-windows-signatures.ps1'
+          Write-Host "safe" # scripts/release/verify-windows-signatures.ps1
+          <#
+          ./scripts/release/verify-windows-signatures.ps1
+          #>
+          @'
+          scripts/release/verify-windows-signatures.ps1
+          '@
+      - name: Publish too early
+        run: gh release upload v1 artifact.exe
+      - name: Real verification too late
+        run: ./scripts/release/verify-windows-signatures.ps1 -InstallAndVerify
+      - name: Upload too late
+        uses: actions/upload-artifact@v4
+`
+  assert.throws(
+    () => assertVerificationPrecedesPublishing(parseWorkflowSteps(maliciousWorkflow)),
+    /tag publishing must occur after signature verification/,
+  )
+})
 
 test('the signed Windows release workflow is protected and verifies before publishing', async () => {
   const workflow = await readFile(new URL('../../../.github/workflows/windows-signed-release.yml', import.meta.url), 'utf8')
@@ -113,11 +206,7 @@ test('the signed Windows release workflow is protected and verifies before publi
     previous = current
   }
 
-  const verification = steps.findIndex((step) => step.run.includes('scripts/release/verify-windows-signatures.ps1'))
-  const upload = steps.findIndex((step) => step.uses === 'actions/upload-artifact@v4')
-  const publish = steps.findIndex((step) => step.run.includes('gh release'))
-  assert.ok(verification < upload, 'artifact upload must occur after signature verification')
-  assert.ok(verification < publish, 'tag publishing must occur after signature verification')
+  const { verification, upload, publish } = assertVerificationPrecedesPublishing(steps)
   assert.equal(steps[upload].if, "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'")
   assert.equal(steps[publish].if, "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')")
   assert.match(workflow, /retention-days:\s*7/)
