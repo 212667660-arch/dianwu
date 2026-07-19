@@ -3,7 +3,7 @@
     <div class="page-heading">
       <div><h1>{{ t('views.profile.title') }}</h1><p>{{ t('views.profile.structuredProfileDescription') }}</p></div>
       <div class="toolbar">
-        <el-tag v-if="backend.profileReady" type="success" effect="plain">{{ t('views.profile.profileVersionPrefix') }}{{ backend.session?.profile_version }}</el-tag>
+        <el-tag v-if="backend.profileReady" type="success" effect="plain">{{ t('views.profile.profileVersionTag', { version: backend.session?.profile_version }) }}</el-tag>
         <el-button :icon="Refresh" @click="backend.refreshSession()">{{ t('views.profile.sync') }}</el-button>
         <el-button v-if="backend.session" type="danger" plain :icon="RefreshLeft" @click="restart">{{ t('views.profile.restart') }}</el-button>
       </div>
@@ -36,7 +36,7 @@
       </div>
 
       <article class="panel dialogue-panel">
-        <div class="panel-header"><h2>{{ t('views.profile.diagnosisConversation') }}</h2><span class="muted">{{ diagnosticMessages.length }} {{ t('views.profile.itemUnit') }}</span></div>
+        <div class="panel-header"><h2>{{ t('views.profile.diagnosisConversation') }}</h2><span class="muted">{{ t('views.profile.diagnosticMessageCount', { count: diagnosticMessages.length }) }}</span></div>
         <div class="panel-body dialogue-list">
           <div v-for="message in diagnosticMessages" :key="message.seq" class="dialogue-row" :class="message.role">
             <span>{{ message.role === 'user' ? t('views.profile.learner') : t('views.profile.profileAgent') }}</span>

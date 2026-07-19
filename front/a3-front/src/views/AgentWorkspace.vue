@@ -35,7 +35,7 @@
         <div class="panel-header"><h2>{{ t('views.agents.latestResourceDelivery') }}</h2><span v-if="latest" class="status-pill good">{{ t('views.agents.quality') }} {{ latest.quality_score }}</span></div>
         <div v-if="latest" class="panel-body latest-resource">
           <span>{{ t('views.agents.topicLabel') }}</span><h2>{{ latest.topic }}</h2>
-          <p>{{ latest.questions.length }} {{ t('views.agents.structuredPracticeCountSuffix') }} {{ latest.sources.length }} {{ t('views.agents.reference') }}</p>
+          <p>{{ t('views.agents.resourceSummary', { questionCount: latest.questions.length, sourceCount: latest.sources.length }) }}</p>
           <div class="quality-issues">
             <el-tag v-for="issue in latest.quality_issues" :key="issue" type="warning" effect="plain">{{ issue }}</el-tag>
             <el-tag v-if="!latest.quality_issues.length" type="success" effect="plain">{{ t('views.agents.qualityCheck') }}</el-tag>

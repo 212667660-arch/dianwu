@@ -19,7 +19,7 @@
   "sync": "同步题目",
   "practiceGenerate": "生成新练习",
   "practiceCurrent": "当前练习",
-  "questionUnit": "题",
+  "questionCount": "{count}题",
   "questionTitle": "题目",
   "resourceQuality": "资源质量",
   "answer": "输入你的答案",

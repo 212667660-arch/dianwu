@@ -8,7 +8,7 @@
       <CollectionRail :collections="backend.knowledgeCollections" :selected-id="activeCollectionId" @select="selectCollection" @create="createCollection" @rename="renameCollection" @delete="deleteCollection" />
       <div class="knowledge-center">
         <div class="center-heading">
-          <div><strong>{{ trashOnly ? t('views.knowledge.trash') : (activeCollection?.name||t('views.knowledge.allDocuments')) }}</strong><span>{{ filteredDocuments.length }} {{ t('views.knowledge.document') }}</span></div>
+          <div><strong>{{ trashOnly ? t('views.knowledge.trash') : (activeCollection?.name||t('views.knowledge.allDocuments')) }}</strong><span>{{ t('views.knowledge.documentCount', { count: filteredDocuments.length }) }}</span></div>
           <input v-model="filter" :aria-label="t('views.knowledge.documentFilterAriaLabel')" :placeholder="t('views.knowledge.documentTitle')">
         </div>
         <div class="advanced-filters" :aria-label="t('views.knowledge.advancedFilterAriaLabel')">
@@ -21,7 +21,7 @@
         </div>
         <div class="bulk-toolbar" :aria-label="t('views.knowledge.documentBulk')">
           <button data-testid="select-all-documents" type="button" @click="toggleSelectAll">{{ allVisibleSelected ? t('views.knowledge.cancel') : t('views.knowledge.resultCurrent') }}</button>
-          <span data-testid="bulk-selection-count">{{ t('views.knowledge.selectedLabel') }} {{ selectedDocumentIds.length }} {{ t('views.knowledge.itemUnit') }}</span>
+          <span data-testid="bulk-selection-count">{{ t('views.knowledge.selectionCount', { count: selectedDocumentIds.length }) }}</span>
           <select v-model.number="targetCollectionId" :aria-label="t('views.knowledge.collectionBulkGoal')"><option :value="null">{{ t('views.knowledge.collectionSelect') }}</option><option v-for="collection in backend.knowledgeCollections" :key="collection.id" :value="collection.id">{{ collection.name }}</option></select>
           <button type="button" :disabled="!canMutateSelection||!targetCollectionId" @click="bulkCollections('add_to_collections')">{{ t('views.knowledge.collectionTitle') }}</button>
           <button type="button" :disabled="!canMutateSelection||!targetCollectionId" @click="bulkCollections('remove_from_collections')">{{ t('views.knowledge.collectionDescription') }}</button>

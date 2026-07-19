@@ -71,9 +71,9 @@
             <div v-for="resource in recentResources" :key="resource.id" class="list-row resource-row">
               <div>
                 <strong>{{ resource.topic }}</strong>
-                <p>{{ t('views.dashboard.profile') }}{{ resource.profile_version }} · {{ resource.questions.length }} {{ t('views.dashboard.practice') }}</p>
+                <p>{{ t('views.dashboard.recentResourceSummary', { profileVersion: resource.profile_version, questionCount: resource.questions.length }) }}</p>
               </div>
-              <span class="quality" :class="resource.quality_score >= 80 ? 'good' : 'warn'">{{ resource.quality_score }} {{ t('views.dashboard.pointsUnit') }}</span>
+              <span class="quality" :class="resource.quality_score >= 80 ? 'good' : 'warn'">{{ t('views.dashboard.qualityScore', { score: resource.quality_score }) }}</span>
             </div>
           </template>
           <div v-else class="empty-block"><p>{{ t('views.dashboard.noGeneratedResources') }}</p></div>

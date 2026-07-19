@@ -7,7 +7,7 @@
 
     <div class="assessment-layout">
       <article class="panel question-panel">
-        <div class="panel-header"><h2>{{ t('views.assessment.practiceCurrent') }}</h2><span class="muted">{{ questionRows.length }} {{ t('views.assessment.questionUnit') }}</span></div>
+        <div class="panel-header"><h2>{{ t('views.assessment.practiceCurrent') }}</h2><span class="muted">{{ t('views.assessment.questionCount', { count: questionRows.length }) }}</span></div>
         <div class="panel-body">
           <div v-for="row in questionRows" :key="row.question.id" class="question-row">
             <div class="question-heading">

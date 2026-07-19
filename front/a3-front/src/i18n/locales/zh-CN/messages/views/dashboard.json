@@ -41,9 +41,8 @@
   "diagnosisStart": "开始诊断",
   "resourceRecent": "最近资源",
   "qualityResult": "质量校验结果",
-  "profile": "画像 v",
-  "practice": "道练习",
-  "pointsUnit": "分",
+  "recentResourceSummary": "画像 v{profileVersion} · {questionCount}道练习",
+  "qualityScore": "{score}分",
   "noGeneratedResources": "暂无已生成资源",
   "waitingStart": "等待开始"
 }

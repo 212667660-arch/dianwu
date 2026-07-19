@@ -1,8 +1,8 @@
 {
   "title": "学习画像",
-  "profileVersionPrefix": "画像 v",
+  "profileVersionTag": "画像 v{version}",
   "sync": "同步",
-  "itemUnit": "条",
+  "diagnosticMessageCount": "{count}条",
   "learner": "学习者",
   "profileAgent": "画像 Agent",
   "startDiagnosis": "开始诊断",

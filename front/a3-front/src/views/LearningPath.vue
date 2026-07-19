@@ -17,7 +17,7 @@
 
     <div class="grid-2 path-grid">
       <article class="panel">
-        <div class="panel-header"><h2>{{ t('views.learningPath.knowledgePointPath') }}</h2><span class="muted">{{ points.length }} {{ t('views.learningPath.knowledgePoint') }}</span></div>
+        <div class="panel-header"><h2>{{ t('views.learningPath.knowledgePointPath') }}</h2><span class="muted">{{ t('views.learningPath.knowledgePointCount', { count: points.length }) }}</span></div>
         <div class="panel-body">
           <div v-for="(point, index) in points" :key="point.id" class="path-row">
             <div class="path-index">{{ index + 1 }}</div>
@@ -32,7 +32,7 @@
       </article>
 
       <article class="panel">
-        <div class="panel-header"><h2>{{ t('views.learningPath.reviewSchedule') }}</h2><span class="muted">{{ backend.reviews.length }} {{ t('views.learningPath.review') }}</span></div>
+        <div class="panel-header"><h2>{{ t('views.learningPath.reviewSchedule') }}</h2><span class="muted">{{ t('views.learningPath.reviewCount', { count: backend.reviews.length }) }}</span></div>
         <div class="panel-body">
           <div v-for="review in backend.reviews" :key="review.id" class="review-row list-row">
             <div class="review-date"><strong>{{ day(review.due_at) }}</strong><span>{{ month(review.due_at) }}</span></div>

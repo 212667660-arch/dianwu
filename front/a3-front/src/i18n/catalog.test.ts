@@ -179,7 +179,7 @@ describe('built-in zh-CN catalog contract', () => {
       'views.modelSettings.workspaceSelectionMode': '学习空间手动选择',
       'views.onboarding.ocrUnavailable': '组件不可用',
       'views.profile.noPendingQuestions': '无',
-      'views.tutor.workspaceLabelPrefix': '▢ 工作空间：',
+      'views.tutor.workspaceLabel': '▢ 工作空间：{sessionId}',
     }
     for (const [key, value] of Object.entries(reviewedPairs)) expect(flat[key], key).toBe(value)
 
@@ -196,11 +196,32 @@ describe('built-in zh-CN catalog contract', () => {
     expect(Object.entries(flat).filter(([key, value]) => key.startsWith('views.') && /【协议:/.test(value)).map(([key]) => key)).toEqual([])
   })
 
+  it('keeps user-visible counts and dynamic labels in complete semantic messages', () => {
+    const flat = flattenMessages(BUILT_IN_MESSAGES)
+    const messages: Record<string, [string, string[]]> = {
+      'views.agents.resourceSummary': ['{questionCount}道结构化练习 · {sourceCount}个参考来源', ['questionCount', 'sourceCount']],
+      'views.assessment.questionCount': ['{count}题', ['count']],
+      'views.dashboard.recentResourceSummary': ['画像 v{profileVersion} · {questionCount}道练习', ['profileVersion', 'questionCount']],
+      'views.dashboard.qualityScore': ['{score}分', ['score']],
+      'views.knowledge.selectionCount': ['已选 {count}项', ['count']],
+      'views.profile.profileVersionTag': ['画像 v{version}', ['version']],
+      'views.profile.diagnosticMessageCount': ['{count}条', ['count']],
+      'views.tutor.knowledgeSpaceButton': ['本空间资料 · {count}', ['count']],
+      'views.tutor.failoverNotice': ['{notice}，这次回答仍保持同一条清晰的上下文。', ['notice']],
+      'views.tutor.workspaceLabel': ['▢ 工作空间：{sessionId}', ['sessionId']],
+      'views.tutor.documentCount': ['{count}份资料', ['count']],
+    }
+    for (const [key, [message, placeholders]] of Object.entries(messages)) {
+      expect(flat[key], key).toBe(message)
+      expect(placeholdersFor(flat[key]), key).toEqual(placeholders)
+    }
+  })
+
   it('covers the reviewed SmartTutor visible-string inventory', () => {
     const values = Object.values(flattenMessages(BUILT_IN_MESSAGES))
     for (const visibleText of [
       '模型未就绪',
-      '这次回答仍保持同一条清晰的上下文。',
+      '{notice}，这次回答仍保持同一条清晰的上下文。',
       '中断前保留',
       '学习诊断不是电脑故障检测，而是画像 Agent 通过几轮对话了解你的学习目标、当前基础和薄弱点。',
       '当前画像已经完成，可以重新尝试刚才的请求。',
@@ -276,7 +297,7 @@ describe('built-in zh-CN catalog contract', () => {
     expect(buildBaseCatalogPayload()).toBe(payload)
     expect(BASE_CATALOG_HASH).toMatch(/^[A-F0-9]{64}$/)
     expect(BASE_CATALOG_HASH).toBe(independentHash)
-    expect(BASE_CATALOG_HASH).toBe('9492F80C1F794622F226DEC9F9CCDB827A0BC201DA23C08A178CCDEEFF98F110')
+    expect(BASE_CATALOG_HASH).toBe('F97C54D52620B3B4A6CB0F5B6270D82099C1581A6C621D5FFF203B6B776DFEAE')
   })
 
   it('deep-freezes every built-in namespace without changing the digest', () => {

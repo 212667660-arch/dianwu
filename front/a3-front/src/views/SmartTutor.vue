@@ -1,14 +1,14 @@
 <template>
   <section class="page tutor-page">
     <div class="tutor-statusbar">
-      <button type="button" class="knowledge-space-button" data-testid="knowledge-space-button" @click="openKnowledgeSpace"><span>▤</span> {{ t('views.tutor.sourceCountPrefix') }} {{ backend.boundKnowledgeCollectionIds.length }}</button>
+      <button type="button" class="knowledge-space-button" data-testid="knowledge-space-button" @click="openKnowledgeSpace"><span>▤</span> {{ t('views.tutor.knowledgeSpaceButton', { count: backend.boundKnowledgeCollectionIds.length }) }}</button>
       <span class="status-pill" :class="backend.ready ? 'good' : 'bad'">{{ backend.ready ? t('views.tutor.modelReady') : t('views.tutor.modelNotReady') }}</span>
       <span class="status-pill">{{ phaseLabel }}</span>
     </div>
 
     <article class="chat-panel">
       <div ref="messageList" class="message-list">
-        <div v-if="failoverNotice" class="connection-notice" data-testid="failover-notice">↝ {{ failoverNotice }}{{ t('views.tutor.failoverContextSuffix') }}</div>
+        <div v-if="failoverNotice" class="connection-notice" data-testid="failover-notice">↝ {{ t('views.tutor.failoverNotice', { notice: failoverNotice }) }}</div>
         <div v-if="!displayMessages.length && !historicalBundles.length && !pendingUser" class="welcome" :data-companion-id="companionId">
           <div class="companion-portrait" aria-hidden="true"><span>{{ t('views.tutor.brandMark') }}</span></div>
           <h1>{{ t('views.tutor.title') }}</h1>
@@ -17,7 +17,7 @@
             <button type="button" class="active"><span class="mini-avatar">{{ t('views.tutor.brandMark') }}</span>{{ t('views.tutor.partner') }}</button>
             <button type="button" disabled><span class="mini-avatar muted-avatar">＋</span>{{ t('views.tutor.futurePartner') }}</button>
           </div>
-          <div class="workspace-memory"><span>{{ t('views.tutor.workspaceLabelPrefix') }}{{ backend.sessionId }}</span><span>{{ t('views.tutor.connection') }}</span></div>
+          <div class="workspace-memory"><span>{{ t('views.tutor.workspaceLabel', { sessionId: backend.sessionId }) }}</span><span>{{ t('views.tutor.connection') }}</span></div>
           <div class="starter-list">
             <button v-for="starter in starters" :key="starter" type="button" @click="editor = starter">{{ starter }}</button>
           </div>
@@ -128,7 +128,7 @@
     <div v-if="knowledgeSpaceOpen" class="knowledge-space-modal" role="dialog" aria-modal="true" :aria-label="t('views.tutor.workspaceDocumentsAriaLabel')">
       <div class="knowledge-space-card"><header><div><span>LEARNING SPACE</span><h2>{{ t('views.tutor.knowledgeSpace.title') }}</h2></div><button type="button" :aria-label="t('views.tutor.closeWorkspaceDocuments')" @click="knowledgeSpaceOpen=false">×</button></header>
         <p class="privacy-notice">{{ t('views.tutor.modelReferencePrivacyNotice') }}</p>
-        <div class="binding-collections"><label v-for="collection in backend.knowledgeCollections" :key="collection.id"><input v-model="bindingIds" type="checkbox" :value="collection.id" :data-testid="`collection-check-${collection.id}`"><span><strong>{{ collection.name }}</strong><small>{{ collection.document_count || 0 }} {{ t('views.tutor.documentUnit') }}</small></span></label><p v-if="!backend.knowledgeCollections.length">{{ t('views.tutor.knowledgeSpace.empty') }}</p></div>
+        <div class="binding-collections"><label v-for="collection in backend.knowledgeCollections" :key="collection.id"><input v-model="bindingIds" type="checkbox" :value="collection.id" :data-testid="`collection-check-${collection.id}`"><span><strong>{{ collection.name }}</strong><small>{{ t('views.tutor.documentCount', { count: collection.document_count || 0 }) }}</small></span></label><p v-if="!backend.knowledgeCollections.length">{{ t('views.tutor.knowledgeSpace.empty') }}</p></div>
         <fieldset><legend>{{ t('views.tutor.knowledgeSpace.privacy') }}</legend><label><input v-model="bindingPrivacy" type="radio" value="allow_model_context" data-testid="privacy-allow-model">{{ t('views.tutor.knowledgeSpace.allowModel') }}</label><label><input v-model="bindingPrivacy" type="radio" value="local_search_only" data-testid="privacy-local-only">{{ t('views.tutor.knowledgeSpace.localOnly') }}</label></fieldset>
         <footer><span>{{ t('views.tutor.knowledgeSpace.localNotice') }}</span><button type="button" data-testid="save-knowledge-binding" @click="saveKnowledgeBinding">{{ t('views.tutor.knowledgeSpace.save') }}</button></footer>
       </div>
