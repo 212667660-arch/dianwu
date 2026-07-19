@@ -221,7 +221,7 @@ function Assert-A3SignatureRecord {
     if ($subject -cne $ExpectedPublisher) {
         throw (New-A3SignatureError 'A3_PUBLISHER_MISMATCH' "Unexpected signer for $path.")
     }
-    if ($digestAlgorithm.ToUpperInvariant() -cne 'SHA256') {
+    if ($digestAlgorithm -cne 'SHA256') {
         throw (New-A3SignatureError 'A3_DIGEST_NOT_SHA256' "Non-SHA256 file digest for $path.")
     }
 

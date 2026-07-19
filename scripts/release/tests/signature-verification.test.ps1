@@ -90,10 +90,13 @@ Assert-ThrowsCode {
 $valid = New-TestRecord
 Assert-A3SignatureRecord -Record $valid -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256 ('A' * 64)
 
-$lowercaseDigest = Copy-Record $valid
-$lowercaseDigest.FileDigestAlgorithm = 'sha256'
-$lowercaseDigest.Sha256 = ('a' * 64)
-Assert-A3SignatureRecord -Record $lowercaseDigest -ExpectedPublisher 'CN=A3 Learning Project' -ExpectedSha256 ('A' * 64)
+foreach ($nonCanonicalDigestAlgorithm in @('sha256', 'Sha256', 'sHa256')) {
+    $nonCanonicalDigest = Copy-Record $valid
+    $nonCanonicalDigest.FileDigestAlgorithm = $nonCanonicalDigestAlgorithm
+    Assert-ThrowsCode {
+        Assert-A3SignatureRecord -Record $nonCanonicalDigest -ExpectedPublisher 'CN=A3 Learning Project'
+    } 'A3_DIGEST_NOT_SHA256' | Out-Null
+}
 
 $fractionalUtc = Copy-Record $valid
 $fractionalUtc.TimestampUtc = '2026-07-18T08:00:00.1234567Z'
