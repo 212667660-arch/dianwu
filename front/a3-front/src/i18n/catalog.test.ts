@@ -155,6 +155,35 @@ describe('built-in zh-CN catalog contract', () => {
     expect(flat['components.conversationRail.empty']).toContain('还没有历史会话')
   })
 
+  it('uses manually reviewed semantic keys across every renderer view', () => {
+    const flat = flattenMessages(BUILT_IN_MESSAGES)
+    const reviewedPairs: Record<string, string> = {
+      'views.agents.noCollaborationEvents': '暂无协作事件',
+      'views.assessment.noReviewTasks': '暂无待复习任务',
+      'views.dashboard.noGeneratedResources': '暂无已生成资源',
+      'views.desktopSettings.backendUnavailable': '不可用',
+      'views.knowledge.permanentDeleteWarning': '永久删除后无法恢复，原文件副本和索引都会被清理。',
+      'views.learningPath.firstPracticePending': '等待首次练习',
+      'views.modelSettings.workspaceSelectionMode': '学习空间手动选择',
+      'views.onboarding.ocrUnavailable': '组件不可用',
+      'views.profile.noPendingQuestions': '无',
+      'views.tutor.workspaceLabelPrefix': '▢ 工作空间：',
+    }
+    for (const [key, value] of Object.entries(reviewedPairs)) expect(flat[key], key).toBe(value)
+
+    const viewEntries = Object.entries(flat).filter(([key]) => key.startsWith('views.'))
+    const mechanicalSegment = /(?:None$|UnavailableAvailable|AvailableUnavailable)/
+    expect(viewEntries.filter(([key]) => key.split('.').some(segment => mechanicalSegment.test(segment))).map(([key]) => key)).toEqual([])
+    expect(viewEntries.filter(([key, value]) => /Empty$/.test(key) && !/(?:空|暂无|还没有|尚未|等待|未设置|第一套|第一位)/.test(value)).map(([key]) => key)).toEqual([])
+    expect(viewEntries.filter(([key, value]) => /Success$/.test(key) && /(?:失败|未完成|不可用|无法)/.test(value)).map(([key]) => key)).toEqual([])
+    expect(viewEntries.filter(([key]) => key.split('.').some(segment => /^(?:stringLiteral|templateExpression|vueText|vueStaticAttribute|message\d+|source|location|candidate|chinese|numbered|fullText)$/i.test(segment))).map(([key]) => key)).toEqual([])
+  })
+
+  it('keeps serialized protocol headings outside the translatable view catalog', () => {
+    const flat = flattenMessages(BUILT_IN_MESSAGES)
+    expect(Object.entries(flat).filter(([key, value]) => key.startsWith('views.') && /【协议:|(?:learner-profile|learning-resource-bundle)\/v\d+/.test(value)).map(([key]) => key)).toEqual([])
+  })
+
   it('covers the reviewed SmartTutor visible-string inventory', () => {
     const values = Object.values(flattenMessages(BUILT_IN_MESSAGES))
     for (const visibleText of [
@@ -224,7 +253,7 @@ describe('built-in zh-CN catalog contract', () => {
     expect(buildBaseCatalogPayload()).toBe(payload)
     expect(BASE_CATALOG_HASH).toMatch(/^[A-F0-9]{64}$/)
     expect(BASE_CATALOG_HASH).toBe(independentHash)
-    expect(BASE_CATALOG_HASH).toBe('F23EF1E53DE3522C67E94F4195E3194AB4A765738FC54E83ADFE310B29BF2CDE')
+    expect(BASE_CATALOG_HASH).toBe('871F58054C104D5035CAF7751E2DFED185B4C96ED281C65BA86F1C0C3625711B')
   })
 
   it('deep-freezes every built-in namespace without changing the digest', () => {

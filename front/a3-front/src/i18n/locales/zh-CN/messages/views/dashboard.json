@@ -15,7 +15,7 @@
     "working": "正在协作",
     "idle": "等待任务"
   },
-  "profileReviewMasterySessionCurrent": "基于当前会话的画像、掌握度与复习安排",
+  "currentSessionLearningSummary": "基于当前会话的画像、掌握度与复习安排",
   "runDemo": "一键演示",
   "sync": "同步",
   "originalProjectData": "项目原创数据",
@@ -35,13 +35,13 @@
   "start": "开始",
   "knowledgePointMastery": "知识点掌握度",
   "sortWeak": "按薄弱程度排序",
-  "knowledgePointDiagnosisMasteryCompleted": "完成诊断后显示知识点掌握度",
+  "masteryAvailableAfterDiagnosis": "完成诊断后显示知识点掌握度",
   "diagnosisStart": "开始诊断",
   "resourceRecent": "最近资源",
   "qualityResult": "质量校验结果",
   "profile": "画像 v",
   "practice": "道练习",
   "pointsUnit": "分",
-  "resourceGenerateNone": "暂无已生成资源",
+  "noGeneratedResources": "暂无已生成资源",
   "waitingStart": "等待开始"
 }

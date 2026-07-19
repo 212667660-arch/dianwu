@@ -20,8 +20,8 @@
   "skip": "暂时跳过",
   "start": "进入学习空间",
   "environmentFirstTime": "第一次见面，先把学习环境安顿好",
-  "modelProfileDefaultOfflineOnline": "所有资料默认保存在本机。你可以现在配置在线模型，也可以先进入内置离线演示。",
-  "desktopEnvironmentInProgressCheck": "正在检查桌面环境…",
+  "localFirstModelChoice": "所有资料默认保存在本机。你可以现在配置在线模型，也可以先进入内置离线演示。",
+  "checkingDesktopEnvironment": "正在检查桌面环境…",
   "diagnosis": "需要诊断",
   "directoryLocal": "本地数据目录",
   "security": "可安全写入",
@@ -29,13 +29,13 @@
   "modelOnline": "在线模型",
   "profile": "已配置",
   "profileTitle": "可稍后配置",
-  "textbookRecognitionChinese": "中文扫描教材可识别",
-  "unavailableAvailable": "组件不可用",
+  "chineseTextbookRecognition": "中文扫描教材可识别",
+  "ocrUnavailable": "组件不可用",
   "desktopVersion": "桌面版本",
   "offline": "先看离线演示",
   "application": "进入应用",
   "offlineCurrent": "当前为离线构建",
   "updateCheck": "可检查更新",
-  "saveSettingsOnboardingNone": "无法保存首次启动设置。",
-  "desktopEnvironmentFailureCheck": "桌面环境检查失败。"
+  "settingsSaveFailure": "无法保存首次启动设置。",
+  "environmentCheckFailure": "桌面环境检查失败。"
 }
