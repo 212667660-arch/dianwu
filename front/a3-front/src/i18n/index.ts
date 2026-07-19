@@ -1,6 +1,6 @@
 import { createI18n } from 'vue-i18n'
 
-import { BUILT_IN_LOCALE, BUILT_IN_MESSAGES } from './catalog'
+import { BUILT_IN_LOCALE, BUILT_IN_MESSAGES, isForbiddenCatalogKey } from './catalog'
 
 type LocaleMessage = string | LocaleMessages
 interface LocaleMessages {
@@ -23,13 +23,23 @@ export const i18n = createI18n({
   messages: initialMessages,
 })
 
-export function installLocaleMessages(locale: string, messages: LocaleMessages): void {
+export function installLocaleMessages(locale: string, messages: Record<string, unknown>): void {
+  assertSafeMessageKeys(messages)
   const installed = sanitizeMessages(messages)
   const existing = i18n.global.getLocaleMessage(locale) as LocaleMessages
   const base = locale === BUILT_IN_LOCALE
     ? BUILT_IN_MESSAGES as unknown as LocaleMessages
     : existing
   i18n.global.setLocaleMessage(locale, mergeMessages(base, installed))
+}
+
+export function resetLocaleRuntimeForTests(): void {
+  const messages = i18n.global.messages.value as Record<string, LocaleMessages>
+  for (const locale of i18n.global.availableLocales) {
+    if (locale !== BUILT_IN_LOCALE) Reflect.deleteProperty(messages, locale)
+  }
+  i18n.global.setLocaleMessage(BUILT_IN_LOCALE, BUILT_IN_MESSAGES as unknown as LocaleMessages)
+  activateLocale(BUILT_IN_LOCALE)
 }
 
 export function activateLocale(locale: string): string {
@@ -50,6 +60,13 @@ function sanitizeMessages(value: Record<string, unknown>): LocaleMessages {
     }
   }
   return sanitized
+}
+
+function assertSafeMessageKeys(value: Record<string, unknown>): void {
+  for (const [key, child] of Object.entries(value)) {
+    if (isForbiddenCatalogKey(key)) throw new TypeError(`Locale messages contain forbidden key: ${key}`)
+    if (isMessageObject(child)) assertSafeMessageKeys(child)
+  }
 }
 
 function mergeMessages(base: LocaleMessages, additions: LocaleMessages): LocaleMessages {

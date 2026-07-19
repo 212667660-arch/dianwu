@@ -10,12 +10,12 @@ import {
   formatPercent,
   formatRelativeTime,
 } from './formatters'
-import { activateLocale, i18n, installLocaleMessages } from './index'
+import { activateLocale, i18n, installLocaleMessages, resetLocaleRuntimeForTests } from './index'
 
 const fixedUtcDate = new Date('2026-07-19T08:15:30.000Z')
 
 afterEach(() => {
-  activateLocale(BUILT_IN_LOCALE)
+  resetLocaleRuntimeForTests()
 })
 
 describe('renderer localization runtime', () => {
@@ -39,6 +39,26 @@ describe('renderer localization runtime', () => {
     expect(activateLocale('fr-FR')).toBe('zh-CN')
     expect(i18n.global.locale.value).toBe('zh-CN')
     expect(document.documentElement.lang).toBe('zh-CN')
+  })
+
+  it('rejects forbidden keys recursively without registering a locale or polluting prototypes', () => {
+    const malicious = JSON.parse('{"common":{"safe":"ok","nested":{"__proto__":{"polluted":"yes"}}},"constructor":{"prototype":{"polluted":"yes"}}}') as Record<string, unknown>
+
+    expect(() => installLocaleMessages('evil', malicious)).toThrow(TypeError)
+    expect(i18n.global.availableLocales).not.toContain('evil')
+    expect(({} as { polluted?: string }).polluted).toBeUndefined()
+  })
+
+  it('resets installed locales so tests do not depend on execution order', () => {
+    installLocaleMessages('en-US', { common: { state: { unknown: 'Unknown' } } })
+    installLocaleMessages('zh-TW', { common: { state: { unknown: '未知' } } })
+    expect(i18n.global.availableLocales).toEqual(expect.arrayContaining(['en-US', 'zh-TW']))
+
+    resetLocaleRuntimeForTests()
+
+    expect(i18n.global.availableLocales).toEqual(['zh-CN'])
+    expect(i18n.global.locale.value).toBe('zh-CN')
+    expect(activateLocale('en-US')).toBe('zh-CN')
   })
 
   it('formats values through Intl using the active locale explicitly', () => {

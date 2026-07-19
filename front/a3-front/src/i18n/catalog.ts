@@ -56,6 +56,10 @@ export const BUILT_IN_MESSAGES = deepFreeze({
 
 const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
 
+export function isForbiddenCatalogKey(key: string): boolean {
+  return FORBIDDEN_KEYS.has(key)
+}
+
 export function flattenMessages(messages: unknown): Record<string, string> {
   const flattened: Record<string, string> = Object.create(null)
 
@@ -71,7 +75,7 @@ export function flattenMessages(messages: unknown): Record<string, string> {
       throw new TypeError(`Catalog leaf at ${path.join('.') || '<root>'} must be a string`)
     }
     for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-      if (FORBIDDEN_KEYS.has(key)) throw new TypeError(`Catalog contains forbidden key: ${key}`)
+      if (isForbiddenCatalogKey(key)) throw new TypeError(`Catalog contains forbidden key: ${key}`)
       visit(child, [...path, key])
     }
   }

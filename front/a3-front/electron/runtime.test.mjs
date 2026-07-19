@@ -7,6 +7,16 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const projectDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
+function containsForbiddenRendererCredentialIdentifier(source) {
+  if (source.includes('X-A3-Desktop-Token')) return true
+  const identifiers = source.match(/[A-Za-z_$][A-Za-z0-9_$]*/g) || []
+  return identifiers.some(identifier => (
+    identifier === 'desktopToken'
+    || identifier === 'apiBaseUrl'
+    || (identifier.includes('MODEL_API_KEY') && identifier !== 'MODEL_API_KEY_REQUIRED')
+  ))
+}
+
 async function loadRuntime() {
   return import('./runtime.mjs')
 }
@@ -270,7 +280,7 @@ test('renderer, preload, and desktop bundle do not receive token or backend addr
   ]
   for (const file of rendererFiles) {
     const source = fs.readFileSync(file, 'utf8')
-    assert.doesNotMatch(source, /desktopToken|apiBaseUrl|X-A3-Desktop-Token|\bMODEL_API_KEY\b/)
+    assert.equal(containsForbiddenRendererCredentialIdentifier(source), false)
   }
   const preload = fs.readFileSync(path.join(projectDir, 'electron', 'preload.cjs'), 'utf8')
   assert.doesNotMatch(preload, /safeStorage|model-settings\.enc/)
@@ -278,8 +288,17 @@ test('renderer, preload, and desktop bundle do not receive token or backend addr
   const emitted = fs.readdirSync(assetsDir).filter(name => name.endsWith('.js'))
   assert.ok(emitted.length > 0, 'desktop build must contain renderer JavaScript')
   for (const file of emitted) {
-    assert.doesNotMatch(fs.readFileSync(path.join(assetsDir, file), 'utf8'), /desktopToken|X-A3-Desktop-Token|\bMODEL_API_KEY\b/)
+    assert.equal(containsForbiddenRendererCredentialIdentifier(
+      fs.readFileSync(path.join(assetsDir, file), 'utf8'),
+    ), false)
   }
+})
+
+test('renderer credential scanning catches env-like API key identifiers without rejecting stable error codes', () => {
+  assert.equal(containsForbiddenRendererCredentialIdentifier('MODEL_API_KEY'), true)
+  assert.equal(containsForbiddenRendererCredentialIdentifier('VITE_MODEL_API_KEY'), true)
+  assert.equal(containsForbiddenRendererCredentialIdentifier('A3_MODEL_API_KEY_BACKUP'), true)
+  assert.equal(containsForbiddenRendererCredentialIdentifier('MODEL_API_KEY_REQUIRED'), false)
 })
 
 test('main process owns a recoverable tray and complete exit lifecycle', () => {
