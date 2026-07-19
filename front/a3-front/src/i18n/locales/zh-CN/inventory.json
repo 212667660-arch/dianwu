@@ -4644,8 +4644,10 @@
     },
     {
       "id": "d8e0bc3b781481b48a727087",
-      "mode": "classified",
-      "reason": "protocol_token"
+      "mode": "mapped",
+      "catalog_key": "views.agents.generateProfileProtocol",
+      "template": "生成 learner-profile/v1",
+      "expression_bindings": []
     },
     {
       "id": "d9abf49f9ab81d642097d026",

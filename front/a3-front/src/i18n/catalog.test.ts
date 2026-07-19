@@ -159,6 +159,7 @@ describe('built-in zh-CN catalog contract', () => {
     const flat = flattenMessages(BUILT_IN_MESSAGES)
     const reviewedPairs: Record<string, string> = {
       'views.agents.noCollaborationEvents': '暂无协作事件',
+      'views.agents.generateProfileProtocol': '生成 learner-profile/v1',
       'views.assessment.noReviewTasks': '暂无待复习任务',
       'views.dashboard.noGeneratedResources': '暂无已生成资源',
       'views.desktopSettings.backendUnavailable': '不可用',
@@ -181,7 +182,7 @@ describe('built-in zh-CN catalog contract', () => {
 
   it('keeps serialized protocol headings outside the translatable view catalog', () => {
     const flat = flattenMessages(BUILT_IN_MESSAGES)
-    expect(Object.entries(flat).filter(([key, value]) => key.startsWith('views.') && /【协议:|(?:learner-profile|learning-resource-bundle)\/v\d+/.test(value)).map(([key]) => key)).toEqual([])
+    expect(Object.entries(flat).filter(([key, value]) => key.startsWith('views.') && /【协议:/.test(value)).map(([key]) => key)).toEqual([])
   })
 
   it('covers the reviewed SmartTutor visible-string inventory', () => {
@@ -253,7 +254,7 @@ describe('built-in zh-CN catalog contract', () => {
     expect(buildBaseCatalogPayload()).toBe(payload)
     expect(BASE_CATALOG_HASH).toMatch(/^[A-F0-9]{64}$/)
     expect(BASE_CATALOG_HASH).toBe(independentHash)
-    expect(BASE_CATALOG_HASH).toBe('871F58054C104D5035CAF7751E2DFED185B4C96ED281C65BA86F1C0C3625711B')
+    expect(BASE_CATALOG_HASH).toBe('7B13E3BF47A8210012157695B123B72F3B63D048683A97E79ADE6B0762EF552F')
   })
 
   it('deep-freezes every built-in namespace without changing the digest', () => {

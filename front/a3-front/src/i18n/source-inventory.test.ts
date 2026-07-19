@@ -217,8 +217,8 @@ describe('renderer production source inventory', () => {
     const classifiedEntries = inventory.entries.filter((entry: InventoryEntry) => entry.mode === 'classified')
 
     expect(candidates).toHaveLength(752)
-    expect(mappedEntries).toHaveLength(743)
-    expect(classifiedEntries).toHaveLength(9)
+    expect(mappedEntries).toHaveLength(744)
+    expect(classifiedEntries).toHaveLength(8)
     expect(inventory.entries.map((entry: InventoryEntry) => entry.id)).toEqual(
       inventory.entries.map((entry: InventoryEntry) => entry.id).sort(),
     )
@@ -230,8 +230,8 @@ describe('renderer production source inventory', () => {
       ...Array.from({ length: 6 }, () => ({ source: 'src/api/types.ts', reason: 'canonical_enum' })),
       { source: 'src/components/knowledge/KnowledgeSourceList.vue', reason: 'non_user_data' },
       { source: 'src/views/ProfileBuilder.vue', reason: 'protocol_token' },
-      { source: 'src/views/AgentWorkspace.vue', reason: 'protocol_token' },
     ]))
+    expect(classifiedEntries.filter((entry: InventoryEntry) => entry.mode === 'classified' && entry.reason === 'protocol_token')).toHaveLength(1)
     expect(mappedEntries.filter((entry: InventoryEntry) => entry.mode === 'mapped'
       && (entry.template.includes('{value}') || entry.expression_bindings.some(binding => binding.placeholder === 'value'))
     ).map((entry: InventoryEntry) => entry.id)).toEqual([])

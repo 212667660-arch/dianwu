@@ -40,6 +40,7 @@
   "profileWaiting": "等待画像",
   "diagnosisConversation": "诊断对话",
   "collectGoalsAndWeaknesses": "收集学习目标与薄弱点",
+  "generateProfileProtocol": "生成 learner-profile/v1",
   "resource": "个性化资源",
   "generateNotesPracticeAndSources": "生成笔记、分层练习和来源",
   "answer": "答题反馈",
