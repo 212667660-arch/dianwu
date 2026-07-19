@@ -1,5 +1,6 @@
 import { sha256 } from '@noble/hashes/sha256'
 import { bytesToHex } from '@noble/hashes/utils'
+import canonicalize from 'canonicalize'
 
 import common from './locales/zh-CN/messages/common.json'
 import navigation from './locales/zh-CN/messages/navigation.json'
@@ -23,7 +24,15 @@ export const CATALOG_VERSION = 1 as const
 export const BUILT_IN_LOCALE = 'zh-CN' as const
 export const DOWNLOADABLE_LOCALES = ['en-US', 'zh-TW'] as const
 
-export const BUILT_IN_MESSAGES = Object.freeze({
+function deepFreeze<T>(value: T): T {
+  if (value && typeof value === 'object') {
+    for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child)
+    Object.freeze(value)
+  }
+  return value
+}
+
+export const BUILT_IN_MESSAGES = deepFreeze({
   common,
   navigation,
   views: {
@@ -74,16 +83,28 @@ export function flattenMessages(messages: unknown): Record<string, string> {
 export function placeholdersFor(message: string): string[] {
   const placeholders = new Set<string>()
   for (const match of message.matchAll(/\{([A-Za-z][A-Za-z0-9_]*)\}/g)) placeholders.add(match[1])
-  return [...placeholders].sort((left, right) => left.localeCompare(right))
+  return [...placeholders].sort(compareUnicodeCodePoints)
 }
 
-function canonicalCatalogPayload(): string {
+function compareUnicodeCodePoints(left: string, right: string): number {
+  const leftPoints = [...left]
+  const rightPoints = [...right]
+  for (let index = 0; index < Math.min(leftPoints.length, rightPoints.length); index += 1) {
+    const difference = leftPoints[index].codePointAt(0)! - rightPoints[index].codePointAt(0)!
+    if (difference !== 0) return difference
+  }
+  return leftPoints.length - rightPoints.length
+}
+
+export function buildBaseCatalogPayload(): string {
   const messages = Object.entries(flattenMessages(BUILT_IN_MESSAGES))
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => compareUnicodeCodePoints(left, right))
     .map(([key, message]) => [key, placeholdersFor(message)] as const)
-  return JSON.stringify({ catalog_version: CATALOG_VERSION, messages })
+  const payload = canonicalize({ catalog_version: CATALOG_VERSION, messages })
+  if (payload === undefined) throw new TypeError('Unable to canonicalize the built-in catalog payload')
+  return payload
 }
 
 export const BASE_CATALOG_HASH = bytesToHex(
-  sha256(new TextEncoder().encode(canonicalCatalogPayload())),
+  sha256(new TextEncoder().encode(buildBaseCatalogPayload())),
 ).toUpperCase()
