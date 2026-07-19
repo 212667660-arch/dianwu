@@ -58,7 +58,7 @@ describe('built-in zh-CN catalog contract', () => {
       'MODEL_PROFILE_DEFAULT_MODEL_INVALID', 'STREAM_INVALID', 'STREAM_CANCELLED',
       'KNOWLEDGE_FILE_SIGNATURE_MISMATCH', 'KNOWLEDGE_PARSE_FAILED', 'KNOWLEDGE_OCR_PACK_REQUIRED',
       'KNOWLEDGE_OCR_PAGE_FAILED', 'IMPORT_FAILED', 'EXPORT_FAILED', 'LANGUAGE_PACK_INVALID',
-      'LANGUAGE_PACK_INCOMPATIBLE', 'LANGUAGE_PACK_SIGNATURE_INVALID', 'UNKNOWN', 'UNKNOWN_WITH_REFERENCE',
+      'LANGUAGE_PACK_INCOMPATIBLE', 'LANGUAGE_PACK_SIGNATURE_INVALID',
     ])
     expect(Object.keys(BUILT_IN_MESSAGES.statuses.session)).toEqual(['NEW', 'DIAGNOSING', 'PROFILED', 'GENERATING', 'PRACTICING', 'REVIEWING', 'COMPLETED'])
     expect(Object.keys(BUILT_IN_MESSAGES.statuses.mastery)).toEqual(['UNASSESSED', 'WEAK', 'LEARNING', 'PROFICIENT', 'MASTERED'])
@@ -67,6 +67,16 @@ describe('built-in zh-CN catalog contract', () => {
     expect(Object.keys(BUILT_IN_MESSAGES.statuses.update)).toEqual(['CHECKING', 'AVAILABLE', 'CURRENT', 'OFFLINE_BUILD', 'ERROR'])
     expect(flat['errors.KNOWLEDGE_PARSE_FAILED']).toBe('解析器未能读取这份资料。')
     expect(flat['statuses.document.OCR_REQUIRED']).toBe('等待 OCR')
+  })
+
+  it('keeps generic error fallbacks semantic and excludes internal replacement literals', () => {
+    const flat = flattenMessages(BUILT_IN_MESSAGES)
+    expect(flat['errors.unknown']).toBe('请求失败，请稍后重试。')
+    expect(flat['errors.unknownWithReference']).toBe('请求失败，请稍后重试。参考编号：{referenceId}')
+    expect(flat['errors.UNKNOWN']).toBeUndefined()
+    expect(flat['errors.UNKNOWN_WITH_REFERENCE']).toBeUndefined()
+    expect(flat['components.knowledgeSourceList.normalizedPageReplacement']).toBeUndefined()
+    expect(Object.values(flat)).not.toContain('第$1页')
   })
 
   it('uses reviewed semantic keys for shared renderer component copy', () => {
@@ -161,7 +171,7 @@ describe('built-in zh-CN catalog contract', () => {
     expect(buildBaseCatalogPayload()).toBe(payload)
     expect(BASE_CATALOG_HASH).toMatch(/^[A-F0-9]{64}$/)
     expect(BASE_CATALOG_HASH).toBe(independentHash)
-    expect(BASE_CATALOG_HASH).toBe('6DF9DCFB02A3CCB77594AF1B3B528DBB06D9024FDDABB2626FDB0838B2D36C2F')
+    expect(BASE_CATALOG_HASH).toBe('41B286ECB33CB107452B2DCFC530A123ED26500B79BE4FEE881D9F94EBAE5ADC')
   })
 
   it('deep-freezes every built-in namespace without changing the digest', () => {

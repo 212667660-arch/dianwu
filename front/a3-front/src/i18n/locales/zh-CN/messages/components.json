@@ -297,8 +297,7 @@
     "emptyDeskDescription": "等你放下一点学习的痕迹。"
   },
   "knowledgeSourceList": {
-    "openReferenceLabel": "查看{referenceId}：{documentName} {locator}",
-    "normalizedPageReplacement": "第$1页"
+    "openReferenceLabel": "查看{referenceId}：{documentName} {locator}"
   },
   "modelSelectionPopover": {
     "selectionTitle": "选择本空间模型与思考强度",
