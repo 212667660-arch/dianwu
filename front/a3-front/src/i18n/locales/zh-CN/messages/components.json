@@ -1,0 +1,17 @@
+{
+  "collectionRail": { "title": "资料集合", "all": "全部资料", "uncategorized": "未分类", "new": "新建集合", "rename": "重命名集合", "delete": "删除集合", "documentCount": "{count} 份资料" },
+  "documentGrid": { "select": "选择 {name}", "favorite": "收藏 {name}", "unfavorite": "取消收藏 {name}", "view": "查看文档 {name}", "cancelImport": "取消 {name} 的导入", "retryOcr": "只重试失败页", "failedPages": "失败页：{pages}", "etaCalculating": "剩余时间计算中", "status": "{name} 导入进度" },
+  "documentInspector": { "empty": "选一份资料，看看它被整理成了什么模样。", "extent": "篇幅", "chunks": "可检索片段", "parser": "解析器", "waitingParser": "等待解析", "ocrTitle": "需要本地 OCR", "ocrDescription": "这是一份图片型 PDF。安装通过许可校验的本地 OCR 包后即可继续，原文件不会上传。", "summarize": "总结知识点", "workedExample": "生成例题与步骤", "localPreview": "预览（本地阅读器）", "rebuild": "重新解析", "delete": "删除资料" },
+  "knowledgeSources": { "title": "参考资料", "open": "查看{reference}：{name} {locator}", "hybrid": "混合召回", "keyword": "关键词" },
+  "textbookCatalog": { "title": "初高中数学教材", "junior": "初中", "senior": "高中", "officialReader": "出版社官方在线阅读", "empty": "当前筛选下暂无已核验教材来源。" },
+  "resourceBundle": { "title": "学习资源包", "generating": "正在生成资源", "retry": "重新生成", "retrying": "正在重新生成", "empty": "暂时没有生成的学习资源。" },
+  "resourceCard": { "note": "学习笔记", "mindMap": "知识导图", "workedExample": "例题讲解", "practice": "练习题", "copy": "复制内容", "copied": "已复制", "grounded": "基于教材", "supplemental": "模型补充知识", "manualReview": "建议人工核对" },
+  "resourceMenu": { "single": "生成单项", "bundle": "生成全部", "note": "生成笔记", "mindMap": "生成导图", "workedExample": "生成例题", "practice": "生成练习" },
+  "safeMermaid": { "invalid": "导图内容无法安全显示。", "tooLarge": "导图内容过大，已改为显示大纲。", "fallback": "导图渲染失败，已保留原始大纲。" },
+  "modelProfileEditor": { "name": "配置名称", "provider": "服务商", "baseUrl": "服务地址", "apiKey": "API 密钥", "defaultModel": "默认模型", "timeout": "请求超时", "enabled": "启用配置", "save": "保存配置" },
+  "modelProfileList": { "default": "默认", "disabled": "已停用", "models": "{count} 个模型", "setDefault": "设为默认", "duplicate": "复制配置" },
+  "modelSelection": { "select": "选择模型", "reasoning": "思考强度", "auto": "自动", "off": "关闭", "low": "轻量", "medium": "标准", "high": "深入", "xhigh": "极高", "lowNote": "更快回应", "mediumNote": "速度与深度平衡", "highNote": "适合复杂问题", "xhighNote": "只在模型明确支持时使用" },
+  "petSettings": { "title": "墨团设置", "visible": "显示墨团", "alwaysOnTop": "始终置顶", "sound": "音效", "voice": "语音", "mute": "静音", "idleThrottle": "空闲时降低动画频率", "resetPosition": "重置位置", "preview": "预览动作" },
+  "conversationRail": { "title": "学习会话", "new": "新学习会话", "switch": "切换会话", "openModels": "模型设置", "empty": "还没有历史会话。" },
+  "deskPanel": { "title": "书桌", "nextAction": "下一步建议", "mastery": "掌握度", "resources": "学习资源", "sources": "资料来源", "note": "随手记", "useSuggestion": "使用建议" }
+}

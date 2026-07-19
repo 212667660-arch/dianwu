@@ -1,0 +1,3 @@
+{
+  "title": "学习路径", "subtitle": "把目标拆成可以一步步完成的路线。", "current": "当前阶段", "completed": "已完成阶段", "upcoming": "后续阶段", "dueReview": "到期复习", "mastery": "掌握度 {percent}%", "restore": "恢复推荐路径", "empty": "完成学习诊断后会生成个性化路径。", "actions": { "diagnose": "完成诊断", "review": "到期复习", "practice": "渐进练习", "remediate": "基础纠错", "consolidate": "综合巩固", "challenge": "挑战迁移" }
+}

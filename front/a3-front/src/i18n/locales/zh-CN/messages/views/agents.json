@@ -1,0 +1,3 @@
+{
+  "title": "智能体协作", "subtitle": "查看每位智能体如何接力完成学习任务。", "diagnosis": "画像 Agent", "planning": "规划 Agent", "teaching": "教学 Agent", "assessment": "评估 Agent", "review": "复核 Agent", "active": "正在处理", "waiting": "等待接力", "completed": "已完成", "reasoning": "工作摘要", "handoff": "交接信息", "empty": "发起学习请求后，协作过程会显示在这里。"
+}

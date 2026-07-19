@@ -1,0 +1,3 @@
+{
+  "title": "桌面设置", "subtitle": "管理桌面应用、墨团和本地服务。", "language": { "title": "语言", "interface": "界面语言", "content": "学习内容语言", "builtIn": "内置", "downloadable": "可下载", "system": "跟随系统", "restartNotice": "部分桌面文字会在重新启动后更新。" }, "application": { "title": "应用信息", "version": "应用版本", "apiVersion": "桌面接口版本", "offlineBuild": "离线构建", "checkUpdates": "检查更新" }, "startup": { "title": "启动设置", "launchAtLogin": "开机时启动", "openMainWindow": "启动后显示主窗口" }, "diagnostics": { "title": "诊断与日志", "run": "运行诊断", "export": "导出诊断日志", "privacy": "导出内容会移除密钥、请求正文和本地绝对路径。" }
+}

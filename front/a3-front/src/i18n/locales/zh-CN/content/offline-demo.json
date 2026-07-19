@@ -1,0 +1,3 @@
+{
+  "title": "一次函数：从斜率理解变化", "license": "CC0-1.0", "intro": "这是一份固定的离线演示内容，用来展示没有模型服务时的完整学习流程。", "degradationMessage": "当前模型不可用，已切换到完整离线演示。", "lesson": "一次函数可以写成 y=kx+b。斜率 k 表示 x 每增加 1 时，y 改变多少；截距 b 表示图像与 y 轴的交点。", "example": "对于 y=2x+1，x 从 3 增加到 4，y 从 7 增加到 9，因此斜率是 2。", "question": "函数 y=-3x+4 的斜率是多少？", "answer": "斜率是 -3。", "feedback": "你已经抓住了斜率对应 x 系数这一关键关系。", "steps": { "diagnosis": "确认学习目标与一次函数基础。", "planning": "安排概念回顾、例题和一次练习。", "teaching": "用相邻自变量的变化解释斜率。", "assessment": "通过识别一次函数系数检查理解。", "review": "复核答案与解释的一致性。" }, "resources": { "noteTitle": "斜率学习笔记", "noteBody": "先找 x 的系数，再结合两个点的纵坐标变化验证斜率。", "practiceTitle": "斜率小练习", "practiceBody": "比较 y=2x+1 与 y=-3x+4 的增减方向，并说明依据。" }
+}

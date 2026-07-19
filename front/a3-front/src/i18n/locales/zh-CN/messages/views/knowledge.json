@@ -1,0 +1,3 @@
+{
+  "title": "知识库", "subtitle": "把讲义、笔记和教材整理成可检索的学习资料。", "allDocuments": "全部资料", "favorites": "收藏", "trash": "回收站", "collections": "资料集合", "newCollection": "新建集合", "importFiles": "导入文件", "searchPlaceholder": "搜索名称、标签或内容", "filters": "高级筛选", "sort": "排序", "batch": "批量操作", "restore": "恢复资料", "purge": "永久删除", "empty": "一页空白，也是一种邀请。把讲义、笔记或表格放进来吧。", "duplicate": "这份资料已经存在，已直接加入所选集合。", "localOnly": "资料原文件保留在本机。"
+}

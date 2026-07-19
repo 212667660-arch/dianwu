@@ -1,0 +1,3 @@
+{
+  "title": "学习总览", "welcome": "欢迎回来，今天也一起稳稳地向前走。", "currentGoal": "当前学习目标", "progress": "学习进度", "mastery": "掌握度", "recentActivity": "最近学习", "nextAction": "下一步建议", "startLearning": "开始学习", "continueLearning": "继续学习", "empty": "完成一次学习诊断后，这里会出现你的专属总览。", "offlineDemo": "体验离线演示", "agents": { "title": "协作智能体", "working": "正在协作", "idle": "等待任务" }
+}

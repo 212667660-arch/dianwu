@@ -1,0 +1,3 @@
+{
+  "title": "学习画像", "subtitle": "通过对话了解你的目标、基础与薄弱点。", "start": "开始学习诊断", "continue": "继续学习诊断", "restart": "重新诊断", "completed": "学习画像已完成", "goal": "学习目标", "foundation": "当前基础", "weaknesses": "薄弱点", "preferences": "学习偏好", "empty": "画像 Agent 还在等待与你认识。", "privacy": "画像仅用于当前学习空间。"
+}

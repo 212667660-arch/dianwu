@@ -1,0 +1,3 @@
+{
+  "name": "墨团", "description": "陪你学习的桌面伙伴", "speech": { "welcome": "今天也一起学一点吧。", "encourage": "慢慢来，你已经在向前走了。", "focus": "我会安静陪着你。", "break": "休息一下，回来再继续。", "review": "有一项复习正等着你。", "complete": "这一小步完成啦。", "backendOffline": "本地学习服务暂时离线。" }, "native": { "show": "显示墨团", "hide": "隐藏墨团", "rest": "休息", "study": "学习", "wait": "等待", "review": "复核", "encourage": "鼓励", "dragHint": "拖动墨团可以调整位置", "resizeHint": "拖动边角可以等比例调整大小" }
+}

@@ -1,0 +1,6 @@
+{
+  "actions": { "confirm": "确认", "cancel": "取消", "save": "保存", "delete": "删除", "edit": "编辑", "close": "关闭", "retry": "重试", "refresh": "刷新", "continue": "继续", "back": "返回", "next": "下一步", "finish": "完成", "create": "新建", "add": "添加", "remove": "移除", "selectAll": "全选", "clear": "清空", "search": "搜索", "send": "发送", "export": "导出", "import": "导入", "open": "打开", "preview": "预览" },
+  "form": { "required": "此项为必填项", "optional": "可选", "invalid": "输入内容无效", "characters": "{count} 个字符", "sessionId": "会话 ID" },
+  "state": { "loading": "正在加载…", "saving": "正在保存…", "empty": "暂无内容", "error": "操作未完成", "success": "操作成功", "offline": "当前处于离线状态", "unknown": "未知" },
+  "units": { "documents": "{count} 份资料", "pages": "{count} 页", "seconds": "约 {count} 秒", "items": "{count} 项" }
+}

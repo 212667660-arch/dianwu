@@ -1,0 +1,8 @@
+{
+  "brand": { "name": "智学协作台", "tagline": "给学习留一点温度" },
+  "dashboard": "学习总览", "profile": "学习画像", "agents": "智能体协作", "learningPath": "学习路径", "tutor": "学习助手", "assessment": "练习评估", "knowledge": "知识库", "modelSettings": "模型设置", "desktopSettings": "桌面设置", "onboarding": "首次启动",
+  "session": { "currentSpace": "当前空间", "newSpace": "新的学习空间", "newSession": "新学习会话", "switchSession": "切换会话", "syncSession": "切换并同步会话", "notStarted": "尚未开始" },
+  "desk": { "open": "打开书桌", "title": "书桌" },
+  "service": { "modelReady": "模型就绪", "backendOnline": "后端在线", "offline": "服务离线" },
+  "mobile": { "openMenu": "打开导航", "title": "学习空间" }
+}
