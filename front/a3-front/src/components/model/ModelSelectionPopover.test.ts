@@ -50,11 +50,12 @@ describe('ModelSelectionPopover', () => {
   })
 
   it('renders injected English model labels without changing model labels', async () => {
-    installLocaleMessages('en-US', { components: { modelSelection: { reasoning: 'Reasoning effort', reasoningTitle: 'How this space thinks' } } })
+    installLocaleMessages('en-US', { components: { modelSelection: { spaceKicker: 'WORKSPACE MODELS', reasoning: 'Reasoning effort', reasoningTitle: 'How this space thinks' } } })
     activateLocale('en-US')
     const wrapper = mount(ModelSelectionPopover, { props: { profiles, policy, preference, busy: false } })
     await wrapper.get('[data-testid="model-selection-trigger"]').trigger('click')
 
+    expect(wrapper.text()).toContain('WORKSPACE MODELS')
     expect(wrapper.text()).toContain('How this space thinks')
     expect(wrapper.text()).toContain('Reasoning effort')
     expect(wrapper.text()).toContain('Model A')

@@ -1,7 +1,7 @@
 <template>
   <section class="textbook-catalog" :aria-label="t('components.textbookCatalog.textbookDirectoryMathematics')">
     <div class="catalog-heading">
-      <div><span>OFFICIAL TEXTBOOKS</span><strong>{{ t('components.textbookCatalog.title') }}</strong></div>
+      <div><span>{{ t('components.textbookCatalog.officialTextbooks') }}</span><strong>{{ t('components.textbookCatalog.title') }}</strong></div>
       <div class="stage-tabs">
         <button type="button" :aria-label="t('components.textbookCatalog.textbookSelectJuniorHigh')" :class="{ active: stage === JUNIOR_STAGE }" @click="stage = JUNIOR_STAGE">{{ t('components.textbookCatalog.junior') }}</button>
         <button type="button" :aria-label="t('components.textbookCatalog.textbookSelectSeniorHigh')" :class="{ active: stage === SENIOR_STAGE }" @click="stage = SENIOR_STAGE">{{ t('components.textbookCatalog.senior') }}</button>

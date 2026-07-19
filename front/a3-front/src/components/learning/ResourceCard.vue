@@ -20,7 +20,7 @@
           <p v-if="artifact.quality_issues.length">{{ t('components.resourceCard.questionLabel') }} {{ artifact.quality_issues.join(', ') }}</p>
         </template>
         <button v-if="artifact.retryable" class="retry-btn" :disabled="retrying" @click.stop="$emit('retry', artifact.artifact_id)">
-          {{ t(retrying ? 'components.resourceCard.retrying' : 'components.resourceBundle.retry') }}
+          {{ t(retrying ? 'components.resourceCard.retrying' : 'components.resourceCard.retry') }}
         </button>
       </div>
       <div v-else class="card-content">

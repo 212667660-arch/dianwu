@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { expect, it } from 'vitest'
 import type { TextbookCatalogItem } from '@/api'
+import { activateLocale, installLocaleMessages } from '@/i18n'
 import TextbookCatalog from './TextbookCatalog.vue'
 
 const items: TextbookCatalogItem[] = [
@@ -29,4 +30,12 @@ it('filters math catalogs by stage and labels official-reader access', async () 
   expect(wrapper.text()).not.toContain('下载到知识库')
   await wrapper.get('[aria-label="在线阅读 人教版高中数学教材电子版目录"]').trigger('click')
   expect(wrapper.emitted('open')?.[0]).toEqual([items[1]])
+})
+
+it('renders the injected textbook catalog kicker', () => {
+  installLocaleMessages('en-US', { components: { textbookCatalog: { officialTextbooks: 'Verified textbook catalog' } } })
+  activateLocale('en-US')
+  const wrapper = mount(TextbookCatalog, { props: { items } })
+
+  expect(wrapper.text()).toContain('Verified textbook catalog')
 })

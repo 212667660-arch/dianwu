@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import ResourceBundle from "@/components/learning/ResourceBundle.vue";
+import ResourceCard from "@/components/learning/ResourceCard.vue";
 import SafeMermaid from "@/components/learning/SafeMermaid.vue";
 import type { ResourceBundle as ResourceBundleType } from "@/api/types";
+import { activateLocale, installLocaleMessages } from "@/i18n";
 
 const mockBundle: ResourceBundleType = {
   bundle_id: "b1",
@@ -73,6 +75,28 @@ describe("ResourceBundle", () => {
     await failedCard.find(".card-header").trigger("click");
     const retryBtn = wrapper.find(".retry-btn");
     expect(retryBtn.exists()).toBe(true);
+  });
+
+  it("owns retry copy in the resourceCard namespace", async () => {
+    installLocaleMessages("en-US", {
+      components: {
+        resourceCard: { retry: "Retry this resource" },
+        resourceBundle: { retry: "Wrong bundle retry" },
+      },
+    });
+    activateLocale("en-US");
+    const wrapper = mount(ResourceCard, {
+      props: {
+        artifact: {
+          ...mockBundle.artifacts[0], status: "FAILED", body: "", quality_score: 0,
+          quality_issues: [], error_code: "SPECIALIST_FAILED", retryable: true,
+        },
+      },
+    });
+    await wrapper.get(".card-header").trigger("click");
+
+    expect(wrapper.get(".retry-btn").text()).toBe("Retry this resource");
+    expect(wrapper.text()).not.toContain("Wrong bundle retry");
   });
 
   it("uses SafeMermaid only for successful mind maps and hides failed copy", async () => {

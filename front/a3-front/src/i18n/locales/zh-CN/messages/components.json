@@ -79,6 +79,7 @@
     "keyword": "关键词"
   },
   "textbookCatalog": {
+    "officialTextbooks": "OFFICIAL TEXTBOOKS",
     "title": "初高中数学教材",
     "junior": "初中",
     "senior": "高中",
@@ -99,6 +100,7 @@
     "quality": "综合质量:"
   },
   "resourceCard": {
+    "retry": "重试",
     "note": "学习笔记",
     "mindMap": "知识导图",
     "workedExample": "例题讲解",
@@ -239,6 +241,7 @@
     "modelProfileDelete": "删除模型配置"
   },
   "modelSelection": {
+    "spaceKicker": "LEARNING SPACE",
     "select": "选择模型",
     "reasoning": "思考强度",
     "auto": "自动",

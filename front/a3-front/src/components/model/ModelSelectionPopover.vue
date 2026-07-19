@@ -14,7 +14,7 @@
 
     <div v-if="open" class="selection-popover" role="dialog" :aria-label="t('components.modelSelection.selectionTitle')">
       <header>
-        <div><span>LEARNING SPACE</span><strong>{{ t('components.modelSelection.reasoningTitle') }}</strong></div>
+        <div><span>{{ t('components.modelSelection.spaceKicker') }}</span><strong>{{ t('components.modelSelection.reasoningTitle') }}</strong></div>
         <button type="button" :aria-label="t('components.modelSelection.modelCloseSelect')" @click="open = false">×</button>
       </header>
 
