@@ -10,11 +10,12 @@ import {
   formatPercent,
   formatRelativeTime,
 } from './formatters'
-import { activateLocale, i18n, installLocaleMessages, resetLocaleRuntimeForTests } from './index'
+import { activateLocale, i18n, installLocaleMessages, initializeBundledLocales, resetLocaleRuntimeForTests } from './index'
 
 const fixedUtcDate = new Date('2026-07-19T08:15:30.000Z')
 
 afterEach(() => {
+  localStorage.clear()
   resetLocaleRuntimeForTests()
 })
 
@@ -49,16 +50,34 @@ describe('renderer localization runtime', () => {
     expect(({} as { polluted?: string }).polluted).toBeUndefined()
   })
 
-  it('resets installed locales so tests do not depend on execution order', () => {
+  it('registers bundled English and Traditional Chinese with Chinese fallback', () => {
+    initializeBundledLocales()
+    expect(i18n.global.availableLocales).toEqual(expect.arrayContaining(['zh-CN', 'en-US', 'zh-TW']))
+    expect(activateLocale('en-US')).toBe('en-US')
+    expect(i18n.global.t('navigation.dashboard')).toBe('Overview')
+    expect(i18n.global.t('views.dashboard.welcome')).toBe(BUILT_IN_MESSAGES.views.dashboard.welcome)
+  })
+
+  it('persists allowlisted locale activation and rejects an invalid stored locale', () => {
+    initializeBundledLocales()
+    activateLocale('zh-TW', true)
+    expect(localStorage.getItem('a3.ui-locale')).toBe('zh-TW')
+
+    localStorage.setItem('a3.ui-locale', 'fr-FR')
+    expect(initializeBundledLocales()).toBe('zh-CN')
+    expect(localStorage.getItem('a3.ui-locale')).toBe('zh-CN')
+  })
+
+  it('resets bundled locales so tests do not depend on execution order', () => {
     installLocaleMessages('en-US', { common: { state: { unknown: 'Unknown' } } })
     installLocaleMessages('zh-TW', { common: { state: { unknown: '未知' } } })
     expect(i18n.global.availableLocales).toEqual(expect.arrayContaining(['en-US', 'zh-TW']))
 
     resetLocaleRuntimeForTests()
 
-    expect(i18n.global.availableLocales).toEqual(['zh-CN'])
+    expect(i18n.global.availableLocales).toEqual(expect.arrayContaining(['zh-CN', 'en-US', 'zh-TW']))
     expect(i18n.global.locale.value).toBe('zh-CN')
-    expect(activateLocale('en-US')).toBe('zh-CN')
+    expect(activateLocale('en-US')).toBe('en-US')
   })
 
   it('formats values through Intl using the active locale explicitly', () => {

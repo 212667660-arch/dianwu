@@ -61,7 +61,7 @@ describe('localized application shell coverage', () => {
       .sort()
     const preciseAllowlist = new Set(['api/types.ts', 'utils/protocol.ts'])
 
-    expect(productionSurface).toHaveLength(49)
+    expect(productionSurface).toHaveLength(50)
     expect(productionSurface.filter(file => file.startsWith('views/'))).toHaveLength(10)
     expect(productionSurface).toContain('components/language/LanguageSettingsCard.vue')
     productionSurface

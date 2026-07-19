@@ -1,6 +1,7 @@
 import { createI18n } from 'vue-i18n'
 
 import { BUILT_IN_LOCALE, BUILT_IN_MESSAGES, isForbiddenCatalogKey } from './catalog'
+import { BUNDLED_LOCALE_OVERLAYS, BUNDLED_LOCALE_STORAGE_KEY, isBundledLocale } from './bundled-locales'
 
 type LocaleMessage = string | LocaleMessages
 interface LocaleMessages {
@@ -39,14 +40,23 @@ export function resetLocaleRuntimeForTests(): void {
     if (locale !== BUILT_IN_LOCALE) Reflect.deleteProperty(messages, locale)
   }
   i18n.global.setLocaleMessage(BUILT_IN_LOCALE, BUILT_IN_MESSAGES as unknown as LocaleMessages)
-  activateLocale(BUILT_IN_LOCALE)
+  initializeBundledLocales(BUILT_IN_LOCALE)
 }
 
-export function activateLocale(locale: string): string {
+export function activateLocale(locale: string, persist = false): string {
   const activeLocale = i18n.global.availableLocales.includes(locale) ? locale : BUILT_IN_LOCALE
   i18n.global.locale.value = activeLocale
   if (typeof document !== 'undefined') document.documentElement.lang = activeLocale
+  if (persist && typeof localStorage !== 'undefined') localStorage.setItem(BUNDLED_LOCALE_STORAGE_KEY, activeLocale)
   return activeLocale
+}
+
+export function initializeBundledLocales(preferredLocale?: string): string {
+  installLocaleMessages('en-US', BUNDLED_LOCALE_OVERLAYS['en-US'])
+  installLocaleMessages('zh-TW', BUNDLED_LOCALE_OVERLAYS['zh-TW'])
+  const stored = preferredLocale ?? (typeof localStorage !== 'undefined' ? localStorage.getItem(BUNDLED_LOCALE_STORAGE_KEY) : null)
+  const selected = isBundledLocale(stored) ? stored : BUILT_IN_LOCALE
+  return activateLocale(selected, true)
 }
 
 function sanitizeMessages(value: Record<string, unknown>): LocaleMessages {
@@ -84,4 +94,4 @@ function isMessageObject(value: unknown): value is LocaleMessages {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
-activateLocale(BUILT_IN_LOCALE)
+initializeBundledLocales()

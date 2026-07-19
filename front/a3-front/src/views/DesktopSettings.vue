@@ -21,6 +21,7 @@
         :busy-locale="null"
         :progress="null"
         :desktop-available="desktopLanguageAvailable"
+        @activate="activateBundledLanguage"
       />
       <PetSettingsCard />
     </div>
@@ -33,6 +34,8 @@ import { computed, onMounted, ref } from 'vue'
 import { backendApi, type DesktopDiagnosticReport, type DesktopInfo } from '@/api'
 import LanguageSettingsCard from '@/components/language/LanguageSettingsCard.vue'
 import PetSettingsCard from '@/components/pet/PetSettingsCard.vue'
+import { BUNDLED_LOCALE_SUMMARIES } from '@/i18n/bundled-locales'
+import { activateLocale } from '@/i18n'
 
 const { t, locale } = useI18n()
 
@@ -42,11 +45,7 @@ type DesktopLanguageCapability = {
   languageImport?: () => unknown
 }
 
-const builtInLanguages = computed(() => [{
-  locale: 'zh-CN',
-  nativeName: t('views.desktopSettings.language.builtInName'),
-  status: 'built_in' as const,
-}])
+const builtInLanguages = computed(() => BUNDLED_LOCALE_SUMMARIES)
 const desktopLanguageAvailable = computed(() => {
   const bridge = window.a3Desktop as (typeof window.a3Desktop & DesktopLanguageCapability) | undefined
   return typeof bridge?.languageList === 'function'
@@ -64,6 +63,7 @@ async function run(action: () => Promise<void>) {
   try { await action() } catch (reason) { error.value = reason instanceof Error ? reason.message : t('views.desktopSettings.desktopFailure') }
 }
 function addMessage(value: string) { messages.value = [...messages.value.filter(item => item !== value), value].slice(-4) }
+function activateBundledLanguage(value: string) { activateLocale(value, true) }
 function runDiagnostics() { return run(async () => { diagnostics.value = await backendApi.desktopDiagnostics(); addMessage(t('views.desktopSettings.diagnosisGenerateTitle')) }) }
 function exportDiagnostics() { return run(async () => { const result = await backendApi.exportDesktopDiagnostics(); addMessage(result.exported ? t('views.desktopSettings.export', { fileName: result.file_name }) : t('views.desktopSettings.exportCancel')) }) }
 function checkUpdates() { return run(async () => { const result = await backendApi.checkDesktopUpdates(); addMessage(result.status === 'offline_build' ? t('views.desktopSettings.offlineTitle', { message: result.message }) : result.message) }) }

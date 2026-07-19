@@ -1,0 +1,18 @@
+{
+  "nativeName": "繁體中文（台灣）",
+  "messages": {
+    "navigation": {
+      "brand": { "name": "智學協作台", "tagline": "讓學習多一點溫度" },
+      "dashboard": "學習總覽", "profile": "學習畫像", "agents": "智慧體協作", "learningPath": "學習路徑",
+      "tutor": "學習助手", "assessment": "練習評估", "knowledge": "知識庫", "modelSettings": "模型設定", "desktopSettings": "桌面設定"
+    },
+    "views": { "desktopSettings": {
+      "desktopPetSettings": "桌面設定", "settingsOverview": "管理桌面應用程式、本機服務與學習夥伴。",
+      "versionUpdate": "版本與更新", "backendProtocol": "後端協定", "backendLocal": "本機後端", "ready": "已就緒", "backendUnavailable": "無法使用",
+      "offline": "離線 OCR", "available": "可用 {version}", "diagnosis": "診斷", "diagnosticPrivacyNotice": "報告會移除金鑰、權杖、學習內容與本機絕對路徑。",
+      "diagnosisGenerate": "執行診斷", "exportLog": "匯出日誌", "noRuntimeLogs": "尚無執行日誌。", "desktopFailure": "桌面操作失敗。",
+      "language": { "title": "語言", "builtInName": "簡體中文", "active": "目前使用", "builtIn": "內建", "installed": "已安裝", "available": "可用", "activate": "使用此語言", "contentFollowsUi": "介面與新產生的 AI 學習內容會使用此語言；既有歷史記錄與使用者檔案不會被翻譯。" },
+      "application": { "version": "應用程式版本", "checkUpdates": "檢查更新" }
+    } }
+  }
+}

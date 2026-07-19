@@ -1,0 +1,20 @@
+{
+  "nativeName": "English (United States)",
+  "messages": {
+    "navigation": {
+      "brand": { "name": "A3 Learning Studio", "tagline": "Make learning feel human" },
+      "dashboard": "Overview", "profile": "Learning profile", "agents": "Agent workspace",
+      "learningPath": "Learning path", "tutor": "Study assistant", "assessment": "Assessment",
+      "knowledge": "Knowledge library", "modelSettings": "Model settings", "desktopSettings": "Desktop settings"
+    },
+    "views": { "desktopSettings": {
+      "desktopPetSettings": "Desktop settings", "settingsOverview": "Manage the desktop app, local service, and study companion.",
+      "versionUpdate": "Version and updates", "backendProtocol": "Backend protocol", "backendLocal": "Local backend",
+      "ready": "Ready", "backendUnavailable": "Unavailable", "offline": "Offline OCR", "available": "Available {version}",
+      "diagnosis": "Diagnostics", "diagnosticPrivacyNotice": "Reports remove credentials, tokens, learning content, and absolute local paths.",
+      "diagnosisGenerate": "Run diagnostics", "exportLog": "Export logs", "noRuntimeLogs": "No runtime logs yet.", "desktopFailure": "Desktop operation failed.",
+      "language": { "title": "Language", "builtInName": "Simplified Chinese", "active": "Active", "builtIn": "Built in", "installed": "Installed", "available": "Available", "activate": "Use this language", "contentFollowsUi": "The interface and newly generated AI learning content use this language. Existing history and user files are not translated." },
+      "application": { "version": "App version", "checkUpdates": "Check for updates" }
+    } }
+  }
+}
