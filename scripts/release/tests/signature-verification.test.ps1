@@ -69,10 +69,13 @@ function Get-TestStreamSha256 {
 }
 
 $expectedExports = @(
+    'Assert-A3ArtifactSet'
     'Assert-A3SignatureRecord'
     'Assert-A3SignatureRecords'
     'Find-A3SignTool'
+    'Get-A3RequiredArtifacts'
     'Get-A3SignatureRecord'
+    'New-A3ReleaseManifest'
     'New-A3SignatureError'
 )
 $module = Get-Module | Where-Object { $_.Path -eq (Resolve-Path -LiteralPath $modulePath).Path }

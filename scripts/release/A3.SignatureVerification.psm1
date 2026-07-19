@@ -1,4 +1,4 @@
-Set-StrictMode -Version Latest
+﻿Set-StrictMode -Version Latest
 
 if ($null -eq ('A3.SignatureNativeMethods' -as [type])) {
     Add-Type -TypeDefinition @'
@@ -911,4 +911,285 @@ function Get-A3SignatureRecord {
         -NativeProcessProvider $nativeProcessProvider
 }
 
-Export-ModuleMember -Function Assert-A3SignatureRecord, Assert-A3SignatureRecords, Find-A3SignTool, Get-A3SignatureRecord, New-A3SignatureError
+function Get-A3RequiredArtifacts {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [string]$ReleaseDir,
+        [string]$InstallDir,
+        [Parameter(Mandatory)] [string]$Version
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Version) -or
+        $Version -in @('.', '..') -or
+        $Version.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0 -or
+        $Version.Contains('/') -or $Version.Contains('\')) {
+        throw (New-A3SignatureError 'A3_PATH_INVALID' 'The release version is not valid for an artifact file name.')
+    }
+
+    $resolvedReleaseDir = Resolve-A3FileSystemPath -Path $ReleaseDir
+    if (-not (Test-Path -LiteralPath $resolvedReleaseDir -PathType Container)) {
+        throw (New-A3SignatureError 'A3_PATH_INVALID' 'The release directory is not an existing filesystem directory.')
+    }
+
+    $artifacts = [Collections.Generic.List[pscustomobject]]::new()
+    $artifacts.Add([pscustomobject][ordered]@{
+        Scope = 'package'
+        RelativePath = 'win-unpacked/智学协作台.exe'
+        Path = [IO.Path]::GetFullPath((Join-Path $resolvedReleaseDir 'win-unpacked\智学协作台.exe'))
+    })
+    $artifacts.Add([pscustomobject][ordered]@{
+        Scope = 'package'
+        RelativePath = 'win-unpacked/resources/backend/api.exe'
+        Path = [IO.Path]::GetFullPath((Join-Path $resolvedReleaseDir 'win-unpacked\resources\backend\api.exe'))
+    })
+    $artifacts.Add([pscustomobject][ordered]@{
+        Scope = 'package'
+        RelativePath = 'win-unpacked/resources/elevate.exe'
+        Path = [IO.Path]::GetFullPath((Join-Path $resolvedReleaseDir 'win-unpacked\resources\elevate.exe'))
+    })
+    $artifacts.Add([pscustomobject][ordered]@{
+        Scope = 'release'
+        RelativePath = "智学协作台 Setup $Version.exe"
+        Path = [IO.Path]::GetFullPath((Join-Path $resolvedReleaseDir "智学协作台 Setup $Version.exe"))
+    })
+
+    if ($PSBoundParameters.ContainsKey('InstallDir')) {
+        if ([string]::IsNullOrWhiteSpace($InstallDir)) {
+            throw (New-A3SignatureError 'A3_PATH_INVALID' 'The install directory is not a valid filesystem directory.')
+        }
+        $resolvedInstallDir = Resolve-A3FileSystemPath -Path $InstallDir
+        if (-not (Test-Path -LiteralPath $resolvedInstallDir -PathType Container)) {
+            throw (New-A3SignatureError 'A3_PATH_INVALID' 'The install directory is not an existing filesystem directory.')
+        }
+        $artifacts.Add([pscustomobject][ordered]@{
+            Scope = 'installed'
+            RelativePath = '智学协作台.exe'
+            Path = [IO.Path]::GetFullPath((Join-Path $resolvedInstallDir '智学协作台.exe'))
+        })
+        $artifacts.Add([pscustomobject][ordered]@{
+            Scope = 'installed'
+            RelativePath = 'resources/backend/api.exe'
+            Path = [IO.Path]::GetFullPath((Join-Path $resolvedInstallDir 'resources\backend\api.exe'))
+        })
+        $artifacts.Add([pscustomobject][ordered]@{
+            Scope = 'installed'
+            RelativePath = 'resources/elevate.exe'
+            Path = [IO.Path]::GetFullPath((Join-Path $resolvedInstallDir 'resources\elevate.exe'))
+        })
+        $artifacts.Add([pscustomobject][ordered]@{
+            Scope = 'installed'
+            RelativePath = 'Uninstall 智学协作台.exe'
+            Path = [IO.Path]::GetFullPath((Join-Path $resolvedInstallDir 'Uninstall 智学协作台.exe'))
+        })
+    }
+
+    return $artifacts.ToArray()
+}
+
+function Assert-A3ArtifactSet {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [object[]]$Artifacts,
+        [Parameter(Mandatory)] [string]$ExpectedPublisher,
+        [scriptblock]$RecordProvider
+    )
+
+    if ($null -eq $RecordProvider) {
+        $RecordProvider = {
+            param([string]$LiteralPath)
+            return Get-A3SignatureRecord -LiteralPath $LiteralPath
+        }
+    }
+
+    $validatedArtifacts = [Collections.Generic.List[pscustomobject]]::new()
+    $missingCount = 0
+    foreach ($artifact in $Artifacts) {
+        if ($artifact -isnot [pscustomobject] -or
+            $null -eq $artifact.PSObject.Properties['Scope'] -or
+            $artifact.Scope -isnot [string] -or
+            [string]::IsNullOrWhiteSpace($artifact.Scope) -or
+            $null -eq $artifact.PSObject.Properties['RelativePath'] -or
+            $artifact.RelativePath -isnot [string] -or
+            [string]::IsNullOrWhiteSpace($artifact.RelativePath) -or
+            $null -eq $artifact.PSObject.Properties['Path'] -or
+            $artifact.Path -isnot [string] -or
+            [string]::IsNullOrWhiteSpace($artifact.Path)) {
+            throw (New-A3SignatureError 'A3_SIGNATURE_RECORD_INVALID' 'The required artifact descriptor is invalid.')
+        }
+
+        try {
+            $resolvedPath = Resolve-A3FileSystemPath -Path $artifact.Path
+        }
+        catch {
+            $missingCount++
+            continue
+        }
+        if (-not (Test-Path -LiteralPath $resolvedPath -PathType Leaf)) {
+            $missingCount++
+            continue
+        }
+        $validatedArtifacts.Add([pscustomobject][ordered]@{
+            Scope = $artifact.Scope
+            RelativePath = $artifact.RelativePath
+            Path = $resolvedPath
+        })
+    }
+
+    if ($missingCount -gt 0 -or $validatedArtifacts.Count -ne $Artifacts.Count) {
+        throw (New-A3SignatureError 'A3_ARTIFACT_MISSING' 'One or more required signed artifacts are missing.')
+    }
+
+    $records = [Collections.Generic.List[pscustomobject]]::new()
+    foreach ($artifact in $validatedArtifacts) {
+        $record = & $RecordProvider $artifact.Path
+        if ($record -isnot [pscustomobject]) {
+            throw (New-A3SignatureError 'A3_SIGNATURE_RECORD_INVALID' 'The signature record provider returned an invalid record.')
+        }
+        try {
+            $expectedSha256 = (Get-FileHash -LiteralPath $artifact.Path -Algorithm SHA256 -ErrorAction Stop).Hash
+        }
+        catch {
+            throw (New-A3SignatureError 'A3_ARTIFACT_MISSING' 'A required signed artifact became unavailable during verification.')
+        }
+        Assert-A3SignatureRecord -Record $record -ExpectedPublisher $ExpectedPublisher -ExpectedSha256 $expectedSha256
+        $records.Add($record)
+    }
+
+    return $records.ToArray()
+}
+
+function New-A3ReleaseManifest {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [string]$ManifestPath,
+        [Parameter(Mandatory)] [string]$SourceCommit,
+        [Parameter(Mandatory)] [string]$AppVersion,
+        [Parameter(Mandatory)] [object[]]$Artifacts,
+        [Parameter(Mandatory)] [object[]]$Records,
+        [string]$VerifiedAtUtc,
+        [scriptblock]$WriteProvider
+    )
+
+    if ([string]::IsNullOrWhiteSpace($SourceCommit) -or [string]::IsNullOrWhiteSpace($AppVersion)) {
+        throw (New-A3SignatureError 'A3_SIGNATURE_RECORD_INVALID' 'The release manifest metadata is invalid.')
+    }
+    if ($Artifacts.Count -ne $Records.Count) {
+        throw (New-A3SignatureError 'A3_HASH_MAP_MISMATCH' 'Release artifacts and signature records must match one-to-one.')
+    }
+
+    if ($PSBoundParameters.ContainsKey('VerifiedAtUtc')) {
+        $verifiedAt = ConvertTo-A3CanonicalUtcText -Value (ConvertTo-A3UtcDate -Value $VerifiedAtUtc)
+    }
+    else {
+        $verifiedAt = ConvertTo-A3CanonicalUtcText -Value ([DateTimeOffset]::UtcNow)
+    }
+
+    $manifestEntries = [Collections.Generic.List[pscustomobject]]::new()
+    $seenRecordPaths = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($artifact in $Artifacts) {
+        if ($artifact -isnot [pscustomobject] -or
+            $artifact.Scope -isnot [string] -or [string]::IsNullOrWhiteSpace($artifact.Scope) -or
+            $artifact.RelativePath -isnot [string] -or [string]::IsNullOrWhiteSpace($artifact.RelativePath) -or
+            $artifact.Path -isnot [string] -or [string]::IsNullOrWhiteSpace($artifact.Path)) {
+            throw (New-A3SignatureError 'A3_SIGNATURE_RECORD_INVALID' 'The release artifact descriptor is invalid.')
+        }
+        $artifactPath = Resolve-A3FileSystemPath -Path $artifact.Path
+        if (-not (Test-Path -LiteralPath $artifactPath -PathType Leaf)) {
+            throw (New-A3SignatureError 'A3_ARTIFACT_MISSING' 'A required release artifact is missing.')
+        }
+
+        $canonicalArtifactPath = ConvertTo-A3CanonicalWindowsPath -Path $artifactPath
+        $matchingRecords = @($Records | Where-Object {
+            $_ -is [pscustomobject] -and
+            $null -ne $_.PSObject.Properties['Path'] -and
+            $_.Path -is [string] -and
+            (ConvertTo-A3CanonicalWindowsPath -Path $_.Path) -ceq $canonicalArtifactPath
+        })
+        if ($matchingRecords.Count -ne 1 -or -not $seenRecordPaths.Add($canonicalArtifactPath)) {
+            throw (New-A3SignatureError 'A3_HASH_MAP_MISMATCH' 'Release artifacts and signature records must match one-to-one.')
+        }
+        $record = $matchingRecords[0]
+        $rawSha256 = (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256 -ErrorAction Stop).Hash
+        $recordSha256 = Get-A3RecordString -Record $record -Name 'Sha256'
+        if (-not (Test-A3Sha256Text -Value $recordSha256) -or $recordSha256.ToUpperInvariant() -cne $rawSha256) {
+            throw (New-A3SignatureError 'A3_HASH_MISMATCH' 'A release artifact changed after signature verification.')
+        }
+        $subject = Get-A3RecordString -Record $record -Name 'Subject'
+        $timestamp = ConvertTo-A3CanonicalUtcText -Value (ConvertTo-A3UtcDate -Value (Get-A3RecordString -Record $record -Name 'TimestampUtc'))
+        $size = ([IO.FileInfo]::new($artifactPath)).Length
+        $manifestEntries.Add([pscustomobject][ordered]@{
+            scope = $artifact.Scope
+            relative_path = $artifact.RelativePath.Replace('\', '/')
+            size = $size
+            sha256 = $rawSha256
+            subject = $subject
+            timestamp_utc = $timestamp
+            verified_at_utc = $verifiedAt
+        })
+    }
+
+    if ($seenRecordPaths.Count -ne $Records.Count) {
+        throw (New-A3SignatureError 'A3_HASH_MAP_MISMATCH' 'Release artifacts and signature records must match one-to-one.')
+    }
+
+    $manifest = [pscustomobject][ordered]@{
+        schema = 'a3-windows-release-manifest/v1'
+        source_commit = $SourceCommit
+        app_version = $AppVersion
+        artifacts = @($manifestEntries | Sort-Object -Property scope, relative_path)
+    }
+    $json = $manifest | ConvertTo-Json -Depth 6
+
+    $resolvedManifestPath = Resolve-A3FileSystemPath -Path $ManifestPath
+    $manifestDirectory = Split-Path -Parent $resolvedManifestPath
+    if (-not (Test-Path -LiteralPath $manifestDirectory -PathType Container)) {
+        throw (New-A3SignatureError 'A3_PATH_INVALID' 'The release manifest directory does not exist.')
+    }
+    $temporaryPath = Join-Path $manifestDirectory ('.{0}.{1}.tmp' -f ([IO.Path]::GetFileName($resolvedManifestPath)), [guid]::NewGuid().ToString('N'))
+    $backupPath = Join-Path $manifestDirectory ('.{0}.{1}.bak' -f ([IO.Path]::GetFileName($resolvedManifestPath)), [guid]::NewGuid().ToString('N'))
+
+    if ($null -eq $WriteProvider) {
+        $WriteProvider = {
+            param([string]$LiteralPath, [string]$Content)
+            $encoding = [Text.UTF8Encoding]::new($false)
+            $stream = [IO.FileStream]::new($LiteralPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+            try {
+                $writer = [IO.StreamWriter]::new($stream, $encoding)
+                try {
+                    $writer.Write($Content)
+                    $writer.Flush()
+                    $stream.Flush($true)
+                }
+                finally {
+                    $writer.Dispose()
+                }
+            }
+            finally {
+                $stream.Dispose()
+            }
+        }
+    }
+
+    try {
+        & $WriteProvider $temporaryPath $json
+        if (-not (Test-Path -LiteralPath $temporaryPath -PathType Leaf)) {
+            throw (New-A3SignatureError 'A3_MANIFEST_WRITE_FAILED' 'The release manifest temporary file was not created.')
+        }
+        if (Test-Path -LiteralPath $resolvedManifestPath -PathType Leaf) {
+            [IO.File]::Replace($temporaryPath, $resolvedManifestPath, $backupPath, $true)
+        }
+        else {
+            [IO.File]::Move($temporaryPath, $resolvedManifestPath)
+        }
+    }
+    finally {
+        if (Test-Path -LiteralPath $temporaryPath -PathType Leaf) {
+            Remove-Item -LiteralPath $temporaryPath -Force -ErrorAction SilentlyContinue
+        }
+        if (Test-Path -LiteralPath $backupPath -PathType Leaf) {
+            Remove-Item -LiteralPath $backupPath -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+Export-ModuleMember -Function Assert-A3ArtifactSet, Assert-A3SignatureRecord, Assert-A3SignatureRecords, Find-A3SignTool, Get-A3RequiredArtifacts, Get-A3SignatureRecord, New-A3ReleaseManifest, New-A3SignatureError
