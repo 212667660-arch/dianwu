@@ -2,7 +2,7 @@
 
 > 项目：基于大模型的个性化资源生成与学习多智能体系统开发
 > 队列位置：E:\软件杯\codex\AI模型任务队列.md
-> 当前模型批次：Sol（S-042 Task 3 完整发布与安装产物验签实施中）
+> 当前模型批次：Sol（S-042 Task 4 PyInstaller 后端安全暂存实施中）
 > 最后审视日期：2026-07-19
 
 ## 一、使用规则
@@ -88,7 +88,7 @@
 | S-039 | P0 | 完成 | 修复用户验收缺陷并完成托盘切换、墨团固定基础大小与手动拉伸 | S-037、S-038、用户四张真实桌面截图 | 单一答案入口与无遮挡提交、收藏局部更新无闪烁且并发安全、学习诊断说明、主窗口/墨团托盘显示收起切换、墨团 192×208 基础尺寸与 1–3 倍等比例四角拉伸、点击不改变大小、`.test-venv` 专用测试环境、完整回归与真实桌面验收；证据见 S-039-COMPLETE |
 | S-040 | P0 | 完成 | 收敛最新功能分支、任务队列与 GitHub 远端状态 | S-039、`codex/s022-five-resource-bundle` 旧同步分支、`origin/main` | 已以 `codex/s022-s026-remediation` 为唯一功能基线完成目录、文档、测试、队列、`origin/main` 和 GitHub 远端收敛；证据见 S-040-COMPLETE |
 | S-041 | P0 | 完成 | 设计 Windows 代码签名与默认中文、可下载语言包总体架构 | S-040、现有 Windows 发布包、桌面设置与安全边界 | 已确定 Azure Trusted Signing 受保护发布链、签名顺序/验证，以及内置 zh-CN、公开 Releases、Ed25519 数据包、原子安装/回滚和 content locale 契约；证据见 S-041-DESIGN |
-| S-042 | P0 | 进行中 | 实现 Windows 可信代码签名与签名发布验收 | S-041；真实签名最终验收依赖 Azure Trusted Signing 资源就绪 | Task 1、Task 2 已完成并通过规格/质量双审；验签核心现已绑定最终物理路径与文件 ID、拒绝 junction/path TOCTOU，只信任 HKLM Windows SDK 根下真实固定 DOS 卷的 x64 signtool，并严格验证发布者、规范 `SHA256`、UTC 时间戳、证书窗口、raw hash、多签名和批量映射；当前进入 Task 3 完整发布/安装产物与 manifest 验证 |
+| S-042 | P0 | 进行中 | 实现 Windows 可信代码签名与签名发布验收 | S-041；真实签名最终验收依赖 Azure Trusted Signing 资源就绪 | Task 1--3 已完成并通过规格/质量双审；验签核心现已绑定最终物理路径与文件 ID、拒绝 junction/path TOCTOU，只信任 HKLM Windows SDK 根下真实固定 DOS 卷的 x64 signtool，并严格验证发布者、规范 `SHA256`、UTC 时间戳、证书窗口、raw hash、多签名和批量映射。Task 3 已覆盖发布前四项、隔离安装后四项、锁定执行、清单快照与稳定句柄清理；当前进入 Task 4 PyInstaller 后端安全暂存 |
 | S-043 | P0 | 就绪 | 实现默认中文、其他语言可下载的语言包系统 | S-041 | 实施计划已完成；待实现内置 zh-CN、可信语言包目录/下载/校验/原子安装/回滚、设置切换、首批语言、前端/Electron/桌宠本地化和桌面验收 |
 | S-044 | P0 | 阻塞 | 对照 `Claude code finds.md` 与软件杯官方赛题要求复核、优化并完成全端发布验收 | S-042、S-043、`E:\软件杯\Claude code finds.md`、官方赛题页 | 逐条复现/驳回审查发现，修复中文路径/XML/时间语义等有效问题，核对赛题功能矩阵，形成“GPT 修改”方法文档，并完成前端、后端、Electron、PyInstaller、安装包和真实桌面生命周期验收 |
 | T-033 | P0 | 完成 | 实现多 API 配置、高可用切换、模型选择与推理强度控制 | S-017 | 版本 2 加密多配置、原子热应用与回滚、3 次/2 配置预算、Retry-After/熔断、普通与流式故障边界、全局/学习空间模型和思考强度选择、兼容迁移、真实桌面 5/5 连接及完整打包回归 |
@@ -166,7 +166,7 @@
 
 ## 八、当前执行顺序
 
-Sol 当前执行 S-042 Task 3。工作树为 `E:\软件杯\.worktrees\s022-s026-remediation`、分支 `codex/s041-signing-i18n-design`，Task 2 最终实现提交为 `3c1b429`，规格复审通过，质量复审 Critical 0、Important 0；最新完整 `npm test` 退出码 0（Electron/Node 192、Vitest 151、签名 harness passed），真实 Microsoft Edge 与 Windows SDK signtool 验签通过。下一步按 TDD 实现发布前四项与隔离安装后四项产物的精确发现、全量验签和原子 JSON manifest，再依次执行 S-042 Task 4—8、S-043 和 S-044。不得删除或覆盖 `.tmp/`、`dist-s033/`、`dist-s033-diag/`、`dist-s033-fixed/`。
+Sol 当前执行 S-042 Task 4。工作树为 `E:\软件杯\.worktrees\s022-s026-remediation`、分支 `codex/s041-signing-i18n-design`，Task 3 实现提交为 `5a2a43b`，竞态加固提交为 `472f90c`。任务 3 规格复审通过，质量复审 Critical 0、Important 0、Minor 0；最新完整 `npm test` 退出码 0（Electron/Node 192、Vitest 151、`signature-verification.test.ps1 passed`、`release-artifacts.test.ps1 passed`），独立两项 PowerShell harness 均退出码 0。下一步按 TDD 实现 PyInstaller 后端的受限路径、完整副本比对、原子替换和回滚，再依次执行 S-042 Task 5--8、S-043 和 S-044。不得删除或覆盖 `.tmp/`、`dist-s033/`、`dist-s033-diag/`、`dist-s033-fixed/`。
 
 ### 历史执行轨迹（仅供追溯，不代表当前状态）
 
@@ -349,3 +349,4 @@ S-016 已完成：本仓库提交身份已设置为 `Wei kb <212667660@qq.com>`�
 | 2026-07-19 | S-042-TASK2-HARDENING-CHECKPOINT | Sol | `scripts/release/A3.SignatureVerification.psm1`、`scripts/release/tests/signature-verification.test.ps1`、`codex/AI模型任务队列.md` | 重启后恢复检查点并完成 Task 2 质量审查要求的安全加固：提交 `d8aac41` 对空值、路径、记录和 hash 映射 fail closed；`ab66f69` 在 Authenticode、signtool 与双哈希验证窗口内锁定产物，拒绝覆盖/重命名/删除；`c69bbd2` 使用句柄最终路径和卷/文件索引绑定文件身份，阻断 junction 重绑定与路径 TOCTOU，同时保留受信 Windows SDK signtool、批量路径/hash 一一对应、SHA-256、时间戳和发布者校验。最新完整 `npm test` 退出码 0：Electron/Node 192 passed、Vitest 151 passed、`signature-verification.test.ps1 passed`；`git diff --check` 通过。Task 2 实现与回归完成，状态保留“进行中”，待最终规格/质量双重复审后进入 Task 3。 |
 | 2026-07-19 | S-042-TASK2-CANONICAL-DIGEST-CHECKPOINT | Sol | `scripts/release/A3.SignatureVerification.psm1`、`scripts/release/tests/signature-verification.test.ps1`、`codex/AI模型任务队列.md` | 最终质量复审继续收紧摘要算法标识：提交 `6b1ede1` 将记录校验从大小写宽松改为只接受规范 `SHA256`，新增 `sha256`、`Sha256`、`sHa256` 拒绝用例；最新 `npm run test:signatures` 退出码 0并输出 `signature-verification.test.ps1 passed`。当前跟踪文件无未提交改动，待运行包含该提交的完整 `npm test` 并完成 Task 2 最终规格/质量双重复审。 |
 | 2026-07-19 | S-042-TASK2-COMPLETE | Sol | `scripts/release/A3.SignatureVerification.psm1`、`scripts/release/tests/signature-verification.test.ps1`、`front/a3-front/package.json`、`codex/AI模型任务队列.md` | Task 2 最终完成：在 `c69bbd2` 绑定最终物理路径和卷/文件索引后，`6b1ede1` 严格要求规范 `SHA256`，`67adbbd` 将 SDK 根限制为本机绝对 DOS 路径，`3c1b429` 进一步拒绝单字母自定义 PSDrive、subst、网络盘、可移动盘和 provider alias，仅接受 HKLM Registry64/32 `KitsRoot10` 下真实固定卷、无 reparse 的版本化 x64 signtool。最终规格审查通过；质量审查 Critical 0、Important 0、Minor 1（后续可增加 mapped-network/removable 的确定性自动测试）。最新完整 `npm test`：Electron/Node 192 passed、Vitest 151 passed、PowerShell harness passed；真实 Edge/SDK signtool 验签通过，`git diff --check` 通过。 |
+| 2026-07-19 | S-042-TASK3-COMPLETE | Sol | `scripts/release/A3.SignatureVerification.psm1`、`scripts/release/verify-windows-signatures.ps1`、`scripts/release/tests/release-artifacts.test.ps1`、`front/a3-front/package.json`、`codex/AI模型任务队列.md` | Task 3 完成：`5a2a43b` 新增发布前主程序、`api.exe`、`elevate.exe`、安装器和隔离安装后四项产物的固定发现、发布者/签名/时间戳/hash 校验、UTF-8 无 BOM 原子 manifest、精确卸载与残留进程清理；`472f90c` 进一步锁定清单构建快照和安装器/卸载器的验签到启动窗口，拒绝文件替换、硬链接与 junction 重绑定，且在安装后验签失败时绝不运行未验证卸载器。最终规格审查通过；质量审查 Critical 0、Important 0、Minor 0。独立 `release-artifacts.test.ps1`、`signature-verification.test.ps1` 均通过；完整 `npm test` 退出码 0，Electron/Node 192 passed、Vitest 151 passed，`git diff --check` 通过。 |
