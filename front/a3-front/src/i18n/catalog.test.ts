@@ -32,7 +32,13 @@ describe('built-in zh-CN catalog contract', () => {
   it('uses stable ASCII semantic catalog key segments', () => {
     const keys = Object.keys(flattenMessages(BUILT_IN_MESSAGES))
     const forbiddenSegment = /^(?:动态文案|displayText.*|vueStaticAttribute|vueText|stringLiteral|templateExpression|source|message\d+|[a-f0-9]{16,}|\d+)$/i
-    expect(keys.filter(key => key.split('.').some(segment => !/^[a-z][A-Za-z0-9]*$/.test(segment)))).toEqual([])
+    expect(keys.filter(key => key.split('.').some((segment, index, segments) => {
+      const isStableErrorCode = segments[0] === 'errors' && index === segments.length - 1
+        && /^[A-Z][A-Z0-9_]+$/.test(segment)
+      const isCanonicalStatus = segments[0] === 'statuses' && index === segments.length - 1
+        && /^[A-Z][A-Z0-9_]+$/.test(segment)
+      return !isStableErrorCode && !isCanonicalStatus && !/^[a-z][A-Za-z0-9]*$/.test(segment)
+    }))).toEqual([])
     expect(keys.filter(key => key.split('.').some(segment => forbiddenSegment.test(segment)))).toEqual([])
   })
   it('publishes the versioned required catalog keys', () => {
@@ -40,8 +46,50 @@ describe('built-in zh-CN catalog contract', () => {
     const flat = flattenMessages(BUILT_IN_MESSAGES)
     expect(flat['navigation.dashboard']).toBeTruthy()
     expect(flat['views.desktopSettings.language.title']).toBeTruthy()
-    expect(flat['errors.backendUnavailable']).toBeTruthy()
+    expect(flat['errors.BACKEND_UNAVAILABLE']).toBeTruthy()
     expect(flat['desktop.tray.quit']).toBeTruthy()
+  })
+
+  it('preserves stable backend error codes and canonical status enums exactly', () => {
+    const flat = flattenMessages(BUILT_IN_MESSAGES)
+    expect(Object.keys(BUILT_IN_MESSAGES.errors).filter(key => /^[A-Z][A-Z0-9_]+$/.test(key))).toEqual([
+      'BACKEND_UNAVAILABLE', 'DESKTOP_BACKEND_UNAVAILABLE', 'DESKTOP_BRIDGE_UNAVAILABLE', 'DESKTOP_ONLY',
+      'MODEL_NOT_CONFIGURED', 'MODEL_AUTHENTICATION_ERROR', 'MODEL_RATE_LIMITED', 'MODEL_REQUEST_FAILED',
+      'MODEL_PROFILE_DEFAULT_MODEL_INVALID', 'STREAM_INVALID', 'STREAM_CANCELLED',
+      'KNOWLEDGE_FILE_SIGNATURE_MISMATCH', 'KNOWLEDGE_PARSE_FAILED', 'KNOWLEDGE_OCR_PACK_REQUIRED',
+      'KNOWLEDGE_OCR_PAGE_FAILED', 'IMPORT_FAILED', 'EXPORT_FAILED', 'LANGUAGE_PACK_INVALID',
+      'LANGUAGE_PACK_INCOMPATIBLE', 'LANGUAGE_PACK_SIGNATURE_INVALID', 'UNKNOWN', 'UNKNOWN_WITH_REFERENCE',
+    ])
+    expect(Object.keys(BUILT_IN_MESSAGES.statuses.session)).toEqual(['NEW', 'DIAGNOSING', 'PROFILED', 'GENERATING', 'PRACTICING', 'REVIEWING', 'COMPLETED'])
+    expect(Object.keys(BUILT_IN_MESSAGES.statuses.mastery)).toEqual(['UNASSESSED', 'WEAK', 'LEARNING', 'PROFICIENT', 'MASTERED'])
+    expect(Object.keys(BUILT_IN_MESSAGES.statuses.document)).toEqual(['QUEUED', 'VALIDATING', 'PARSING', 'OCR_REQUIRED', 'OCR_RUNNING', 'INDEXING', 'COMPLETED', 'FAILED'])
+    expect(Object.keys(BUILT_IN_MESSAGES.statuses.resource)).toEqual(['PENDING', 'GENERATING', 'COMPLETED', 'FAILED'])
+    expect(Object.keys(BUILT_IN_MESSAGES.statuses.update)).toEqual(['CHECKING', 'AVAILABLE', 'CURRENT', 'OFFLINE_BUILD', 'ERROR'])
+    expect(flat['errors.KNOWLEDGE_PARSE_FAILED']).toBe('解析器未能读取这份资料。')
+    expect(flat['statuses.document.OCR_REQUIRED']).toBe('等待 OCR')
+  })
+
+  it('uses reviewed semantic keys for shared renderer component copy', () => {
+    const flat = flattenMessages(BUILT_IN_MESSAGES)
+    expect(flat['components.collectionRail.gardenTitle']).toBe('资料花园')
+    expect(flat['components.collectionRail.documentCountSuffix']).toBe('份资料 ·')
+    expect(flat['components.safeMermaid.unavailableNotice']).toContain('Mermaid 渲染不可用')
+    expect(flat['components.safeMermaid.outlineUnavailableTitle']).toBe('大纲不可用')
+    expect(flat['components.petSettingsCard.settingsLoadFailure']).toContain('无法读取')
+    expect(flat['components.petSettingsCard.actionPreviewUnavailable']).toContain('不可用')
+    expect(flat['components.petSettingsCard.settingsSaveFailure']).toContain('没有保存成功')
+    expect(flat['components.resourceCard.securityReviewUnavailable']).toContain('审核暂时不可用')
+    expect(flat['components.documentGrid.offlineOcrUnavailable']).toContain('OCR 组件不可用')
+  })
+
+  it('rejects obvious mechanical catalog key patterns while retaining semantic empty-state keys', () => {
+    const flat = flattenMessages(BUILT_IN_MESSAGES)
+    const mechanical = /(?:None|UnavailableAvailable|AvailableUnavailable|^source$|^message\d+$|stringLiteral|templateExpression|vueText|vueStaticAttribute)/
+    expect(Object.keys(flat).filter(key => /^(?:common|navigation|components|pet|errors)\./.test(key)
+      && key.split('.').some(segment => mechanical.test(segment)))).toEqual([])
+    expect(flat['common.state.empty']).toBe('暂无内容')
+    expect(flat['components.documentGrid.empty']).toContain('一页空白')
+    expect(flat['components.conversationRail.empty']).toContain('还没有历史会话')
   })
 
   it('covers the reviewed SmartTutor visible-string inventory', () => {
@@ -113,7 +161,7 @@ describe('built-in zh-CN catalog contract', () => {
     expect(buildBaseCatalogPayload()).toBe(payload)
     expect(BASE_CATALOG_HASH).toMatch(/^[A-F0-9]{64}$/)
     expect(BASE_CATALOG_HASH).toBe(independentHash)
-    expect(BASE_CATALOG_HASH).toBe('551F069FF87E6C7DB31C3CF824374C63475E8CD986BD9D32CD648E003028A91F')
+    expect(BASE_CATALOG_HASH).toBe('6DF9DCFB02A3CCB77594AF1B3B528DBB06D9024FDDABB2626FDB0838B2D36C2F')
   })
 
   it('deep-freezes every built-in namespace without changing the digest', () => {

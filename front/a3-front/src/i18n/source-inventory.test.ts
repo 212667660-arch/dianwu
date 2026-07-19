@@ -228,7 +228,7 @@ describe('renderer production source inventory', () => {
       reason: entry.mode === 'classified' ? entry.reason : undefined,
     }))).toEqual(expect.arrayContaining([
       ...Array.from({ length: 6 }, () => ({ source: 'src/api/types.ts', reason: 'canonical_enum' })),
-      { source: 'src/components/knowledge/KnowledgeSourceList.vue', reason: 'compatibility_fallback' },
+      { source: 'src/components/knowledge/KnowledgeSourceList.vue', reason: 'non_user_data' },
     ]))
     expect(mappedEntries.filter((entry: InventoryEntry) => entry.mode === 'mapped'
       && (entry.template.includes('{value}') || entry.expression_bindings.some(binding => binding.placeholder === 'value'))
