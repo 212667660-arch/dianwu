@@ -5,7 +5,11 @@
     "hidePet": "隐藏墨团",
     "pauseAi": "暂停 AI",
     "resumeAi": "恢复 AI",
-    "quit": "完全退出"
+    "quit": "完全退出",
+    "continueAi": "继续 AI",
+    "toggleMainWindow": "显示/最小化主窗口",
+    "togglePet": "显示/隐藏墨团",
+    "tooltip": "智学协作台"
   },
   "dialog": {
     "confirmQuitTitle": "退出智学协作台",
@@ -19,7 +23,9 @@
     "ready": "诊断完成",
     "exported": "已导出 {fileName}",
     "backendStopped": "本地学习服务已停止，请重启桌面应用。",
-    "redacted": "敏感信息已移除"
+    "redacted": "敏感信息已移除",
+    "exportDialogTitle": "导出智学协作台诊断报告",
+    "jsonFilterName": "JSON 诊断报告"
   },
   "import": {
     "preparing": "正在准备导入…",
@@ -31,7 +37,17 @@
     "startingBackend": "正在启动本地学习服务…",
     "backendReady": "本地学习服务已就绪",
     "backendFailed": "本地学习服务启动失败",
-    "openingWindow": "正在打开学习空间…"
+    "openingWindow": "正在打开学习空间…",
+    "backendNotResponding": "后端尚未响应。",
+    "backendNotReady": "后端未就绪（{status}）。",
+    "backendConnectionFailed": "后端连接失败。",
+    "backendExecutableMissing": "找不到后端启动文件：{command}",
+    "unknownError": "未知错误",
+    "failurePageTitle": "智学协作台未能启动",
+    "failurePageMessage": "本地学习服务尚未就绪。请检查安装文件或稍后重试。",
+    "failureDialogTitle": "智学协作台启动失败",
+    "failureDialogMessage": "本地学习服务未能启动。",
+    "exportDiagnosticsButton": "导出诊断报告"
   },
   "updater": {
     "check": "检查更新",
@@ -39,6 +55,21 @@
     "available": "发现新版本 {version}",
     "current": "当前已是最新版本",
     "offlineBuild": "此离线构建不执行在线更新检查。",
-    "failed": "暂时无法检查更新。"
+    "failed": "暂时无法检查更新。",
+    "unsignedSource": "当前安装包未配置签名发布源，不会自动下载更新。"
+  },
+  "application": {
+    "name": "智学协作台"
+  },
+  "knowledgeImport": {
+    "dialogTitle": "选择要放进知识库的资料",
+    "filterName": "学习资料",
+    "modelPackageSafetyNotice": "A3 不会自动下载 OCR 或语义模型。请只安装已确认许可和 SHA-256、且兼容当前应用版本的本地模型包。\n"
+  },
+  "pet": {
+    "characterImportDialogTitle": "选择桌宠角色包文件夹"
+  },
+  "modelConfig": {
+    "originalProfileLabel": "原模型配置"
   }
 }

@@ -25,6 +25,7 @@ export interface SourceCandidate {
 export const CLASSIFIED_REASONS = [
   'canonical_enum',
   'protocol_token',
+  'static_markup_template',
   'compatibility_fallback',
   'internal_log',
   'developer_diagnostic',

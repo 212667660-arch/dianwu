@@ -14,8 +14,8 @@ import {
   type SourceCandidate,
 } from './source-inventory'
 
-function rendererProductionCandidates(): SourceCandidate[] {
-  const root = resolve(process.cwd(), 'src')
+function productionCandidates(rootName: 'src' | 'electron'): SourceCandidate[] {
+  const root = resolve(process.cwd(), rootName)
   const files: string[] = []
   const walk = (directory: string): void => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -31,6 +31,9 @@ function rendererProductionCandidates(): SourceCandidate[] {
     .sort()
     .flatMap(source => extractSourceCandidates(source, readFileSync(resolve(process.cwd(), source), 'utf8')))
 }
+
+const rendererProductionCandidates = (): SourceCandidate[] => productionCandidates('src')
+const electronProductionCandidates = (): SourceCandidate[] => productionCandidates('electron')
 
 describe('source inventory extraction', () => {
   it('extracts only real TS and JS string nodes without crossing syntax boundaries', () => {
@@ -119,6 +122,7 @@ describe('source inventory validation', () => {
     expect(CLASSIFIED_REASONS).toEqual([
       'canonical_enum',
       'protocol_token',
+      'static_markup_template',
       'compatibility_fallback',
       'internal_log',
       'developer_diagnostic',
@@ -207,18 +211,22 @@ describe('source inventory validation', () => {
   })
 })
 
-describe('renderer production source inventory', () => {
+describe('repository production source inventory', () => {
   it('completely maps or classifies every Simplified Chinese AST candidate', () => {
-    const candidates = rendererProductionCandidates()
+    const rendererCandidates = rendererProductionCandidates()
+    const electronCandidates = electronProductionCandidates()
+    const candidates = [...rendererCandidates, ...electronCandidates]
     const inventory = JSON.parse(readFileSync(resolve(process.cwd(), 'src/i18n/locales/zh-CN/inventory.json'), 'utf8'))
     const catalog = flattenMessages(BUILT_IN_MESSAGES)
     const result = validateRepositoryInventory(candidates, inventory, catalog)
     const mappedEntries = inventory.entries.filter((entry: InventoryEntry) => entry.mode === 'mapped')
     const classifiedEntries = inventory.entries.filter((entry: InventoryEntry) => entry.mode === 'classified')
 
-    expect(candidates).toHaveLength(752)
-    expect(mappedEntries).toHaveLength(744)
-    expect(classifiedEntries).toHaveLength(8)
+    expect(rendererCandidates).toHaveLength(752)
+    expect(electronCandidates).toHaveLength(115)
+    expect(candidates).toHaveLength(867)
+    expect(mappedEntries).toHaveLength(795)
+    expect(classifiedEntries).toHaveLength(72)
     expect(inventory.entries.map((entry: InventoryEntry) => entry.id)).toEqual(
       inventory.entries.map((entry: InventoryEntry) => entry.id).sort(),
     )
@@ -232,11 +240,44 @@ describe('renderer production source inventory', () => {
       { source: 'src/views/ProfileBuilder.vue', reason: 'protocol_token' },
     ]))
     expect(classifiedEntries.filter((entry: InventoryEntry) => entry.mode === 'classified' && entry.reason === 'protocol_token')).toHaveLength(1)
+    const electronIds = new Set(electronCandidates.map(candidate => candidate.id))
+    const electronMapped = mappedEntries.filter((entry: InventoryEntry) => electronIds.has(entry.id))
+    const electronClassified = classifiedEntries.filter((entry: InventoryEntry) => electronIds.has(entry.id))
+    expect(electronMapped).toHaveLength(51)
+    expect(electronClassified).toHaveLength(64)
+    expect(new Set(electronClassified.map((entry: InventoryEntry) => entry.mode === 'classified' ? entry.reason : undefined))).toEqual(
+      new Set(['compatibility_fallback', 'static_markup_template']),
+    )
+    expect(electronClassified.filter((entry: InventoryEntry) => entry.mode === 'classified' && entry.reason === 'compatibility_fallback')).toHaveLength(62)
+    expect(electronClassified.filter((entry: InventoryEntry) => entry.mode === 'classified' && entry.reason === 'static_markup_template').map((entry: InventoryEntry) => entry.id).sort()).toEqual([
+      '1b5b736bc4d3cbed5291fd84', '1f422c82bdd2fe669228e4a9',
+    ])
+    for (const entry of electronClassified) {
+      if (entry.mode !== 'classified' || entry.reason !== 'compatibility_fallback') continue
+      const candidate = candidateById.get(entry.id)!
+      const lines = readFileSync(resolve(process.cwd(), candidate.source), 'utf8').split('\n')
+      expect(lines.slice(Math.max(0, candidate.line - 4), candidate.line + 3).join('\n'), entry.id).toMatch(/[A-Z][A-Z0-9_]{3,}/)
+    }
+    for (const id of [
+      '45e70d4d57fe3f0987de0c40', // unsigned updater source notice
+      '348ce279868556f2221eddeb', '4b622d7cdc3128c4b8762fce', // diagnostics save dialog
+      '20aa3117c75db0d5dd954e15', 'af1ad8a389786ada67cd3292', // knowledge import dialog
+      '063cf5f360006ae4b7356de7', '230e7872a03da15c6f0df5e1', // startup failure dialog
+      '531cc01f9d2febc411827287', // pet character import dialog
+      'b87c5babd3c31dda8cc1bbeb', '4857e8f62bba5dba822a07a8', 'ba20c63f9564ed00eaa20dae',
+      '9bd4e45250d76c294b36df7b', 'd228f5161545ad26381fe303', '2bbeb5e9b25a8074097dadaf',
+      '2b43fe7f2a4fb847860bf0e7', '3ade964ec1d0aa9baa7e48f2', '3a87b364faa0a8400f7ce515',
+      '112d90853419b0e477c28d61', '3fe2e47e983e2092ef6d0170', '76ed2e4fd6c4e7a885a1f568',
+      'dc510ad5c85e63c4c837a988', '7d7b10582a1236315b9901b7',
+    ]) expect(electronMapped.some((entry: InventoryEntry) => entry.id === id), id).toBe(true)
     expect(mappedEntries.filter((entry: InventoryEntry) => entry.mode === 'mapped'
       && (entry.template.includes('{value}') || entry.expression_bindings.some(binding => binding.placeholder === 'value'))
     ).map((entry: InventoryEntry) => entry.id)).toEqual([])
     expect(mappedEntries.filter((entry: InventoryEntry & { catalog_key?: string }) =>
-      !/^(?:common(?:\.|$)|navigation(?:\.|$)|views\.|components\.|statuses(?:\.|$)|errors(?:\.|$)|pet(?:\.|$))/.test(entry.catalog_key ?? ''),
+      !/^(?:common(?:\.|$)|navigation(?:\.|$)|views\.|components\.|statuses(?:\.|$)|errors(?:\.|$)|desktop(?:\.|$)|pet(?:\.|$))/.test(entry.catalog_key ?? ''),
+    ).map((entry: InventoryEntry) => entry.id)).toEqual([])
+    expect(electronMapped.filter((entry: InventoryEntry) => entry.mode === 'mapped'
+      && !/^(?:common\.|desktop\.|errors\.[A-Z][A-Z0-9_]+$|pet\.)/.test(entry.catalog_key)
     ).map((entry: InventoryEntry) => entry.id)).toEqual([])
     for (const prefix of [
       'views.dashboard', 'views.profile', 'views.agents', 'views.learningPath', 'views.tutor', 'views.assessment',

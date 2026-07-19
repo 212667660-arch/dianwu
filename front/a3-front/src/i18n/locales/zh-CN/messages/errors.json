@@ -124,5 +124,13 @@
   "serviceRequestFailure": "服务请求未成功，请稍后重试。",
   "serviceUnavailable": "服务暂时不可用，请稍后重试。",
   "streamingUnsupported": "浏览器不支持流式响应",
-  "failure": "请求失败，请稍后重试"
+  "failure": "请求失败，请稍后重试",
+  "KNOWLEDGE_SOURCE_OPEN_FAILED": "知识库资料来源无法打开。",
+  "MODEL_CREDENTIAL_STORE_INVALID": "模型凭据存储内容无效。",
+  "MODEL_CREDENTIAL_STORE_UNAVAILABLE": "当前系统无法安全保存模型凭据。",
+  "MODEL_PROFILE_DEFAULT_DELETE_DENIED": "默认模型配置不能直接删除。",
+  "MODEL_PROFILE_DEFAULT_DISABLE_DENIED": "请先选择新的默认模型配置，再停用当前默认配置。",
+  "MODEL_PROFILE_LAST_ENABLED": "至少需要保留一个启用的模型配置。",
+  "MODEL_RUNTIME_RECOVERY_REQUIRED": "模型配置恢复未完成，请重启应用后再试。",
+  "MODEL_RUNTIME_ROLLBACK_FAILED": "模型配置恢复未完成，请重启应用。"
 }

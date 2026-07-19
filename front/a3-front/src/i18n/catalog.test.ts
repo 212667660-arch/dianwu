@@ -118,6 +118,16 @@ describe('built-in zh-CN catalog contract', () => {
     expect(BUILT_IN_MESSAGES.statuses.catalogStatus).toEqual({ checking: '正在检查' })
     expect(BUILT_IN_MESSAGES.statuses.masteryDisplay).toEqual({ unassessed: '未评估' })
     expect(flat['errors.KNOWLEDGE_PARSE_FAILED']).toBe('解析器未能读取这份资料。')
+    for (const code of [
+      'KNOWLEDGE_SOURCE_OPEN_FAILED',
+      'MODEL_CREDENTIAL_STORE_INVALID',
+      'MODEL_CREDENTIAL_STORE_UNAVAILABLE',
+      'MODEL_PROFILE_DEFAULT_DELETE_DENIED',
+      'MODEL_PROFILE_DEFAULT_DISABLE_DENIED',
+      'MODEL_PROFILE_LAST_ENABLED',
+      'MODEL_RUNTIME_RECOVERY_REQUIRED',
+      'MODEL_RUNTIME_ROLLBACK_FAILED',
+    ]) expect(flat[`errors.${code}`], code).toBeTruthy()
     expect(flat['statuses.importStatus.OCR_REQUIRED']).toBe('等待 OCR')
   })
 
@@ -228,6 +238,17 @@ describe('built-in zh-CN catalog contract', () => {
     visit(BUILT_IN_MESSAGES)
   })
 
+  it('keeps the native startup failure page copy as plain text catalog leaves', () => {
+    const flat = flattenMessages(BUILT_IN_MESSAGES)
+    const shell = readFileSync(resolve(process.cwd(), 'electron/main.mjs'), 'utf8')
+    for (const key of ['desktop.startup.failurePageTitle', 'desktop.startup.failurePageMessage']) {
+      expect(flat[key], key).not.toMatch(/<\/?[A-Za-z][^>]*>/)
+      expect(shell, key).toContain(flat[key])
+    }
+    expect(flat['desktop.startup.failurePageHtml']).toBeUndefined()
+    expect(flat['desktop.startup.failurePageUrl']).toBeUndefined()
+  })
+
   it('rejects invalid catalog structures while flattening', () => {
     expect(() => flattenMessages({ list: ['invalid'] })).toThrow(/array/i)
     expect(() => flattenMessages({ missing: null })).toThrow(/null/i)
@@ -254,7 +275,7 @@ describe('built-in zh-CN catalog contract', () => {
     expect(buildBaseCatalogPayload()).toBe(payload)
     expect(BASE_CATALOG_HASH).toMatch(/^[A-F0-9]{64}$/)
     expect(BASE_CATALOG_HASH).toBe(independentHash)
-    expect(BASE_CATALOG_HASH).toBe('7B13E3BF47A8210012157695B123B72F3B63D048683A97E79ADE6B0762EF552F')
+    expect(BASE_CATALOG_HASH).toBe('5E8E8DC42A5014D39E0238EDCF65D2F2C5B98C32B90828D2CACC805FE5F33B85')
   })
 
   it('deep-freezes every built-in namespace without changing the digest', () => {

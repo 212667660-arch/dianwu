@@ -8,7 +8,13 @@
     "break": "休息一下，回来再继续。",
     "review": "有一项复习正等着你。",
     "complete": "这一小步完成啦。",
-    "backendOffline": "本地学习服务暂时离线。"
+    "backendOffline": "本地学习服务暂时离线。",
+    "completionGentleRest": "这一小步完成得很好，可以轻轻休息一下。",
+    "completionAwaitingContinue": "做得很好，我会在这里等你继续。",
+    "completionEffortMarked": "今天的努力已经留下痕迹了。",
+    "failureTryAgain": "没关系，我们慢慢来，再试一次就好。",
+    "failureRegroup": "这次没有完成也没关系，我会陪你重新整理。",
+    "failurePauseAndRetry": "先停一下呼吸，再试一次也来得及。"
   },
   "native": {
     "show": "显示墨团",
