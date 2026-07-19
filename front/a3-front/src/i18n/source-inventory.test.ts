@@ -26,6 +26,8 @@ describe('source inventory extraction', () => {
       '静态模板',
     ])
     expect(candidates[1].expressions).toEqual(['current', 'total'])
+    expect(candidates[1].static_parts).toEqual(['进度 ', '/', ''])
+    expect(candidates[0].static_parts).toEqual(['真实文案'])
     expect(candidates.map(candidate => candidate.kind)).toEqual([
       'string_literal',
       'template_expression',
@@ -55,6 +57,7 @@ describe('source inventory extraction', () => {
       '脚本文案',
     ])
     expect(candidates[4].expressions).toEqual(['page'])
+    expect(candidates[4].static_parts).toEqual(['第 ', ' 页'])
     expect(candidates[6].expressions).toEqual(['current', 'total'])
   })
 
@@ -78,7 +81,7 @@ describe('source inventory extraction', () => {
 describe('source inventory validation', () => {
   const candidate = (overrides: Partial<SourceCandidate> = {}): SourceCandidate => ({
     id: 'candidate-1', source: 'src/a.ts', kind: 'template_expression', raw: '进度 ${current}/${total}',
-    expressions: ['current', 'total'], line: 1, column: 1, ...overrides,
+    expressions: ['current', 'total'], static_parts: ['进度 ', '/', ''], line: 1, column: 1, ...overrides,
   })
 
   it('reports both missing candidates and extra entries', () => {
@@ -90,17 +93,47 @@ describe('source inventory validation', () => {
   it('validates mapped templates without folding duplicate or reordered expressions', () => {
     const entry: InventoryEntry = {
       id: 'candidate-1', mode: 'mapped', catalog_key: 'progress', template: '进度 {current}/{total}',
-      expression_placeholders: ['current', 'total'],
+      expression_bindings: [{ expression: 'current', placeholder: 'current' }, { expression: 'total', placeholder: 'total' }],
     }
     expect(validateInventory([candidate()], [entry], { progress: '进度 {current}/{total}' }).issues).toEqual([])
-    expect(validateInventory([candidate()], [{ ...entry, expression_placeholders: ['total', 'current'] }], { progress: '进度 {current}/{total}' }).issues).toContainEqual(expect.objectContaining({ code: 'expression_mismatch' }))
-    const duplicate = candidate({ raw: '${current}/${current}', expressions: ['current', 'current'] })
-    expect(validateInventory([duplicate], [{ ...entry, template: '{current}/{current}', expression_placeholders: ['current'] }], { progress: '{current}/{current}' }).issues).toContainEqual(expect.objectContaining({ code: 'expression_mismatch' }))
+    expect(validateInventory([candidate()], [{ ...entry, expression_bindings: [...entry.expression_bindings].reverse() }], { progress: '进度 {total}/{current}' }).issues).toContainEqual(expect.objectContaining({ code: 'expression_mismatch' }))
+    const duplicate = candidate({ raw: '${current}/${current}', expressions: ['current', 'current'], static_parts: ['', '/', ''] })
+    expect(validateInventory([duplicate], [{ ...entry, template: '{current}/{current}', expression_bindings: [{ expression: 'current', placeholder: 'current' }] }], { progress: '{current}/{current}' }).issues).toContainEqual(expect.objectContaining({ code: 'expression_mismatch' }))
   })
 
-  it('rejects unknown classification reasons and catalog placeholder mismatch', () => {
-    const mapped: InventoryEntry = { id: 'candidate-1', mode: 'mapped', catalog_key: 'progress', template: '进度 {current}/{total}', expression_placeholders: ['current', 'total'] }
-    expect(validateInventory([candidate()], [mapped], { progress: '进度 {value}/{total}' }).issues).toContainEqual(expect.objectContaining({ code: 'catalog_placeholder_mismatch' }))
+  it('rejects unknown classification reasons and catalog value mismatch', () => {
+    const mapped: InventoryEntry = { id: 'candidate-1', mode: 'mapped', catalog_key: 'progress', template: '进度 {current}/{total}', expression_bindings: [{ expression: 'current', placeholder: 'current' }, { expression: 'total', placeholder: 'total' }] }
+    expect(validateInventory([candidate()], [mapped], { progress: '不同文案 {current}/{total}' }).issues).toContainEqual(expect.objectContaining({ code: 'catalog_value_mismatch' }))
     expect(validateInventory([candidate()], [{ id: 'candidate-1', mode: 'classified', reason: 'anything' as never }], {}).issues).toContainEqual(expect.objectContaining({ code: 'invalid_reason' }))
+  })
+
+  it('rejects mapped static text that differs from the source candidate', () => {
+    const plain = candidate({ kind: 'string_literal', raw: '原始文案', expressions: [], static_parts: ['原始文案'] })
+    const entry: InventoryEntry = { id: 'candidate-1', mode: 'mapped', catalog_key: 'plain', template: '错误文案', expression_bindings: [] }
+    expect(validateInventory([plain], [entry], { plain: '错误文案' }).issues).toContainEqual(expect.objectContaining({ code: 'template_mismatch' }))
+  })
+
+  it('rejects matching placeholders when static template parts differ', () => {
+    const entry: InventoryEntry = { id: 'candidate-1', mode: 'mapped', catalog_key: 'progress', template: '错误 {current}/{total}', expression_bindings: [{ expression: 'current', placeholder: 'current' }, { expression: 'total', placeholder: 'total' }] }
+    expect(validateInventory([candidate()], [entry], { progress: entry.template }).issues).toContainEqual(expect.objectContaining({ code: 'template_mismatch' }))
+  })
+
+  it('allows semantic placeholder names for exact complex source expressions', () => {
+    for (const [expression, placeholder] of [
+      ['item.display_name', 'name'],
+      ['backend.resources.length', 'count'],
+      ['Math.round(progress)', 'percent'],
+    ]) {
+      const complex = candidate({ raw: `值 \${${expression}}`, expressions: [expression], static_parts: ['值 ', ''] })
+      const entry: InventoryEntry = { id: 'candidate-1', mode: 'mapped', catalog_key: 'value', template: `值 {${placeholder}}`, expression_bindings: [{ expression, placeholder }] }
+      expect(validateInventory([complex], [entry], { value: entry.template }).issues, expression).toEqual([])
+    }
+  })
+
+  it('rejects invalid placeholder names and placeholder order or repetition differences', () => {
+    const base: InventoryEntry = { id: 'candidate-1', mode: 'mapped', catalog_key: 'progress', template: '进度 {current}/{total}', expression_bindings: [{ expression: 'current', placeholder: 'current' }, { expression: 'total', placeholder: 'total' }] }
+    expect(validateInventory([candidate()], [{ ...base, expression_bindings: [{ expression: 'current', placeholder: 'bad-name' }, base.expression_bindings[1]] }], { progress: '进度 {bad-name}/{total}' }).issues).toContainEqual(expect.objectContaining({ code: 'invalid_placeholder' }))
+    expect(validateInventory([candidate()], [{ ...base, template: '进度 {total}/{current}' }], { progress: '进度 {total}/{current}' }).issues).toContainEqual(expect.objectContaining({ code: 'template_mismatch' }))
+    expect(validateInventory([candidate()], [{ ...base, template: '进度 {current}/{current}' }], { progress: '进度 {current}/{current}' }).issues).toContainEqual(expect.objectContaining({ code: 'template_mismatch' }))
   })
 })
