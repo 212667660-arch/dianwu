@@ -55,6 +55,8 @@ npm run desktop:pack
 npm run desktop:dist
 ```
 
+以上两个命令是本地未签名开发路径。Windows 正式发布必须使用受保护的签名流程；Azure 资源、GitHub Environment、变量和凭据轮换说明见 [Azure Trusted Signing 发布配置](../../docs/release/azure-trusted-signing.md)。发布凭据禁止粘贴到 issues、chat、logs、commits 或 artifacts。
+
 正式桌面版由 Electron 主进程生成短期本地令牌、动态分配端口并启动 FastAPI。令牌和后端地址只存在于主进程；渲染进程、preload 和打包后的前端资源均不接收它们。
 
 ### 安装版模型配置

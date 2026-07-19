@@ -72,6 +72,8 @@ MODEL_NAME=deepseek-v4-pro
 
 不要把真实密钥写入代码、提交到版本库或发送到前端。
 
+Windows 正式签名发布的 Azure 资源、受保护 Environment、最小权限和凭据轮换流程见 [Azure Trusted Signing 发布配置](docs/release/azure-trusted-signing.md)。任何发布凭据都禁止粘贴到 issues、chat、logs、commits 或 artifacts。
+
 开发模式默认使用 `APP_ENV=development`。配置 `DESKTOP_TOKEN` 后，所有 `/api/*` 接口和 `/health/ready` 都必须携带 `X-A3-Desktop-Token`；生产模式始终要求该令牌，缺失时会拒绝业务请求。Electron 正式版应由主进程每次启动生成短期令牌，并通过受保护通道传给后端，renderer 不持有令牌。
 
 生产模式不允许后端通过 `PUT /api/settings/model` 将 API Key 明文写入 `.env`；请使用 Electron `safeStorage` 或 Windows Credential Manager 保存密钥，再在启动时注入模型配置。生产模式仅接受 HTTPS 公网模型网关，默认拒绝 localhost、私网、链路本地地址和非标准端口。开发环境需要测试本地网关时，显式设置 `ALLOW_LOCAL_MODEL_GATEWAY=true`。
