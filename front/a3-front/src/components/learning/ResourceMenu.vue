@@ -1,21 +1,22 @@
 ﻿<template>
   <div class="resource-menu">
-    <label class="menu-label">资源类型</label>
+    <label class="menu-label">{{ t('components.resourceMenu.resourceType') }}</label>
     <select data-testid="resource-mode" :value="modelKey" @change="onChange" class="menu-select">
-      <option value="bundle">📦 完整资源包</option>
+      <option value="bundle">{{ t('components.resourceMenu.resource') }}</option>
       <option disabled>──────────</option>
-      <option value="single:course_explanation">📖 课程讲解</option>
-      <option value="single:mind_map">🧠 思维导图</option>
-      <option value="single:question_bank">📝 题库</option>
-      <option value="single:extended_reading">📚 延伸阅读</option>
-      <option value="single:adaptive_practice">🔬 自适应练习</option>
+      <option v-for="type in resourceTypes" :key="type" :value="`single:${type}`">{{ t(resourceTypeKey(type)) }}</option>
     </select>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from "vue";
+import { useI18n } from "vue-i18n";
 import type { ArtifactType, ResourceSelection } from "@/api/types";
+import { resourceTypeKey } from "@/i18n/display-maps";
+
+const { t } = useI18n();
+const resourceTypes: ArtifactType[] = ["course_explanation", "mind_map", "question_bank", "extended_reading", "adaptive_practice"];
 
 const props = defineProps<{
   modelValue?: ResourceSelection;
@@ -49,13 +50,15 @@ function onChange(e: Event) {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 .menu-label {
   font-size: 14px;
   font-weight: 500;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .menu-select {
+  min-width: 0;
   padding: 4px 8px;
   border: 1px solid #d1d5db;
   border-radius: 6px;

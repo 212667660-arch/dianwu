@@ -4,12 +4,12 @@
       <div ref="mermaidEl" class="mermaid-render"></div>
     </div>
     <div v-else class="outline-fallback">
-      <div class="fallback-notice">⚠ Mermaid 渲染不可用，显示文本大纲</div>
+      <div class="fallback-notice">{{ t('components.safeMermaid.unavailableNotice') }}</div>
       <pre class="outline-text">{{ outlineText }}</pre>
     </div>
     <div class="outline-section">
       <details>
-        <summary>📋 文本大纲</summary>
+        <summary>{{ t('components.safeMermaid.textOutline') }}</summary>
         <pre class="outline-text">{{ outlineText }}</pre>
       </details>
     </div>
@@ -22,6 +22,9 @@ let safeMermaidSequence = 0;
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   content: string;
@@ -82,8 +85,8 @@ const canRender = computed(() => safeToRender.value && !renderFailed.value);
 
 const outlineText = computed(() => {
   if (props.outline) return props.outline;
-  const match = props.content.match(/##\s*大纲\n([\s\S]*?)(?=\n##|$)/);
-  return match ? match[1].trim() : "大纲不可用";
+  const match = props.content.match(/##\s*\u5927\u7eb2\n([\s\S]*?)(?=\n##|$)/);
+  return match ? match[1].trim() : t('components.safeMermaid.outlineUnavailableTitle');
 });
 
 const ALLOWED_SVG_TAGS = new Set([
@@ -172,7 +175,7 @@ onBeforeUnmount(() => { renderVersion += 1; });
 </script>
 
 <style scoped>
-.safe-mermaid { margin: 8px 0; }
+.safe-mermaid { min-width: 0; margin: 8px 0; }
 .mermaid-container {
   overflow-x: auto; padding: 8px;
   background: #f9fafb; border-radius: 6px;
@@ -183,6 +186,7 @@ onBeforeUnmount(() => { renderVersion += 1; });
   border-radius: 6px; border: 1px solid #fbbf24;
 }
 .fallback-notice { font-size: 13px; color: #92400e; margin-bottom: 4px; }
+.fallback-notice, .outline-section summary { overflow-wrap: anywhere; }
 .outline-text {
   font-size: 13px; font-family: monospace;
   white-space: pre-wrap; margin: 4px 0;

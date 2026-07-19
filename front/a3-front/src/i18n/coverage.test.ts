@@ -52,24 +52,46 @@ describe('localized application shell coverage', () => {
     for (const key of mappedKeys) expect(catalog[key], key).toEqual(expect.any(String))
   })
 
-  it('keeps Han literals out of the phased Task 3 router, shell, and display-map production surface', () => {
+  it('keeps Han literals out of the phased Task 4 router, shell, display-map, and component production surface', () => {
     const root = resolve(__dirname, '..')
-    // Task 4 expands this gate to src/components; Task 5 expands it to src/views
-    // and then to all production Vue/TypeScript outside the explicit protocol/enum allowlist.
-    const task3ProductionSurface = [
+    // Task 5 expands this gate to src/views and then to all production Vue/TypeScript
+    // outside the explicit protocol/enum allowlist.
+    const componentProductionSurface = readdirSync(resolve(root, 'components'), { recursive: true })
+      .map(file => `components/${String(file).replaceAll('\\', '/')}`)
+      .filter(file => /\.(?:ts|vue)$/.test(file) && !file.endsWith('.test.ts'))
+    const task4ProductionSurface = [
       ...readdirSync(resolve(root, 'router'))
         .filter(file => /\.(?:ts|vue)$/.test(file) && !file.endsWith('.test.ts'))
         .map(file => `router/${file}`),
       'layouts/AppLayout.vue',
       'i18n/display-maps.ts',
+      ...componentProductionSurface,
     ].sort()
-    expect(task3ProductionSurface).toEqual([
+    expect(componentProductionSurface).toHaveLength(16)
+    expect(task4ProductionSurface).toHaveLength(20)
+    expect(task4ProductionSurface).toEqual([
+      'components/knowledge/CollectionRail.vue',
+      'components/knowledge/DocumentGrid.vue',
+      'components/knowledge/DocumentInspector.vue',
+      'components/knowledge/KnowledgeSourceList.vue',
+      'components/knowledge/TextbookCatalog.vue',
+      'components/learning/ResourceBundle.vue',
+      'components/learning/ResourceCard.vue',
+      'components/learning/ResourceMenu.vue',
+      'components/learning/SafeMarkdown.vue',
+      'components/learning/SafeMermaid.vue',
+      'components/model/ModelProfileEditor.vue',
+      'components/model/ModelProfileList.vue',
+      'components/model/ModelSelectionPopover.vue',
+      'components/pet/PetSettingsCard.vue',
+      'components/workspace/ConversationRail.vue',
+      'components/workspace/DeskPanel.vue',
       'i18n/display-maps.ts',
       'layouts/AppLayout.vue',
       'router/history.ts',
       'router/index.ts',
     ])
-    task3ProductionSurface.forEach(file => expect(readFileSync(resolve(root, file), 'utf8'), file).not.toMatch(/\p{Script=Han}/u))
+    task4ProductionSurface.forEach(file => expect(readFileSync(resolve(root, file), 'utf8'), file).not.toMatch(/\p{Script=Han}/u))
 
     const shell = readFileSync(resolve(root, 'layouts/AppLayout.vue'), 'utf8')
     expect(shell).toContain('statuses.sessionState.')

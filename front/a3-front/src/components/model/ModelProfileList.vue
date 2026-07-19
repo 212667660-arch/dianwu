@@ -1,18 +1,18 @@
 <template>
-  <section class="profile-rail" aria-label="模型配置列表">
+  <section class="profile-rail" :aria-label="t('components.modelProfileList.modelProfile')">
     <div class="rail-heading">
       <div>
-        <span class="eyebrow">连接书架</span>
-        <h2>模型配置</h2>
+        <span class="eyebrow">{{ t('components.modelProfileList.connection') }}</span>
+        <h2>{{ t('components.modelProfileList.modelProfileTitle') }}</h2>
       </div>
       <button class="new-button" type="button" data-testid="profile-create" :disabled="busy" @click="emit('create')">
-        ＋ 新建
+        {{ t('components.modelProfileList.create') }}
       </button>
     </div>
 
     <div v-if="profiles.length === 0" class="empty-rail">
-      <span>空</span>
-      <p>还没有可用的模型配置。</p>
+      <span>{{ t('components.modelProfileList.empty') }}</span>
+      <p>{{ t('components.modelProfileList.noAvailableProfiles') }}</p>
     </div>
 
     <article
@@ -35,36 +35,36 @@
           class="star-button"
           :class="{ active: policy?.default_profile_id === profile.id }"
           type="button"
-          :title="policy?.default_profile_id === profile.id ? '当前默认配置' : '设为默认配置'"
-          :aria-label="policy?.default_profile_id === profile.id ? '当前默认配置' : `将${profile.label}设为默认配置`"
+          :title="t(policy?.default_profile_id === profile.id ? 'components.modelProfileList.profileDefaultCurrent' : 'components.modelProfileList.profileDefault')"
+          :aria-label="policy?.default_profile_id === profile.id ? t('components.modelProfileList.profileDefaultCurrent') : t('components.modelProfileList.profileDefaultTitle', { name: profile.label })"
           :data-testid="`profile-default-${profile.id}`"
           :disabled="busy || !profile.enabled || policy?.default_profile_id === profile.id"
           @click.stop="emit('set-default', profile.id)"
         >
-          {{ policy?.default_profile_id === profile.id ? '★ 默认' : '☆' }}
+          {{ policy?.default_profile_id === profile.id ? t('components.modelProfileList.defaultTitle') : '☆' }}
         </button>
       </div>
 
       <p class="model-name">{{ defaultModel(profile) }}</p>
 
       <div class="status-row">
-        <span v-if="!profile.enabled" class="state-tag muted">已停用</span>
-        <span v-else-if="runtime(profile.id)?.needs_attention" class="state-tag danger">需要处理</span>
-        <span v-else-if="runtime(profile.id)?.circuit_state === 'open'" class="state-tag warn">冷却中</span>
-        <span v-else class="state-tag healthy">可用</span>
-        <span v-if="runtime(profile.id)?.circuit_state === 'open'" class="state-tag warn">冷却中</span>
-        <span v-if="fallbackNumber(profile.id)" class="fallback-order">备用 {{ fallbackNumber(profile.id) }}</span>
+        <span v-if="!profile.enabled" class="state-tag muted">{{ t('components.modelProfileList.disabled') }}</span>
+        <span v-else-if="runtime(profile.id)?.needs_attention" class="state-tag danger">{{ t('components.modelProfileList.needsAttention') }}</span>
+        <span v-else-if="runtime(profile.id)?.circuit_state === 'open'" class="state-tag warn">{{ t('components.modelProfileList.cooldownStatus') }}</span>
+        <span v-else class="state-tag healthy">{{ t('components.modelProfileList.available') }}</span>
+        <span v-if="runtime(profile.id)?.circuit_state === 'open'" class="state-tag warn">{{ t('components.modelProfileList.cooldownStatus') }}</span>
+        <span v-if="fallbackNumber(profile.id)" class="fallback-order">{{ t('components.modelProfileList.failover') }} {{ formatNumber(fallbackNumber(profile.id)) }}</span>
       </div>
 
       <div class="card-actions">
-        <button type="button" :data-testid="`profile-test-${profile.id}`" :disabled="busy" @click.stop="emit('test', profile)">测试</button>
+        <button type="button" :data-testid="`profile-test-${profile.id}`" :disabled="busy" @click.stop="emit('test', profile)">{{ t('components.modelProfileList.test') }}</button>
         <button type="button" :data-testid="`profile-toggle-${profile.id}`" :disabled="busy || (profile.enabled && policy?.default_profile_id === profile.id)" @click.stop="emit('toggle-enabled', { profileId: profile.id, enabled: !profile.enabled })">
-          {{ profile.enabled ? '停用' : '启用' }}
+          {{ t(profile.enabled ? 'components.modelProfileList.disable' : 'components.modelProfileList.enable') }}
         </button>
-        <button type="button" :data-testid="`profile-duplicate-${profile.id}`" :disabled="busy" @click.stop="emit('duplicate', profile)">复制</button>
+        <button type="button" :data-testid="`profile-duplicate-${profile.id}`" :disabled="busy" @click.stop="emit('duplicate', profile)">{{ t('components.modelProfileList.duplicateTitle') }}</button>
         <button type="button" :data-testid="`profile-move-up-${profile.id}`" :disabled="busy || !canMove(profile.id, -1)" @click.stop="emit('move-fallback', { profileId: profile.id, direction: -1 })">↑</button>
         <button type="button" :data-testid="`profile-move-down-${profile.id}`" :disabled="busy || !canMove(profile.id, 1)" @click.stop="emit('move-fallback', { profileId: profile.id, direction: 1 })">↓</button>
-        <button class="danger-action" type="button" :data-testid="`profile-delete-${profile.id}`" :disabled="busy || policy?.default_profile_id === profile.id" @click.stop="requestDelete(profile)">删除</button>
+        <button class="danger-action" type="button" :data-testid="`profile-delete-${profile.id}`" :disabled="busy || policy?.default_profile_id === profile.id" @click.stop="requestDelete(profile)">{{ t('common.actions.delete') }}</button>
       </div>
     </article>
   </section>
@@ -72,7 +72,12 @@
 
 <script setup lang="ts">
 import { ElMessageBox } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 import type { ModelProfilePolicy, ModelProfileSummary, ModelRuntimeProfileStatus, ModelRuntimeStatus } from '@/api'
+import { providerKey } from '@/i18n/display-maps'
+import { formatNumber } from '@/i18n/formatters'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   profiles: ModelProfileSummary[]
@@ -94,7 +99,7 @@ const emit = defineEmits<{
 }>()
 
 function providerLabel(provider: ModelProfileSummary['provider']) {
-  return provider === 'anthropic' ? 'Anthropic' : 'OpenAI 兼容'
+  return t(providerKey(provider))
 }
 
 function defaultModel(profile: ModelProfileSummary) {
@@ -119,7 +124,7 @@ function canMove(profileId: string, direction: -1 | 1) {
 
 async function requestDelete(profile: ModelProfileSummary) {
   try {
-    await ElMessageBox.confirm(`删除“${profile.label}”？加密凭据和本地配置会一并移除。`, '删除模型配置', { type: 'warning' })
+    await ElMessageBox.confirm(t('components.modelProfileList.profileDeleteLocal', { name: profile.label }), t('components.modelProfileList.modelProfileDelete'), { type: 'warning' })
     emit('delete', profile.id)
   } catch {
     // User cancelled the destructive action.
@@ -153,7 +158,7 @@ h2 { margin: 3px 0 0; font-family: Georgia, "Microsoft YaHei", serif; font-size:
 .state-tag.warn { color: #9a6d2f; background: #fbefd9; }
 .state-tag.danger { color: #a4534d; background: #f7e3df; }
 .state-tag.muted, .fallback-order { color: var(--muted); background: #efebe5; }
-.card-actions { gap: 4px; margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.card-actions { gap: 4px; flex-wrap: wrap; min-width: 0; margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
 .card-actions button { min-width: 30px; padding: 5px 7px; border: 0; border-radius: 7px; color: var(--muted); background: transparent; cursor: pointer; font-size: 11px; }
 .card-actions button:hover:not(:disabled) { color: var(--ink); background: var(--surface-soft); }
 .card-actions .danger-action { margin-left: auto; color: #a45a52; }

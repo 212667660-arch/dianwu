@@ -37,7 +37,7 @@ describe("ResourceBundle", () => {
   it("renders topic and status", () => {
     const wrapper = mount(ResourceBundle, { props: { bundle: mockBundle } });
     expect(wrapper.text()).toContain("一次函数");
-    expect(wrapper.text()).toContain("COMPLETED");
+    expect(wrapper.text()).toContain("已完成");
   });
 
   it("renders all artifact cards", () => {

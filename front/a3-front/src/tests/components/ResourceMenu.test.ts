@@ -1,5 +1,6 @@
 ﻿import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
+import { activateLocale, installLocaleMessages } from "@/i18n";
 import ResourceMenu from "@/components/learning/ResourceMenu.vue";
 
 describe("ResourceMenu", () => {
@@ -13,9 +14,9 @@ describe("ResourceMenu", () => {
     const wrapper = mount(ResourceMenu);
     const text = wrapper.text();
     expect(text).toContain("课程讲解");
-    expect(text).toContain("思维导图");
+    expect(text).toContain("知识导图");
     expect(text).toContain("题库");
-    expect(text).toContain("延伸阅读");
+    expect(text).toContain("拓展阅读");
     expect(text).toContain("自适应练习");
   });
 
@@ -42,5 +43,14 @@ describe("ResourceMenu", () => {
         resourceType: "course_explanation",
       });
     }
+  });
+
+  it("renders injected English learning labels", () => {
+    installLocaleMessages("en-US", { components: { resourceMenu: { resourceType: "Resource type", resource: "📦 Complete bundle" } } });
+    activateLocale("en-US");
+    const wrapper = mount(ResourceMenu);
+
+    expect(wrapper.text()).toContain("Resource type");
+    expect(wrapper.text()).toContain("Complete bundle");
   });
 });

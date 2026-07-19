@@ -9,20 +9,6 @@
       "expression_bindings": []
     },
     {
-      "id": "0102fd21ef7b8d659c0502e5",
-      "mode": "mapped",
-      "catalog_key": "components.textbookCatalog.junior",
-      "template": "初中",
-      "expression_bindings": []
-    },
-    {
-      "id": "0123b6307adb7ef3a065ddbf",
-      "mode": "mapped",
-      "catalog_key": "components.collectionRail.gardenTitle",
-      "template": "资料花园",
-      "expression_bindings": []
-    },
-    {
       "id": "01241d9610b75a85415258c3",
       "mode": "mapped",
       "catalog_key": "views.desktopSettings.diagnosisGenerate",
@@ -30,24 +16,10 @@
       "expression_bindings": []
     },
     {
-      "id": "014824b24a13231987cb3f4d",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.waitingAnimation",
-      "template": "等你回来",
-      "expression_bindings": []
-    },
-    {
       "id": "0176f9d09e007ddbd2cd8d19",
       "mode": "mapped",
       "catalog_key": "views.modelSettings.connectionTitle",
       "template": "此刻的连接",
-      "expression_bindings": []
-    },
-    {
-      "id": "02031fcab989dd6b3b065679",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.modelReasoning",
-      "template": "模型与思考档位",
       "expression_bindings": []
     },
     {
@@ -77,24 +49,10 @@
       "expression_bindings": []
     },
     {
-      "id": "0342364bf0cb1200b4cfa94c",
-      "mode": "mapped",
-      "catalog_key": "common.actions.cancel",
-      "template": "取消",
-      "expression_bindings": []
-    },
-    {
       "id": "0415c730a2bf782e448862a3",
       "mode": "mapped",
       "catalog_key": "views.dashboard.sessionPhase",
       "template": "会话阶段",
-      "expression_bindings": []
-    },
-    {
-      "id": "0447d75b457abade451b4b7a",
-      "mode": "mapped",
-      "catalog_key": "components.conversationRail.start",
-      "template": "从一句想学的话开始",
       "expression_bindings": []
     },
     {
@@ -122,18 +80,6 @@
       "id": "0518c55f54c0ad87c34e8a7e",
       "mode": "classified",
       "reason": "compatibility_fallback"
-    },
-    {
-      "id": "054c6e63e7e38de0cdab718d",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.securityReasoning",
-      "template": "推理适配器不在安全白名单中。",
-      "expression_bindings": []
-    },
-    {
-      "id": "058ef959cf70b46e9e3a77e4",
-      "mode": "classified",
-      "reason": "non_user_data"
     },
     {
       "id": "06042cc7859c0458526a41d0",
@@ -176,36 +122,10 @@
       "expression_bindings": []
     },
     {
-      "id": "079ee44943e928a2182aaf94",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.knowledgePoint",
-      "template": "总结知识点 {name}",
-      "expression_bindings": [
-        {
-          "expression": "document.display_name",
-          "placeholder": "name"
-        }
-      ]
-    },
-    {
-      "id": "081356a30450309539e9d7e1",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.questionBank",
-      "template": "📝 题库",
-      "expression_bindings": []
-    },
-    {
       "id": "086879199d91ed86c4974cc8",
       "mode": "mapped",
       "catalog_key": "views.tutor.scope.exact",
       "template": "按所选页码精确检索",
-      "expression_bindings": []
-    },
-    {
-      "id": "09b8cab8d9a670605acb2dac",
-      "mode": "mapped",
-      "catalog_key": "views.dashboard.mastery",
-      "template": "掌握度",
       "expression_bindings": []
     },
     {
@@ -230,13 +150,6 @@
       "expression_bindings": []
     },
     {
-      "id": "0af3aa527fda109e37b6b3ac",
-      "mode": "mapped",
-      "catalog_key": "navigation.learningPath",
-      "template": "学习路径",
-      "expression_bindings": []
-    },
-    {
       "id": "0b43d90561a332f95a513077",
       "mode": "mapped",
       "catalog_key": "views.onboarding.profile",
@@ -251,42 +164,11 @@
       "expression_bindings": []
     },
     {
-      "id": "0c32486fbfb48580849b5a7a",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.actionPreviewUnavailable",
-      "template": "动作预览暂时不可用。",
-      "expression_bindings": []
-    },
-    {
       "id": "0c7170263b1317a3a96b53cc",
       "mode": "mapped",
       "catalog_key": "views.tutor.knowledgeSpace.empty",
       "template": "还没有资料集合，可以先去知识库建一座小书房。",
       "expression_bindings": []
-    },
-    {
-      "id": "0ca54e4d49196918d828be49",
-      "mode": "mapped",
-      "catalog_key": "components.documentGrid.view",
-      "template": "查看文档 {name}",
-      "expression_bindings": [
-        {
-          "expression": "item.display_name",
-          "placeholder": "name"
-        }
-      ]
-    },
-    {
-      "id": "0d00346ab025e952a35a4a3a",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.generateWorkedExample",
-      "template": "生成例题与步骤 {name}",
-      "expression_bindings": [
-        {
-          "expression": "document.display_name",
-          "placeholder": "name"
-        }
-      ]
     },
     {
       "id": "0d347c505a2b309e95a47326",
@@ -296,54 +178,10 @@
       "expression_bindings": []
     },
     {
-      "id": "0defbb691bb515f54bdb44d2",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileList.create",
-      "template": "＋ 新建",
-      "expression_bindings": []
-    },
-    {
-      "id": "0e070a4323b86c89bd2aff54",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelectionPopover.global",
-      "template": "跟随全局",
-      "expression_bindings": []
-    },
-    {
       "id": "0e53a71e19313deaa48bd8f1",
       "mode": "mapped",
       "catalog_key": "views.agents.startLearningTask",
       "template": "发起学习任务",
-      "expression_bindings": []
-    },
-    {
-      "id": "0f3ce05d9e2ce4b87af09149",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.securityContentCheck",
-      "template": "内容未通过安全检查，请修改请求后重试。",
-      "expression_bindings": []
-    },
-    {
-      "id": "0f8b01546b10fe46a4b09896",
-      "mode": "mapped",
-      "catalog_key": "components.documentGrid.favoriteActionLabel",
-      "template": "{favoriteAction} {name}",
-      "expression_bindings": [
-        {
-          "expression": "item.favorite ? '取消收藏' : '收藏'",
-          "placeholder": "favoriteAction"
-        },
-        {
-          "expression": "item.display_name",
-          "placeholder": "name"
-        }
-      ]
-    },
-    {
-      "id": "0f965dce035b214f630e7fdc",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelectionPopover.selectionTitle",
-      "template": "选择本空间模型与思考强度",
       "expression_bindings": []
     },
     {
@@ -357,20 +195,6 @@
       "reason": "compatibility_fallback"
     },
     {
-      "id": "0fc3cdbbd799f336666285ef",
-      "mode": "mapped",
-      "catalog_key": "navigation.mobile.title",
-      "template": "学习空间",
-      "expression_bindings": []
-    },
-    {
-      "id": "0fef728205b86a4d1caf4436",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.ocrDescription",
-      "template": "这是一份图片型 PDF。安装通过许可校验的本地 OCR 包后即可继续，原文件不会上传。",
-      "expression_bindings": []
-    },
-    {
       "id": "112d90853419b0e477c28d61",
       "mode": "mapped",
       "catalog_key": "desktop.tray.pauseAi",
@@ -378,30 +202,9 @@
       "expression_bindings": []
     },
     {
-      "id": "1179ff437895152cdc91fb07",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileList.profileDefaultCurrent",
-      "template": "当前默认配置",
-      "expression_bindings": []
-    },
-    {
       "id": "11871a0d18870cdfa81b7302",
       "mode": "classified",
       "reason": "canonical_enum"
-    },
-    {
-      "id": "11c99927b4e2bdb5f8bbb878",
-      "mode": "mapped",
-      "catalog_key": "views.knowledge.favorites",
-      "template": "收藏",
-      "expression_bindings": []
-    },
-    {
-      "id": "12044ecc2ab7a496b5924c60",
-      "mode": "mapped",
-      "catalog_key": "components.collectionRail.documentCountSuffix",
-      "template": "份资料 ·",
-      "expression_bindings": []
     },
     {
       "id": "12957d9ebe19553757297993",
@@ -416,24 +219,10 @@
       "reason": "compatibility_fallback"
     },
     {
-      "id": "130a1323941df802b4f9c9a6",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileList.profileDefault",
-      "template": "设为默认配置",
-      "expression_bindings": []
-    },
-    {
       "id": "14871bd669858524a8ea06ea",
       "mode": "mapped",
       "catalog_key": "views.tutor.sourceCountPrefix",
       "template": "本空间资料 ·",
-      "expression_bindings": []
-    },
-    {
-      "id": "14f9c6580f512ca9eb8c7d8f",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.apiUrlValidation",
-      "template": "API 地址必须以 http:// 或 https:// 开头。",
       "expression_bindings": []
     },
     {
@@ -451,13 +240,6 @@
       "expression_bindings": []
     },
     {
-      "id": "162b8360e6a389ac583de1c8",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.profileName",
-      "template": "请填写配置显示名称。",
-      "expression_bindings": []
-    },
-    {
       "id": "16441beb06edb9829464d566",
       "mode": "classified",
       "reason": "compatibility_fallback"
@@ -467,20 +249,6 @@
       "mode": "mapped",
       "catalog_key": "views.dashboard.continueLearning",
       "template": "继续学习",
-      "expression_bindings": []
-    },
-    {
-      "id": "16a8cf7d7549e3a671b69030",
-      "mode": "mapped",
-      "catalog_key": "components.deskPanel.todayLearningTitle",
-      "template": "今天的学习",
-      "expression_bindings": []
-    },
-    {
-      "id": "16bd6f8908685cd281287922",
-      "mode": "mapped",
-      "catalog_key": "components.documentGrid.empty",
-      "template": "一页空白，也是一种邀请",
       "expression_bindings": []
     },
     {
@@ -495,13 +263,6 @@
       "mode": "mapped",
       "catalog_key": "views.agents.agentStatusOverview",
       "template": "画像 Agent 与资源 Agent 的真实工作状态",
-      "expression_bindings": []
-    },
-    {
-      "id": "176b487c51408f128bfe36b4",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.openAiCompatible",
-      "template": "OpenAI 兼容",
       "expression_bindings": []
     },
     {
@@ -540,37 +301,9 @@
       "expression_bindings": []
     },
     {
-      "id": "186db7b598203a6f8d85d4c9",
-      "mode": "mapped",
-      "catalog_key": "components.deskPanel.resource",
-      "template": "份资源",
-      "expression_bindings": []
-    },
-    {
-      "id": "1894f3c8b54d3a6bb26c3456",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.showCompanion",
-      "template": "显示伙伴",
-      "expression_bindings": []
-    },
-    {
-      "id": "19608e9cd50ed2b0cf25ff77",
-      "mode": "mapped",
-      "catalog_key": "components.collectionRail.localOnlyNotice",
-      "template": "⌂ 文件只保存在这台设备",
-      "expression_bindings": []
-    },
-    {
       "id": "1a573b82e504d32e87be3272",
       "mode": "classified",
       "reason": "compatibility_fallback"
-    },
-    {
-      "id": "1aa2c8ff0667a1c5195097d3",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileList.noAvailableProfiles",
-      "template": "还没有可用的模型配置。",
-      "expression_bindings": []
     },
     {
       "id": "1b28a2fe4ad3ae539e47301d",
@@ -597,13 +330,6 @@
       "id": "1b5b736bc4d3cbed5291fd84",
       "mode": "classified",
       "reason": "static_markup_template"
-    },
-    {
-      "id": "1b7bc84bde53b6be122f494f",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.inProgress",
-      "template": "正在整理",
-      "expression_bindings": []
     },
     {
       "id": "1c7156543951a4d1d57c2c7b",
@@ -660,13 +386,6 @@
       "reason": "static_markup_template"
     },
     {
-      "id": "1f4554d29b902e0b0de9361e",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.petCompanionDescription",
-      "template": "在桌边陪你学习。",
-      "expression_bindings": []
-    },
-    {
       "id": "1f5ab495880d685b3e235fd7",
       "mode": "mapped",
       "catalog_key": "views.dashboard.multiAgent",
@@ -714,24 +433,10 @@
       "expression_bindings": []
     },
     {
-      "id": "211d65a53bf1bee3ff6a21a8",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.inProgress",
-      "template": "正在努力",
-      "expression_bindings": []
-    },
-    {
       "id": "2124614f5aba73d023948f23",
       "mode": "mapped",
       "catalog_key": "views.modelSettings.failoverExplanation",
       "template": "仅在连接中断、超时或服务临时不可用时切换；认证和输入错误不会被备用配置掩盖。",
-      "expression_bindings": []
-    },
-    {
-      "id": "21d3041d70381cf5e982f4be",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.settingsLoadFailure",
-      "template": "桌宠设置暂时无法读取。",
       "expression_bindings": []
     },
     {
@@ -773,38 +478,11 @@
       "expression_bindings": []
     },
     {
-      "id": "241a4abaae3219af8c205b41",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.courseExplanation",
-      "template": "📖 课程讲解",
-      "expression_bindings": []
-    },
-    {
       "id": "24baa7a0c9d0eaed8c9b8c96",
       "mode": "mapped",
       "catalog_key": "views.tutor.generationFailure",
       "template": "生成失败，请检查后重试。",
       "expression_bindings": []
-    },
-    {
-      "id": "2509d604d5658c81bcf9256d",
-      "mode": "mapped",
-      "catalog_key": "components.knowledgeSourceList.openReferenceLabel",
-      "template": "查看{referenceId}：{documentName} {locator}",
-      "expression_bindings": [
-        {
-          "expression": "source.reference_id",
-          "placeholder": "referenceId"
-        },
-        {
-          "expression": "source.document_name",
-          "placeholder": "documentName"
-        },
-        {
-          "expression": "source.locator_label.replace(/第\\s*(\\d+)\\s*页/,'第$1页')",
-          "placeholder": "locator"
-        }
-      ]
     },
     {
       "id": "25b4519969131e05283ae782",
@@ -821,38 +499,10 @@
       "expression_bindings": []
     },
     {
-      "id": "265f6b3a3134cc14200ab1f6",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.practiceTitle",
-      "template": "🔬 自适应练习",
-      "expression_bindings": []
-    },
-    {
-      "id": "26b4b31da44d457101885a17",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.naturalSpeedLabel",
-      "template": "1× 自然",
-      "expression_bindings": []
-    },
-    {
       "id": "26d23e6e78b9c35472f4e222",
       "mode": "mapped",
       "catalog_key": "views.dashboard.start",
       "template": "开始",
-      "expression_bindings": []
-    },
-    {
-      "id": "2714c0970d907382c6099383",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.localPreview",
-      "template": "预览（本地阅读器）",
-      "expression_bindings": []
-    },
-    {
-      "id": "2727ee2e75c403b2b6757dae",
-      "mode": "mapped",
-      "catalog_key": "components.deskPanel.emptyDeskDescription",
-      "template": "等你放下一点学习的痕迹。",
       "expression_bindings": []
     },
     {
@@ -870,24 +520,10 @@
       "expression_bindings": []
     },
     {
-      "id": "2766d80c5491ad0f7b4f3ef5",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.modelProfileEdit",
-      "template": "模型配置编辑器",
-      "expression_bindings": []
-    },
-    {
       "id": "2790153cc9b5e23f652a2827",
       "mode": "mapped",
       "catalog_key": "views.agents.profileAgentDescription",
       "template": "通过多轮对话识别目标、水平、风格和薄弱知识点。",
-      "expression_bindings": []
-    },
-    {
-      "id": "27d97d6bdf93f626bc055ed4",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.organizedStatus",
-      "template": "已经安静地整理好了",
       "expression_bindings": []
     },
     {
@@ -923,13 +559,6 @@
       "mode": "mapped",
       "catalog_key": "views.dashboard.modelOnlineAvailable",
       "template": "在线模型可用",
-      "expression_bindings": []
-    },
-    {
-      "id": "2a66dfb9ef44607a60cdc259",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.versionTitle",
-      "template": "请填写 Anthropic 版本。",
       "expression_bindings": []
     },
     {
@@ -980,24 +609,10 @@
       ]
     },
     {
-      "id": "2ca78e99a5591c50646fcdc4",
-      "mode": "mapped",
-      "catalog_key": "common.actions.close",
-      "template": "关闭",
-      "expression_bindings": []
-    },
-    {
       "id": "2cf3c4697b213be44930845c",
       "mode": "mapped",
       "catalog_key": "views.tutor.previousQuestion",
       "template": "刚才的问题",
-      "expression_bindings": []
-    },
-    {
-      "id": "2d340c8842508c4141e58abd",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileList.connection",
-      "template": "连接书架",
       "expression_bindings": []
     },
     {
@@ -1006,18 +621,6 @@
       "catalog_key": "views.knowledge.modelDocument",
       "template": "资料只留在这台设备。需要模型协助时，也只取与你问题相关的少量片段。",
       "expression_bindings": []
-    },
-    {
-      "id": "2d9cb3acba00bc94c2b64b95",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.parseRetry",
-      "template": "重新解析 {name}",
-      "expression_bindings": [
-        {
-          "expression": "document.display_name",
-          "placeholder": "name"
-        }
-      ]
     },
     {
       "id": "2dfbf9b1643ce7480c3b3c51",
@@ -1039,18 +642,6 @@
       "catalog_key": "views.knowledge.tagFilter",
       "template": "按标签筛选",
       "expression_bindings": []
-    },
-    {
-      "id": "2e5907e7f18b98cbef7f7ef1",
-      "mode": "mapped",
-      "catalog_key": "components.documentGrid.pageFailure",
-      "template": "重试 {name} 的失败 OCR 页面",
-      "expression_bindings": [
-        {
-          "expression": "item.display_name",
-          "placeholder": "name"
-        }
-      ]
     },
     {
       "id": "2e68332d7d779cf4223c3c37",
@@ -1076,20 +667,6 @@
       "mode": "mapped",
       "catalog_key": "views.modelSettings.disabled",
       "template": "已关闭",
-      "expression_bindings": []
-    },
-    {
-      "id": "2ed93bdc2bd3402ef71acd3e",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.voiceLocal",
-      "template": "使用系统本地语音，不上传文字或音频。",
-      "expression_bindings": []
-    },
-    {
-      "id": "2fdff397d05edea135d628ce",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.modelReasoningAutomatic",
-      "template": "每个模型都必须保留“自动”思考档位。",
       "expression_bindings": []
     },
     {
@@ -1184,13 +761,6 @@
       "expression_bindings": []
     },
     {
-      "id": "34e00567a890503b7ae20ca7",
-      "mode": "mapped",
-      "catalog_key": "components.conversationRail.conversation",
-      "template": "对话",
-      "expression_bindings": []
-    },
-    {
       "id": "34e8cad756a6e237fcf0db63",
       "mode": "mapped",
       "catalog_key": "views.agents.deliveredItemCount",
@@ -1210,20 +780,6 @@
       "expression_bindings": []
     },
     {
-      "id": "35dbeeaa239edb63bbe0b4f9",
-      "mode": "mapped",
-      "catalog_key": "components.textbookCatalog.textbookDirectoryMathematics",
-      "template": "官方数学教材目录",
-      "expression_bindings": []
-    },
-    {
-      "id": "363632ae5c4fda4256a27549",
-      "mode": "mapped",
-      "catalog_key": "components.conversationRail.practiceReview",
-      "template": "练习与复习",
-      "expression_bindings": []
-    },
-    {
       "id": "369170f685c06267288ce34c",
       "mode": "mapped",
       "catalog_key": "views.knowledge.bulkOperationFailure",
@@ -1236,48 +792,10 @@
       ]
     },
     {
-      "id": "369845f54a361b94f05b1461",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.edit",
-      "template": "编辑 · {name}",
-      "expression_bindings": [
-        {
-          "expression": "profile.label",
-          "placeholder": "name"
-        }
-      ]
-    },
-    {
-      "id": "3700bd440fb961da1a158a8f",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.securityReviewUnavailable",
-      "template": "内容安全审核暂时不可用，请稍后重试。",
-      "expression_bindings": []
-    },
-    {
-      "id": "3747b5d3f694bdce1eefc46c",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.pageCount",
-      "template": "{pageCount} 页",
-      "expression_bindings": [
-        {
-          "expression": "props.document.page_count",
-          "placeholder": "pageCount"
-        }
-      ]
-    },
-    {
       "id": "378201f70ce8774e27be4a43",
       "mode": "mapped",
       "catalog_key": "views.agents.updateMasteryAndReviewPlan",
       "template": "更新掌握度与复习计划",
-      "expression_bindings": []
-    },
-    {
-      "id": "37d24d12241876233313a517",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.expand",
-      "template": "展开",
       "expression_bindings": []
     },
     {
@@ -1328,13 +846,6 @@
       "expression_bindings": []
     },
     {
-      "id": "398474cd0cc2c62821bedb35",
-      "mode": "mapped",
-      "catalog_key": "components.deskPanel.noteTitle",
-      "template": "便签",
-      "expression_bindings": []
-    },
-    {
       "id": "39aa98faf21b967a20587f87",
       "mode": "mapped",
       "catalog_key": "views.knowledge.tag",
@@ -1345,13 +856,6 @@
       "id": "39b954688d82b34ac8f83fdb",
       "mode": "classified",
       "reason": "compatibility_fallback"
-    },
-    {
-      "id": "39b97fc716d6672b1caf8932",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileList.modelProfile",
-      "template": "模型配置列表",
-      "expression_bindings": []
     },
     {
       "id": "3a0d4bac596d9d1d3a0764bf",
@@ -1365,13 +869,6 @@
       "mode": "mapped",
       "catalog_key": "views.knowledge.purge",
       "template": "永久删除",
-      "expression_bindings": []
-    },
-    {
-      "id": "3a76349d27db9695c3a6d5e4",
-      "mode": "mapped",
-      "catalog_key": "components.documentGrid.offlineOcrUnavailable",
-      "template": "离线 OCR 组件不可用",
       "expression_bindings": []
     },
     {
@@ -1396,20 +893,6 @@
       "expression_bindings": []
     },
     {
-      "id": "3c2a93b0d3c596beb991b454",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.chunks",
-      "template": "可检索片段",
-      "expression_bindings": []
-    },
-    {
-      "id": "3cd5d844898119bf551a6911",
-      "mode": "mapped",
-      "catalog_key": "common.actions.delete",
-      "template": "删除",
-      "expression_bindings": []
-    },
-    {
       "id": "3d4762c9fbcd9373b15a4406",
       "mode": "mapped",
       "catalog_key": "errors.MODEL_CREDENTIAL_STORE_INVALID",
@@ -1424,24 +907,10 @@
       "expression_bindings": []
     },
     {
-      "id": "3d4a5664398e5498b81139cc",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.practiceTitle",
-      "template": "🔬 自适应练习",
-      "expression_bindings": []
-    },
-    {
       "id": "3d4c689953fa19594a1c823f",
       "mode": "mapped",
       "catalog_key": "views.tutor.scope.expanded",
       "template": "已扩大相邻页检索",
-      "expression_bindings": []
-    },
-    {
-      "id": "3ddcecb3ebacccc2fd9f9fd3",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.apiKeyRetainPlaceholder",
-      "template": "留空沿用已保存密钥",
       "expression_bindings": []
     },
     {
@@ -1456,41 +925,6 @@
       "mode": "mapped",
       "catalog_key": "views.tutor.modelNotReady",
       "template": "模型未就绪",
-      "expression_bindings": []
-    },
-    {
-      "id": "3e88493118337496093a8123",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.modelLabel",
-      "template": "供应商模型名",
-      "expression_bindings": []
-    },
-    {
-      "id": "3eae631acc7fc28786dc3b39",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileList.failover",
-      "template": "备用",
-      "expression_bindings": []
-    },
-    {
-      "id": "3f0b7cb35141dbd1da52235b",
-      "mode": "mapped",
-      "catalog_key": "pet.native.wait",
-      "template": "等待",
-      "expression_bindings": []
-    },
-    {
-      "id": "3f0ce270080f96662daee84e",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.profile",
-      "template": "配置 ID",
-      "expression_bindings": []
-    },
-    {
-      "id": "3f45da2eec45a51c396248d6",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.securityContentStructure",
-      "template": "内容包含不安全的展示结构，已停止渲染。",
       "expression_bindings": []
     },
     {
@@ -1531,27 +965,6 @@
       "expression_bindings": []
     },
     {
-      "id": "401e7a3ab482d1380ab39093",
-      "mode": "mapped",
-      "catalog_key": "components.documentGrid.etaCalculating",
-      "template": "剩余时间计算中",
-      "expression_bindings": []
-    },
-    {
-      "id": "4035c16e5c5c63553c0f173e",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileList.enable",
-      "template": "启用",
-      "expression_bindings": []
-    },
-    {
-      "id": "4093d9d82fbba46b01fb4e6c",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.workspacePreferenceHint",
-      "template": "保存后保持稳定，用于学习空间偏好。",
-      "expression_bindings": []
-    },
-    {
       "id": "40e5414dc7d0161de1040d44",
       "mode": "mapped",
       "catalog_key": "views.agents.qualityCheck",
@@ -1587,43 +1000,10 @@
       "expression_bindings": []
     },
     {
-      "id": "4240c6e2d729c4a8ad35ca62",
-      "mode": "mapped",
-      "catalog_key": "components.textbookCatalog.onlineReading",
-      "template": "在线阅读 {name}",
-      "expression_bindings": [
-        {
-          "expression": "item.title",
-          "placeholder": "name"
-        }
-      ]
-    },
-    {
-      "id": "42b32f2629b3e96e3a0847bf",
-      "mode": "mapped",
-      "catalog_key": "common.form.sessionId",
-      "template": "会话 ID",
-      "expression_bindings": []
-    },
-    {
-      "id": "42fdf9b585c3b1d05c3ec681",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelection.auto",
-      "template": "自动",
-      "expression_bindings": []
-    },
-    {
       "id": "43437491629bbe50c27d30a4",
       "mode": "mapped",
       "catalog_key": "views.learningPath.recommendationCurrent",
       "template": "当前建议",
-      "expression_bindings": []
-    },
-    {
-      "id": "4358beab7b0e937b7ad64683",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.questionLabel",
-      "template": "问题:",
       "expression_bindings": []
     },
     {
@@ -1655,13 +1035,6 @@
       "expression_bindings": []
     },
     {
-      "id": "4591306d4912cd916948f98c",
-      "mode": "mapped",
-      "catalog_key": "components.collectionRail.emptyDescription",
-      "template": "还没有集合。",
-      "expression_bindings": []
-    },
-    {
       "id": "45e70d4d57fe3f0987de0c40",
       "mode": "mapped",
       "catalog_key": "desktop.updater.unsignedSource",
@@ -1669,38 +1042,10 @@
       "expression_bindings": []
     },
     {
-      "id": "460d343248b0c63ae735f5e7",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.reasoning",
-      "template": "推理适配器",
-      "expression_bindings": []
-    },
-    {
-      "id": "46a09fb7a6786753b3484a37",
-      "mode": "mapped",
-      "catalog_key": "components.textbookCatalog.senior",
-      "template": "高中",
-      "expression_bindings": []
-    },
-    {
-      "id": "4710029b1f58853fe560f9f6",
-      "mode": "mapped",
-      "catalog_key": "components.collectionRail.gettingStartedPrompt",
-      "template": "从一门正在学习的课开始吧。",
-      "expression_bindings": []
-    },
-    {
       "id": "472a9a94b4cdcba546c0ffbe",
       "mode": "mapped",
       "catalog_key": "errors.MODEL_CREDENTIAL_STORE_UNAVAILABLE",
       "template": "当前系统无法安全保存模型凭据。",
-      "expression_bindings": []
-    },
-    {
-      "id": "475e4cef384f45d3ac1465f0",
-      "mode": "mapped",
-      "catalog_key": "components.documentGrid.parseFailure",
-      "template": "解析器未能读取这份资料",
       "expression_bindings": []
     },
     {
@@ -1756,20 +1101,6 @@
       "expression_bindings": []
     },
     {
-      "id": "48f1a311bda5593c2263ad63",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelectionPopover.enabledOption",
-      "template": "开启",
-      "expression_bindings": []
-    },
-    {
-      "id": "49c0e96a9dbc5990d945893c",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelection.highNote",
-      "template": "适合复杂问题",
-      "expression_bindings": []
-    },
-    {
       "id": "49c290c1ace11771a2de940b",
       "mode": "mapped",
       "catalog_key": "views.knowledge.documentCollectionDelete",
@@ -1794,20 +1125,6 @@
       "reason": "compatibility_fallback"
     },
     {
-      "id": "4b356a9b96675b8edf4c21fb",
-      "mode": "mapped",
-      "catalog_key": "pet.native.rest",
-      "template": "休息",
-      "expression_bindings": []
-    },
-    {
-      "id": "4b5c6639fdf9039a28055eab",
-      "mode": "mapped",
-      "catalog_key": "common.actions.next",
-      "template": "下一步",
-      "expression_bindings": []
-    },
-    {
       "id": "4b622d7cdc3128c4b8762fce",
       "mode": "mapped",
       "catalog_key": "desktop.diagnostics.jsonFilterName",
@@ -1829,24 +1146,10 @@
       "expression_bindings": []
     },
     {
-      "id": "4b7b00309e0cfbf45478a4f4",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.answer",
-      "template": "答案复核：",
-      "expression_bindings": []
-    },
-    {
       "id": "4bff55272ea938e9e29d2423",
       "mode": "mapped",
       "catalog_key": "views.tutor.diagnosisRequired.description",
       "template": "学习诊断不是电脑故障检测，而是画像 Agent 通过几轮对话了解你的学习目标、当前基础和薄弱点。",
-      "expression_bindings": []
-    },
-    {
-      "id": "4ceed5b1f1b6dd6b5cf7bf31",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.newProfileApiKeyHint",
-      "template": "新配置必须输入密钥，保存完成后输入框会立即清空。",
       "expression_bindings": []
     },
     {
@@ -1867,29 +1170,6 @@
       "catalog_key": "views.profile.structuredProfileDescription",
       "template": "画像 Agent 根据诊断对话生成的结构化学习者信息",
       "expression_bindings": []
-    },
-    {
-      "id": "4e443bd8e0b117a3873b125f",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelectionPopover.reasoningTitle",
-      "template": "本空间的思考方式",
-      "expression_bindings": []
-    },
-    {
-      "id": "4e6757b102f2355a8d2127cb",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelectionPopover.modelAndEffortSummary",
-      "template": "{modelLabel} · {effectiveEffortValue}",
-      "expression_bindings": [
-        {
-          "expression": "selectedModel.value?.label || '选择模型'",
-          "placeholder": "modelLabel"
-        },
-        {
-          "expression": "effortLabel(effectiveEffort.value)",
-          "placeholder": "effectiveEffortValue"
-        }
-      ]
     },
     {
       "id": "4ea5a996d227207975ed8e82",
@@ -1930,13 +1210,6 @@
       "reason": "canonical_enum"
     },
     {
-      "id": "50c00b3b4a9002f13c8d56ba",
-      "mode": "mapped",
-      "catalog_key": "components.resourceMenu.resourceType",
-      "template": "资源类型",
-      "expression_bindings": []
-    },
-    {
       "id": "510a427abd168fa570ed3112",
       "mode": "mapped",
       "catalog_key": "views.dashboard.mastery",
@@ -1952,20 +1225,6 @@
       "id": "5136732e2d1bab28d9c34620",
       "mode": "classified",
       "reason": "canonical_enum"
-    },
-    {
-      "id": "51682a2580443d9fdc19a450",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileList.modelProfileDelete",
-      "template": "删除模型配置",
-      "expression_bindings": []
-    },
-    {
-      "id": "518ec069389bccf2748edb68",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelection.mediumNote",
-      "template": "速度与深度平衡",
-      "expression_bindings": []
     },
     {
       "id": "51ebdeeaa39dd18459e55640",
@@ -2003,13 +1262,6 @@
       "expression_bindings": []
     },
     {
-      "id": "53aee8ed28390d96b54a73e2",
-      "mode": "mapped",
-      "catalog_key": "components.deskPanel.diagnosis",
-      "template": "学习诊断",
-      "expression_bindings": []
-    },
-    {
       "id": "53d740229f027d0f742c6f0f",
       "mode": "mapped",
       "catalog_key": "views.knowledge.itemUnit",
@@ -2031,78 +1283,10 @@
       "expression_bindings": []
     },
     {
-      "id": "554376e415ed2e9abe49e2d7",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.connectionTitle",
-      "template": "连接稳定 · {latencyMs} ms",
-      "expression_bindings": [
-        {
-          "expression": "result.latency_ms",
-          "placeholder": "latencyMs"
-        }
-      ]
-    },
-    {
-      "id": "55643047e6d49db02d3545b1",
-      "mode": "mapped",
-      "catalog_key": "components.safeMermaid.outlineUnavailableTitle",
-      "template": "大纲不可用",
-      "expression_bindings": []
-    },
-    {
-      "id": "558df79a492720b71713e509",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelection.high",
-      "template": "深入",
-      "expression_bindings": []
-    },
-    {
-      "id": "571e0b426e80043660c49420",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.connectionRetryTest",
-      "template": "每次修改后都需要重新测试，避免把不确定的连接带入学习过程。",
-      "expression_bindings": []
-    },
-    {
-      "id": "57609ddcb9d811811ab0d931",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.recognitionWaitingEnableLocal",
-      "template": "等待你启用本地识别",
-      "expression_bindings": []
-    },
-    {
-      "id": "5767bdd5e6b21248768bed9d",
-      "mode": "mapped",
-      "catalog_key": "components.documentGrid.cancelFavorite",
-      "template": "取消收藏",
-      "expression_bindings": []
-    },
-    {
       "id": "578f76949b85a87f59699d30",
       "mode": "mapped",
       "catalog_key": "views.knowledge.documentCollection",
       "template": "给这个资料集合取一个名字",
-      "expression_bindings": []
-    },
-    {
-      "id": "57c5059bd09b9b5dac189137",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.quality",
-      "template": "质量:",
-      "expression_bindings": []
-    },
-    {
-      "id": "5820df68151f24fc0ee31915",
-      "mode": "mapped",
-      "catalog_key": "statuses.importStatus.OCR_RUNNING",
-      "template": "正在逐页识别",
-      "expression_bindings": []
-    },
-    {
-      "id": "586abbbc1065687c7d154205",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.apiKeyPlaceholder",
-      "template": "输入 API Key",
       "expression_bindings": []
     },
     {
@@ -2120,7 +1304,7 @@
     {
       "id": "58ed42e20d3aa3da3cd7c100",
       "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.sizeLabel",
+      "catalog_key": "components.petSettings.sizeLabel",
       "template": "大小",
       "expression_bindings": []
     },
@@ -2167,13 +1351,6 @@
       "expression_bindings": []
     },
     {
-      "id": "5b6038d78ad5e4ce62a36427",
-      "mode": "mapped",
-      "catalog_key": "views.modelSettings.testConnection",
-      "template": "测试连接",
-      "expression_bindings": []
-    },
-    {
       "id": "5b6bb217fb7080479767db20",
       "mode": "mapped",
       "catalog_key": "views.knowledge.restoreTitle",
@@ -2216,18 +1393,6 @@
       "expression_bindings": []
     },
     {
-      "id": "5ce3868da2baf433f669ba4a",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileList.profileDefaultTitle",
-      "template": "将{name}设为默认配置",
-      "expression_bindings": [
-        {
-          "expression": "profile.label",
-          "placeholder": "name"
-        }
-      ]
-    },
-    {
       "id": "5cf7f8ff9adc726b8ce44ef9",
       "mode": "classified",
       "reason": "compatibility_fallback"
@@ -2240,24 +1405,10 @@
       "expression_bindings": []
     },
     {
-      "id": "5d30c87dab11e80a2517178d",
-      "mode": "mapped",
-      "catalog_key": "navigation.desk.title",
-      "template": "书桌",
-      "expression_bindings": []
-    },
-    {
       "id": "5d3d21f845db1fdee88df4e6",
       "mode": "mapped",
       "catalog_key": "views.knowledge.documentFilterAriaLabel",
       "template": "筛选知识库资料",
-      "expression_bindings": []
-    },
-    {
-      "id": "5d9cb3c04a1a86498e7d73ec",
-      "mode": "mapped",
-      "catalog_key": "components.knowledgeSources.title",
-      "template": "参考资料",
       "expression_bindings": []
     },
     {
@@ -2268,30 +1419,9 @@
       "expression_bindings": []
     },
     {
-      "id": "5e661b879bd4532aa0781e1e",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.securityReasoningTitle",
-      "template": "思考档位不在安全白名单中。",
-      "expression_bindings": []
-    },
-    {
       "id": "5ebd6d7c1f144b112c607c08",
       "mode": "classified",
       "reason": "compatibility_fallback"
-    },
-    {
-      "id": "5ed48f0eb599c994fbdba127",
-      "mode": "mapped",
-      "catalog_key": "components.textbookCatalog.onlineReadingTitle",
-      "template": "人教社官方在线阅读",
-      "expression_bindings": []
-    },
-    {
-      "id": "5fe5ec0b9ff339f349e0e1e7",
-      "mode": "mapped",
-      "catalog_key": "components.textbookCatalog.senior",
-      "template": "高中",
-      "expression_bindings": []
     },
     {
       "id": "600f935c658945086beff373",
@@ -2320,13 +1450,6 @@
       "reason": "compatibility_fallback"
     },
     {
-      "id": "614a80cdb0aaf4b2905ae0c4",
-      "mode": "mapped",
-      "catalog_key": "components.conversationRail.knowledgeLibraryLocal",
-      "template": "本地知识库",
-      "expression_bindings": []
-    },
-    {
       "id": "61ffc032ffceb2762efa76a5",
       "mode": "mapped",
       "catalog_key": "views.modelSettings.connectionInProgress",
@@ -2341,38 +1464,10 @@
       "expression_bindings": []
     },
     {
-      "id": "621abc6918a61ee35d5223df",
-      "mode": "mapped",
-      "catalog_key": "components.textbookCatalog.junior",
-      "template": "初中",
-      "expression_bindings": []
-    },
-    {
-      "id": "621e2be7be1fcc3a0f640903",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelection.medium",
-      "template": "标准",
-      "expression_bindings": []
-    },
-    {
       "id": "6285ff3d83504b8f1a904314",
       "mode": "mapped",
       "catalog_key": "views.dashboard.profile",
       "template": "画像 v",
-      "expression_bindings": []
-    },
-    {
-      "id": "628766db37cde016affa1d03",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileList.cooldownStatus",
-      "template": "冷却中",
-      "expression_bindings": []
-    },
-    {
-      "id": "62c5160fa2e8d345e49e85f2",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.manualReviewRequired",
-      "template": "需人工核对",
       "expression_bindings": []
     },
     {
@@ -2386,31 +1481,10 @@
       "reason": "compatibility_fallback"
     },
     {
-      "id": "6446cbdc38038f4c22530884",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.profileDescription",
-      "template": "新配置必须输入 API Key。",
-      "expression_bindings": []
-    },
-    {
-      "id": "647414134364475ff3d5154f",
-      "mode": "mapped",
-      "catalog_key": "navigation.tutor",
-      "template": "学习助手",
-      "expression_bindings": []
-    },
-    {
       "id": "650572bcac250a639d2c9398",
       "mode": "mapped",
       "catalog_key": "views.tutor.modelPreferenceSaved",
       "template": "本空间模型偏好已保存",
-      "expression_bindings": []
-    },
-    {
-      "id": "650d2f20b899ae9358c04e4a",
-      "mode": "mapped",
-      "catalog_key": "statuses.importStatus.VALIDATING",
-      "template": "正在校验",
       "expression_bindings": []
     },
     {
@@ -2428,30 +1502,9 @@
       "expression_bindings": []
     },
     {
-      "id": "65b25de3ae203bba85a8a888",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.serviceType",
-      "template": "服务类型",
-      "expression_bindings": []
-    },
-    {
       "id": "65ff0f7ea6621f96bf91cfee",
       "mode": "classified",
       "reason": "compatibility_fallback"
-    },
-    {
-      "id": "660420dadb375dcfb969e867",
-      "mode": "mapped",
-      "catalog_key": "pet.native.review",
-      "template": "复核",
-      "expression_bindings": []
-    },
-    {
-      "id": "668b3969f84ce889824a2170",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.modelName",
-      "template": "请完整填写模型名称和显示名。",
-      "expression_bindings": []
     },
     {
       "id": "66ce6c0c75a1e8e609f19637",
@@ -2480,25 +1533,6 @@
       "expression_bindings": []
     },
     {
-      "id": "681726dc8a86a02826bb4ec0",
-      "mode": "mapped",
-      "catalog_key": "components.documentGrid.notes",
-      "template": "把讲义、笔记或表格放进来吧",
-      "expression_bindings": []
-    },
-    {
-      "id": "682e6e299037c098fef1302c",
-      "mode": "mapped",
-      "catalog_key": "components.collectionRail.deleteCollectionLabel",
-      "template": "删除集合 {name}",
-      "expression_bindings": [
-        {
-          "expression": "item.name",
-          "placeholder": "name"
-        }
-      ]
-    },
-    {
       "id": "686fac681072f621678aabab",
       "mode": "mapped",
       "catalog_key": "views.tutor.you",
@@ -2524,13 +1558,6 @@
       "mode": "mapped",
       "catalog_key": "views.tutor.requestFailed",
       "template": "本次请求未完成",
-      "expression_bindings": []
-    },
-    {
-      "id": "6a273fb2fdfaf318f2f22167",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.defaultModel",
-      "template": "默认模型",
       "expression_bindings": []
     },
     {
@@ -2567,20 +1594,6 @@
       "expression_bindings": []
     },
     {
-      "id": "6b1b99bca235820f35b2e831",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.summarize",
-      "template": "总结知识点",
-      "expression_bindings": []
-    },
-    {
-      "id": "6b8da9a7627b3d1542e0425b",
-      "mode": "mapped",
-      "catalog_key": "components.resourceBundle.quality",
-      "template": "综合质量:",
-      "expression_bindings": []
-    },
-    {
       "id": "6c1d1fadad2c9b1c826f34e7",
       "mode": "mapped",
       "catalog_key": "views.knowledge.peopleEducationPress",
@@ -2609,24 +1622,10 @@
       "expression_bindings": []
     },
     {
-      "id": "6d6783820ce92bd1ef15d559",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileList.profileDefaultCurrent",
-      "template": "当前默认配置",
-      "expression_bindings": []
-    },
-    {
       "id": "6e3894f5dcd435e475f7736a",
       "mode": "mapped",
       "catalog_key": "views.dashboard.knowledgePointMastery",
       "template": "知识点掌握度",
-      "expression_bindings": []
-    },
-    {
-      "id": "6eaad522a39ebed032691a09",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.nameTitle",
-      "template": "显示名称",
       "expression_bindings": []
     },
     {
@@ -2651,37 +1650,11 @@
       "expression_bindings": []
     },
     {
-      "id": "701d22de1034c80a21fba16a",
-      "mode": "mapped",
-      "catalog_key": "components.safeMermaid.textOutline",
-      "template": "📋 文本大纲",
-      "expression_bindings": []
-    },
-    {
       "id": "7061f99f64b800f1c01ce349",
       "mode": "mapped",
       "catalog_key": "views.knowledge.permanentDeleteWarning",
       "template": "永久删除后无法恢复，原文件副本和索引都会被清理。",
       "expression_bindings": []
-    },
-    {
-      "id": "719d46aa5c54a369fbdab1c4",
-      "mode": "mapped",
-      "catalog_key": "statuses.importStatus.INDEXING",
-      "template": "正在编目",
-      "expression_bindings": []
-    },
-    {
-      "id": "71e1c353c1aebcfe51c7fc70",
-      "mode": "mapped",
-      "catalog_key": "components.documentGrid.importProgressLabel",
-      "template": "{name} 导入进度",
-      "expression_bindings": [
-        {
-          "expression": "item.display_name",
-          "placeholder": "name"
-        }
-      ]
     },
     {
       "id": "71ef00912d675937eaac6255",
@@ -2698,38 +1671,10 @@
       "expression_bindings": []
     },
     {
-      "id": "7279250fafbab56d8b1e2bab",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.reasoningDescription",
-      "template": "不发送显式推理参数",
-      "expression_bindings": []
-    },
-    {
       "id": "727b5e1f466410c5bd280400",
       "mode": "mapped",
       "catalog_key": "views.tutor.linearFunctionExamplePrompt",
       "template": "我想学习一次函数，请先了解我的基础。",
-      "expression_bindings": []
-    },
-    {
-      "id": "72beac418334ce732c47d7bc",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.questionBank",
-      "template": "📝 题库",
-      "expression_bindings": []
-    },
-    {
-      "id": "72ca89d2d367e6d68dc7142e",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.reading",
-      "template": "📚 延伸阅读",
-      "expression_bindings": []
-    },
-    {
-      "id": "7358b75e43603c9ffda6786a",
-      "mode": "mapped",
-      "catalog_key": "components.conversationRail.accountFeatureReserved",
-      "template": "账号功能预留",
       "expression_bindings": []
     },
     {
@@ -2761,13 +1706,6 @@
       "expression_bindings": []
     },
     {
-      "id": "74b353494dd606f230f81db0",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.action",
-      "template": "动作预览",
-      "expression_bindings": []
-    },
-    {
       "id": "74ee6871a9ccd8ef39d71ac9",
       "mode": "mapped",
       "catalog_key": "pet.native.ariaLabel",
@@ -2793,13 +1731,6 @@
       "mode": "mapped",
       "catalog_key": "views.knowledge.collectionBulkGoal",
       "template": "批量操作目标集合",
-      "expression_bindings": []
-    },
-    {
-      "id": "75e35829a40a0a37ea714fac",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.organizingStatus",
-      "template": "仍在整理中",
       "expression_bindings": []
     },
     {
@@ -2859,27 +1790,6 @@
       "expression_bindings": []
     },
     {
-      "id": "79d40ef80610a4972ad9c9a5",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.rebuild",
-      "template": "重新解析",
-      "expression_bindings": []
-    },
-    {
-      "id": "79ee831a048c8d0b787edebf",
-      "mode": "mapped",
-      "catalog_key": "views.modelSettings.model",
-      "template": "模型",
-      "expression_bindings": []
-    },
-    {
-      "id": "7a3b118d870fce6763db1286",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.animation",
-      "template": "动画",
-      "expression_bindings": []
-    },
-    {
       "id": "7ac63f866e610402492da8b1",
       "mode": "mapped",
       "catalog_key": "views.onboarding.updateCheck",
@@ -2922,22 +1832,6 @@
       "catalog_key": "views.knowledge.purge",
       "template": "永久删除",
       "expression_bindings": []
-    },
-    {
-      "id": "7c2dde2a28d86f7aa997061c",
-      "mode": "mapped",
-      "catalog_key": "components.documentGrid.pageProgress",
-      "template": "第 {currentPage}/{pageCount} 页 ·",
-      "expression_bindings": [
-        {
-          "expression": "job.current_page",
-          "placeholder": "currentPage"
-        },
-        {
-          "expression": "job.page_count",
-          "placeholder": "pageCount"
-        }
-      ]
     },
     {
       "id": "7c524a474f27adfd35a9acd2",
@@ -2984,24 +1878,10 @@
       "expression_bindings": []
     },
     {
-      "id": "7da04109983c82309a0a94aa",
-      "mode": "mapped",
-      "catalog_key": "components.resourceMenu.resource",
-      "template": "📦 完整资源包",
-      "expression_bindings": []
-    },
-    {
       "id": "7e56551ada046218614dd9a5",
       "mode": "mapped",
       "catalog_key": "views.profile.restart",
       "template": "重新诊断",
-      "expression_bindings": []
-    },
-    {
-      "id": "7e5b77deaa289a7befb02c18",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelection.reasoning",
-      "template": "思考强度",
       "expression_bindings": []
     },
     {
@@ -3012,13 +1892,6 @@
       "expression_bindings": []
     },
     {
-      "id": "7e93ff8b6ec8a80985c84dac",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileList.available",
-      "template": "可用",
-      "expression_bindings": []
-    },
-    {
       "id": "7eda47f7b81187ba7eae3d90",
       "mode": "mapped",
       "catalog_key": "views.dashboard.resourceGenerate",
@@ -3026,24 +1899,10 @@
       "expression_bindings": []
     },
     {
-      "id": "7edb2ef34f3f05cc71ca2767",
-      "mode": "mapped",
-      "catalog_key": "components.knowledgeSources.hybrid",
-      "template": "混合召回",
-      "expression_bindings": []
-    },
-    {
       "id": "7edcf85075d8d143f3a06b00",
       "mode": "mapped",
       "catalog_key": "views.tutor.evidence.description",
       "template": "当前页码范围没有检索到足够依据。你可以按原范围重新检索，或扩大到相邻页面。",
-      "expression_bindings": []
-    },
-    {
-      "id": "7ef42ef8b804e59a05ecf05b",
-      "mode": "mapped",
-      "catalog_key": "navigation.modelSettings",
-      "template": "模型设置",
       "expression_bindings": []
     },
     {
@@ -3058,32 +1917,6 @@
       "mode": "mapped",
       "catalog_key": "views.knowledge.collectionSelect",
       "template": "选择集合",
-      "expression_bindings": []
-    },
-    {
-      "id": "7fa5a8c45f880e817b77050b",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileList.duplicateTitle",
-      "template": "复制",
-      "expression_bindings": []
-    },
-    {
-      "id": "7ff1985709c1e893dc3cd1be",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.sheetCount",
-      "template": "{sheetCount} 个工作表",
-      "expression_bindings": [
-        {
-          "expression": "props.document.sheet_count",
-          "placeholder": "sheetCount"
-        }
-      ]
-    },
-    {
-      "id": "8013ed289b1602efdc1d978d",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.workedExample",
-      "template": "生成例题与步骤",
       "expression_bindings": []
     },
     {
@@ -3148,13 +1981,6 @@
       "expression_bindings": []
     },
     {
-      "id": "8585ce044abcd7005e5082b3",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelection.select",
-      "template": "选择模型",
-      "expression_bindings": []
-    },
-    {
       "id": "862102f33028525e085a40bc",
       "mode": "mapped",
       "catalog_key": "views.dashboard.pointsUnit",
@@ -3186,70 +2012,14 @@
       "reason": "compatibility_fallback"
     },
     {
-      "id": "874fc820454d56385258efe7",
-      "mode": "mapped",
-      "catalog_key": "components.conversationRail.historyDescription",
-      "template": "你的学习轨迹会留在这里",
-      "expression_bindings": []
-    },
-    {
-      "id": "895c85a9b08ab8a94cdc96dc",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.volume",
-      "template": "音量",
-      "expression_bindings": []
-    },
-    {
-      "id": "8a19309830d253a391098b70",
-      "mode": "mapped",
-      "catalog_key": "pet.native.encourage",
-      "template": "鼓励",
-      "expression_bindings": []
-    },
-    {
       "id": "8a19fa0f8acffae67e7cf0de",
       "mode": "classified",
       "reason": "compatibility_fallback"
     },
     {
-      "id": "8acdbd245017d7f5cce8949f",
-      "mode": "mapped",
-      "catalog_key": "components.textbookCatalog.senior",
-      "template": "高中",
-      "expression_bindings": []
-    },
-    {
       "id": "8ad6dcdbcaad74b7b33a8e74",
       "mode": "classified",
       "reason": "compatibility_fallback"
-    },
-    {
-      "id": "8b79c59ad77dfe66581e9439",
-      "mode": "mapped",
-      "catalog_key": "views.modelSettings.profiles",
-      "template": "模型配置",
-      "expression_bindings": []
-    },
-    {
-      "id": "8be593d1e9b06f18ab722b17",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.modelDefaultSelect",
-      "template": "请选择有效的默认模型。",
-      "expression_bindings": []
-    },
-    {
-      "id": "8c3e1109343b6a588a0d991c",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.desktop",
-      "template": "仅桌面端",
-      "expression_bindings": []
-    },
-    {
-      "id": "8c87711188d21c30fd90855f",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.itemUnit",
-      "template": "条",
-      "expression_bindings": []
     },
     {
       "id": "8c997100af0ec1d1879d9e6e",
@@ -3271,20 +2041,6 @@
       "expression_bindings": []
     },
     {
-      "id": "8e334f2c3a6d7a430cd40004",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.petAction",
-      "template": "也可以拖动墨团四角等比例缩放；点击只播放动作。",
-      "expression_bindings": []
-    },
-    {
-      "id": "8f0c2c0afba63c5fa5984153",
-      "mode": "mapped",
-      "catalog_key": "pet.native.study",
-      "template": "学习",
-      "expression_bindings": []
-    },
-    {
       "id": "8f160059e5f147329cc3aacc",
       "mode": "mapped",
       "catalog_key": "views.tutor.workspaceDocumentsAriaLabel",
@@ -3292,31 +2048,10 @@
       "expression_bindings": []
     },
     {
-      "id": "8f24a85e2c601942e4b9e018",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelection.xhighNote",
-      "template": "只在模型明确支持时使用",
-      "expression_bindings": []
-    },
-    {
-      "id": "8fbf54ed842a7aa5bbb50bbd",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.volume",
-      "template": "音量",
-      "expression_bindings": []
-    },
-    {
       "id": "90192a3d70074ee92c3de0eb",
       "mode": "mapped",
       "catalog_key": "views.tutor.knowledgeSpace.save",
       "template": "保存到本空间",
-      "expression_bindings": []
-    },
-    {
-      "id": "90471ec30cfae2b0ddb8b058",
-      "mode": "mapped",
-      "catalog_key": "components.textbookCatalog.junior",
-      "template": "初中",
       "expression_bindings": []
     },
     {
@@ -3345,34 +2080,6 @@
       "mode": "mapped",
       "catalog_key": "errors.desktopOnlineTextbookReadingAvailable",
       "template": "官方教材在线阅读仅桌面版可用。",
-      "expression_bindings": []
-    },
-    {
-      "id": "9140fe8f782bd372325b1ef2",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.reasoningTitle",
-      "template": "允许的思考档位",
-      "expression_bindings": []
-    },
-    {
-      "id": "920634348a76236cccf32ba8",
-      "mode": "mapped",
-      "catalog_key": "statuses.importStatus.OCR_REQUIRED",
-      "template": "等待 OCR",
-      "expression_bindings": []
-    },
-    {
-      "id": "92d0ff39bc49f381f9c5514e",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelection.low",
-      "template": "轻量",
-      "expression_bindings": []
-    },
-    {
-      "id": "9416484d02b3f33f0fcb9fde",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.encouragementAnimation",
-      "template": "需要安慰",
       "expression_bindings": []
     },
     {
@@ -3418,20 +2125,6 @@
       "expression_bindings": []
     },
     {
-      "id": "966f0ee94dfbbeab5e446635",
-      "mode": "mapped",
-      "catalog_key": "components.documentGrid.pageRecognitionFailureTitle",
-      "template": "页面图像未能可靠识别，可只重试失败页",
-      "expression_bindings": []
-    },
-    {
-      "id": "96be95e677840a286f4dac77",
-      "mode": "mapped",
-      "catalog_key": "statuses.importStatus.QUEUED",
-      "template": "等待导入",
-      "expression_bindings": []
-    },
-    {
       "id": "96dc4eb9d7a4f8a9c4c6acfb",
       "mode": "mapped",
       "catalog_key": "views.tutor.knowledgeSpace.localOnly",
@@ -3446,31 +2139,10 @@
       "expression_bindings": []
     },
     {
-      "id": "97e8b4c745c676d1fc45c17e",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.apiKeySave",
-      "template": "密钥已加密保存",
-      "expression_bindings": []
-    },
-    {
       "id": "97f66a9a74884fba4b672a20",
       "mode": "mapped",
       "catalog_key": "views.modelSettings.ready",
       "template": "学习引擎已就绪",
-      "expression_bindings": []
-    },
-    {
-      "id": "988aa8e2eb7e8539b4b29f8b",
-      "mode": "mapped",
-      "catalog_key": "navigation.session.newSession",
-      "template": "新学习会话",
-      "expression_bindings": []
-    },
-    {
-      "id": "98e5ee9b489c00dafe5331cb",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.timeoutValidation",
-      "template": "请求超时必须在 5 到 300 秒之间。",
       "expression_bindings": []
     },
     {
@@ -3495,37 +2167,9 @@
       "expression_bindings": []
     },
     {
-      "id": "99e20c7bc3f67fba46143884",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileList.test",
-      "template": "测试",
-      "expression_bindings": []
-    },
-    {
       "id": "9a04af180167d2ea47baec2c",
       "mode": "classified",
       "reason": "compatibility_fallback"
-    },
-    {
-      "id": "9a3db2b97688b7877c00fa6c",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelectionPopover.modelCloseSelect",
-      "template": "关闭模型选择",
-      "expression_bindings": []
-    },
-    {
-      "id": "9a58485a7625c4fd196c12f2",
-      "mode": "mapped",
-      "catalog_key": "common.state.saving",
-      "template": "正在保存…",
-      "expression_bindings": []
-    },
-    {
-      "id": "9ad0cbb692791ebbb9e0341f",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.petRestore",
-      "template": "恢复墨团",
-      "expression_bindings": []
     },
     {
       "id": "9bd4e45250d76c294b36df7b",
@@ -3539,13 +2183,6 @@
       "mode": "mapped",
       "catalog_key": "views.assessment.explanation",
       "template": "解析",
-      "expression_bindings": []
-    },
-    {
-      "id": "9c3bf185d0a8df1f9234ce9b",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelection.lowNote",
-      "template": "更快回应",
       "expression_bindings": []
     },
     {
@@ -3568,60 +2205,11 @@
       "reason": "compatibility_fallback"
     },
     {
-      "id": "9d87f74e9a5763d31172411b",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.desktopAnimationApplication",
-      "template": "请在 Electron 桌面应用中使用显示、拖动与动画控制。",
-      "expression_bindings": []
-    },
-    {
       "id": "9e12771fed02fbbf38b8818f",
       "mode": "mapped",
       "catalog_key": "views.knowledge.document",
       "template": "份资料",
       "expression_bindings": []
-    },
-    {
-      "id": "9e4ef9bb7bee2b4379d371b2",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.courseExplanation",
-      "template": "📖 课程讲解",
-      "expression_bindings": []
-    },
-    {
-      "id": "9f36579eb19aad8373009962",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.slideCount",
-      "template": "{slideCount} 张幻灯片",
-      "expression_bindings": [
-        {
-          "expression": "props.document.slide_count",
-          "placeholder": "slideCount"
-        }
-      ]
-    },
-    {
-      "id": "9f4a4faf1beed7415216de3c",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.inProgressTitle",
-      "template": "正在试灯…",
-      "expression_bindings": []
-    },
-    {
-      "id": "9f7dcfb0831ef88a16937913",
-      "mode": "mapped",
-      "catalog_key": "components.documentGrid.recognition",
-      "template": "第 {currentPage}/{pageCount} 页识别后需要处理",
-      "expression_bindings": [
-        {
-          "expression": "job.current_page",
-          "placeholder": "currentPage"
-        },
-        {
-          "expression": "job.page_count",
-          "placeholder": "pageCount"
-        }
-      ]
     },
     {
       "id": "a0022f0ff3e8e01a67b6a9ca",
@@ -3631,31 +2219,10 @@
       "expression_bindings": []
     },
     {
-      "id": "a018d7801e3ff47da367a053",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.modelStatus",
-      "template": "至少需要一个模型。",
-      "expression_bindings": []
-    },
-    {
-      "id": "a03a2b08757a0b6ed37911bf",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.reading",
-      "template": "📚 延伸阅读",
-      "expression_bindings": []
-    },
-    {
       "id": "a04a3c0ffb1eccd81faa3f6a",
       "mode": "mapped",
       "catalog_key": "views.tutor.evidence.expand",
       "template": "扩大范围",
-      "expression_bindings": []
-    },
-    {
-      "id": "a0b942477dacee49cb7a7de9",
-      "mode": "mapped",
-      "catalog_key": "components.deskPanel.loadingStatus",
-      "template": "写下一句想提醒自己的话…",
       "expression_bindings": []
     },
     {
@@ -3687,13 +2254,6 @@
       "expression_bindings": []
     },
     {
-      "id": "a167406d42a1f6e92b57f6f2",
-      "mode": "mapped",
-      "catalog_key": "components.deskPanel.noteDescription",
-      "template": "学习便签",
-      "expression_bindings": []
-    },
-    {
       "id": "a22f806d4e355e8df5f7b12b",
       "mode": "mapped",
       "catalog_key": "views.onboarding.settingsSaveFailure",
@@ -3712,20 +2272,6 @@
       "mode": "mapped",
       "catalog_key": "components.documentInspector.itemUnit",
       "template": "条",
-      "expression_bindings": []
-    },
-    {
-      "id": "a288a9e9dfbd265f43d40daa",
-      "mode": "mapped",
-      "catalog_key": "statuses.importStatus.PARSING",
-      "template": "正在阅读",
-      "expression_bindings": []
-    },
-    {
-      "id": "a292c7d3c7dd77c331df8a77",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.connectionProfileRetryTest",
-      "template": "配置已改变，请重新测试连接。",
       "expression_bindings": []
     },
     {
@@ -3769,20 +2315,6 @@
       "expression_bindings": []
     },
     {
-      "id": "a64300abf44168b922e5dc57",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.modelTitle",
-      "template": "＋ 添加模型",
-      "expression_bindings": []
-    },
-    {
-      "id": "a653e09657bd1398cf32fcbc",
-      "mode": "mapped",
-      "catalog_key": "components.documentGrid.fileSignatureMismatch",
-      "template": "文件内容与扩展名不一致",
-      "expression_bindings": []
-    },
-    {
       "id": "a6a56372234a8d7abda6669b",
       "mode": "mapped",
       "catalog_key": "views.onboarding.diagnosis",
@@ -3794,13 +2326,6 @@
       "mode": "mapped",
       "catalog_key": "views.desktopSettings.ready",
       "template": "已就绪",
-      "expression_bindings": []
-    },
-    {
-      "id": "a761b4c85ccb467de4c2cf2c",
-      "mode": "mapped",
-      "catalog_key": "components.knowledgeSources.keyword",
-      "template": "关键词",
       "expression_bindings": []
     },
     {
@@ -3837,24 +2362,10 @@
       "expression_bindings": []
     },
     {
-      "id": "a88323d4f05e3cc7646604e0",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.mindMapTitle",
-      "template": "🧠 思维导图",
-      "expression_bindings": []
-    },
-    {
       "id": "a8b6edcbf0a93e2634f0d6a8",
       "mode": "mapped",
       "catalog_key": "views.agents.diagnosis",
       "template": "画像 Agent",
-      "expression_bindings": []
-    },
-    {
-      "id": "a90125cbd07c1dfa8fd9074a",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.fileCharacterPackApplicationCheck",
-      "template": "角色包没有应用，请检查文件规格。",
       "expression_bindings": []
     },
     {
@@ -3872,20 +2383,6 @@
       "expression_bindings": []
     },
     {
-      "id": "a9619b203cda0f370b1179e4",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelectionPopover.applyToWorkspace",
-      "template": "应用到本空间",
-      "expression_bindings": []
-    },
-    {
-      "id": "a9865b8e7b1b0c004a012da6",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.reviewCorrected",
-      "template": "已修正",
-      "expression_bindings": []
-    },
-    {
       "id": "a9b4d978776f7e4154ff4796",
       "mode": "classified",
       "reason": "compatibility_fallback"
@@ -3898,38 +2395,10 @@
       "expression_bindings": []
     },
     {
-      "id": "aa062c1a33aafe6a6c0d03c0",
-      "mode": "mapped",
-      "catalog_key": "common.actions.close",
-      "template": "关闭",
-      "expression_bindings": []
-    },
-    {
       "id": "aa3228b86a96a4e6b3a6872d",
       "mode": "mapped",
       "catalog_key": "views.assessment.needsReinforcement",
       "template": "需要巩固",
-      "expression_bindings": []
-    },
-    {
-      "id": "aa3959bf890038317513c5e7",
-      "mode": "mapped",
-      "catalog_key": "components.petSettings.alwaysOnTop",
-      "template": "始终置顶",
-      "expression_bindings": []
-    },
-    {
-      "id": "aac5e130bcc748f83e308b70",
-      "mode": "mapped",
-      "catalog_key": "components.conversationRail.conversationTitle",
-      "template": "还没有学习对话",
-      "expression_bindings": []
-    },
-    {
-      "id": "ab610c45963946f2b2f9f94d",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.openAiCompatible",
-      "template": "OpenAI 兼容",
       "expression_bindings": []
     },
     {
@@ -3954,31 +2423,10 @@
       "expression_bindings": []
     },
     {
-      "id": "ad3509dd748d70036f8fefb0",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.extent",
-      "template": "篇幅",
-      "expression_bindings": []
-    },
-    {
       "id": "ad6b4631af7f0fa804077448",
       "mode": "mapped",
       "catalog_key": "views.modelSettings.profileDisabled",
       "template": "配置已停用。",
-      "expression_bindings": []
-    },
-    {
-      "id": "ad9b3aa46f91bcab6344ed05",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.profileEnvironmentSaveCurrentApplication",
-      "template": "配置已加密保存，并热应用到当前学习环境。",
-      "expression_bindings": []
-    },
-    {
-      "id": "add48e557d9b0a1ee9dc61e8",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.learningPartnerDesktop",
-      "template": "桌面学习伙伴",
       "expression_bindings": []
     },
     {
@@ -3989,24 +2437,10 @@
       "expression_bindings": []
     },
     {
-      "id": "ae744b76f167263a96b6fa68",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileList.empty",
-      "template": "空",
-      "expression_bindings": []
-    },
-    {
       "id": "ae83503966c575f0813b8455",
       "mode": "mapped",
       "catalog_key": "errors.modelProfileDesktopAvailable",
       "template": "多模型配置管理仅桌面版可用。",
-      "expression_bindings": []
-    },
-    {
-      "id": "ae9ec909aceb509473b568c0",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileList.disabled",
-      "template": "已停用",
       "expression_bindings": []
     },
     {
@@ -4050,13 +2484,6 @@
       "expression_bindings": []
     },
     {
-      "id": "b116a30f78eb4d08e2daa89a",
-      "mode": "mapped",
-      "catalog_key": "components.conversationRail.recent",
-      "template": "最近访问",
-      "expression_bindings": []
-    },
-    {
       "id": "b144e76d39a19ae88015ddf3",
       "mode": "mapped",
       "catalog_key": "desktop.startup.backendExecutableMissing",
@@ -4073,32 +2500,6 @@
       "mode": "mapped",
       "catalog_key": "views.dashboard.sync",
       "template": "同步",
-      "expression_bindings": []
-    },
-    {
-      "id": "b1924020aac4f59f392026f0",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.capabilities",
-      "template": "能力声明",
-      "expression_bindings": []
-    },
-    {
-      "id": "b1b096b598d928bdacb79d81",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.localReading",
-      "template": "预览（本地阅读器） {name}",
-      "expression_bindings": [
-        {
-          "expression": "document.display_name",
-          "placeholder": "name"
-        }
-      ]
-    },
-    {
-      "id": "b1dc7ca4c089b37c4a5f468a",
-      "mode": "mapped",
-      "catalog_key": "components.textbookCatalog.junior",
-      "template": "初中",
       "expression_bindings": []
     },
     {
@@ -4123,13 +2524,6 @@
       "expression_bindings": []
     },
     {
-      "id": "b406d32ecca2a29cbb7543b1",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.profileTitle",
-      "template": "配置 ID 只能包含字母、数字、下划线和连字符。",
-      "expression_bindings": []
-    },
-    {
       "id": "b4229ec6771567bcebea8a21",
       "mode": "mapped",
       "catalog_key": "views.agents.structuredPracticeCountSuffix",
@@ -4144,24 +2538,10 @@
       "expression_bindings": []
     },
     {
-      "id": "b5bab10915532d49da719734",
-      "mode": "mapped",
-      "catalog_key": "statuses.importStatus.FAILED",
-      "template": "需要处理",
-      "expression_bindings": []
-    },
-    {
       "id": "b5d1631a498c16d6938f4a37",
       "mode": "mapped",
       "catalog_key": "views.tutor.diagnosisRequired.completedDescription",
       "template": "当前画像已经完成，可以重新尝试刚才的请求。",
-      "expression_bindings": []
-    },
-    {
-      "id": "b5ea2888888fb3cb5e6bbf2d",
-      "mode": "mapped",
-      "catalog_key": "components.deskPanel.desk",
-      "template": "今天的书桌还很安静。",
       "expression_bindings": []
     },
     {
@@ -4205,13 +2585,6 @@
       "expression_bindings": []
     },
     {
-      "id": "b87dcdea15d19aab60938d72",
-      "mode": "mapped",
-      "catalog_key": "components.documentGrid.failedPagesPrefix",
-      "template": "· 失败页：",
-      "expression_bindings": []
-    },
-    {
       "id": "b8973031ad728d49ceabb7d3",
       "mode": "mapped",
       "catalog_key": "errors.mathematics",
@@ -4223,13 +2596,6 @@
       "mode": "mapped",
       "catalog_key": "views.dashboard.diagnosisStart",
       "template": "开始诊断",
-      "expression_bindings": []
-    },
-    {
-      "id": "b9a4f3d603a00faaf270dfbd",
-      "mode": "mapped",
-      "catalog_key": "components.textbookCatalog.junior",
-      "template": "初中",
       "expression_bindings": []
     },
     {
@@ -4249,27 +2615,6 @@
       "mode": "mapped",
       "catalog_key": "pet.speech.completionEffortMarked",
       "template": "今天的努力已经留下痕迹了。",
-      "expression_bindings": []
-    },
-    {
-      "id": "ba47020c98302d8839c25ffd",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.delete",
-      "template": "删除资料",
-      "expression_bindings": []
-    },
-    {
-      "id": "ba9b119707104674c520ebb1",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelection.high",
-      "template": "深入",
-      "expression_bindings": []
-    },
-    {
-      "id": "bb03ceea9d5cabb6e6d2a906",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.ocrTitle",
-      "template": "需要本地 OCR",
       "expression_bindings": []
     },
     {
@@ -4294,27 +2639,6 @@
       "expression_bindings": []
     },
     {
-      "id": "bd52faad14d88d1483b045f7",
-      "mode": "mapped",
-      "catalog_key": "statuses.importStatus.FAILED",
-      "template": "需要处理",
-      "expression_bindings": []
-    },
-    {
-      "id": "bd6e41f892f4f8d73b89044a",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.waitingParser",
-      "template": "等待解析",
-      "expression_bindings": []
-    },
-    {
-      "id": "bdca127c1af1a339afb94b6c",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.modelPrompt",
-      "template": "模型 ID 不能重复。",
-      "expression_bindings": []
-    },
-    {
       "id": "be03597b9986ee11dd1366f8",
       "mode": "mapped",
       "catalog_key": "views.knowledge.name",
@@ -4322,38 +2646,10 @@
       "expression_bindings": []
     },
     {
-      "id": "be14351708b7b135cc85aff4",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.maxOutputTokens",
-      "template": "最大输出 Token",
-      "expression_bindings": []
-    },
-    {
-      "id": "be63ca447193ffd0cda1257f",
-      "mode": "mapped",
-      "catalog_key": "components.textbookCatalog.empty",
-      "template": "当前筛选下暂无已核验教材来源。",
-      "expression_bindings": []
-    },
-    {
-      "id": "be7ddb808828cea96876d0c9",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileList.disable",
-      "template": "停用",
-      "expression_bindings": []
-    },
-    {
       "id": "bf85d6dd7c366e3490a91086",
       "mode": "mapped",
       "catalog_key": "views.modelSettings.enabled",
       "template": "已开启",
-      "expression_bindings": []
-    },
-    {
-      "id": "bf904a13d96b6b081bce766c",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.sizeLabel",
-      "template": "大小",
       "expression_bindings": []
     },
     {
@@ -4385,13 +2681,6 @@
       "expression_bindings": []
     },
     {
-      "id": "c0c304394e92a9a8b310cd35",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelection.medium",
-      "template": "标准",
-      "expression_bindings": []
-    },
-    {
       "id": "c0f4c334374b765fc0f47cf5",
       "mode": "mapped",
       "catalog_key": "views.dashboard.resourceRecent",
@@ -4413,30 +2702,11 @@
       "expression_bindings": []
     },
     {
-      "id": "c1667360598e99f087f973a0",
-      "mode": "mapped",
-      "catalog_key": "components.collectionRail.subtitle",
-      "template": "安静地收好学习材料",
-      "expression_bindings": []
-    },
-    {
       "id": "c1f12e37a8ab211cae24cc55",
       "mode": "mapped",
       "catalog_key": "common.actions.send",
       "template": "发送",
       "expression_bindings": []
-    },
-    {
-      "id": "c29a45343089fe2f08da1e8a",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.livelySpeedLabel",
-      "template": "{speed}× 轻快",
-      "expression_bindings": [
-        {
-          "expression": "value",
-          "placeholder": "speed"
-        }
-      ]
     },
     {
       "id": "c29cf86a5cef59f14fdf3746",
@@ -4474,13 +2744,6 @@
       "expression_bindings": []
     },
     {
-      "id": "c440cb3ca17dc6f3d9df5894",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.connection",
-      "template": "点亮新连接",
-      "expression_bindings": []
-    },
-    {
       "id": "c4abde9d3298a49884854192",
       "mode": "mapped",
       "catalog_key": "views.tutor.closeWorkspaceDocuments",
@@ -4488,51 +2751,9 @@
       "expression_bindings": []
     },
     {
-      "id": "c5012d1c1665056fd4d01b78",
-      "mode": "mapped",
-      "catalog_key": "components.collectionRail.myCollectionsTitle",
-      "template": "我的集合",
-      "expression_bindings": []
-    },
-    {
-      "id": "c5510df1426d9f9b20db1fbb",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelectionPopover.model",
-      "template": "交给模型决定",
-      "expression_bindings": []
-    },
-    {
-      "id": "c5784a4e6f5c92ba73f84ad9",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.importCharacterPack",
-      "template": "导入角色包",
-      "expression_bindings": []
-    },
-    {
       "id": "c58ba5a5dce555fe881b9a0e",
       "mode": "classified",
       "reason": "canonical_enum"
-    },
-    {
-      "id": "c595d5b4d078a49883ab44be",
-      "mode": "mapped",
-      "catalog_key": "views.modelSettings.model",
-      "template": "模型",
-      "expression_bindings": []
-    },
-    {
-      "id": "c5bbcc3221512445780ae757",
-      "mode": "mapped",
-      "catalog_key": "components.textbookCatalog.senior",
-      "template": "高中",
-      "expression_bindings": []
-    },
-    {
-      "id": "c5d952054faecefac4492158",
-      "mode": "mapped",
-      "catalog_key": "components.conversationRail.workspaceNavigation",
-      "template": "学习空间导航",
-      "expression_bindings": []
     },
     {
       "id": "c5df425fc30eccd276cff5d8",
@@ -4550,13 +2771,6 @@
       "reason": "compatibility_fallback"
     },
     {
-      "id": "c6108f03de6c013fe855edf1",
-      "mode": "mapped",
-      "catalog_key": "components.documentGrid.pageRecognitionFailure",
-      "template": "部分页面识别失败",
-      "expression_bindings": []
-    },
-    {
       "id": "c614e8329673f3c6d2ee53b1",
       "mode": "mapped",
       "catalog_key": "views.desktopSettings.backendProtocol",
@@ -4571,35 +2785,9 @@
       "expression_bindings": []
     },
     {
-      "id": "c7129a0ba32f383f580cbef8",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.deleteTitle",
-      "template": "删除 {name}",
-      "expression_bindings": [
-        {
-          "expression": "document.display_name",
-          "placeholder": "name"
-        }
-      ]
-    },
-    {
-      "id": "c7169238c1fe6c7d32e3ed7a",
-      "mode": "mapped",
-      "catalog_key": "statuses.importStatus.COMPLETED",
-      "template": "已整理",
-      "expression_bindings": []
-    },
-    {
       "id": "c77ed4fa6132b9988ea3eba7",
       "mode": "classified",
       "reason": "compatibility_fallback"
-    },
-    {
-      "id": "c8173fe4849d85e44d5b46a1",
-      "mode": "mapped",
-      "catalog_key": "components.conversationRail.progress",
-      "template": "我的进度",
-      "expression_bindings": []
     },
     {
       "id": "c840c95e456698ab965d28b9",
@@ -4715,13 +2903,6 @@
       "expression_bindings": []
     },
     {
-      "id": "cec9cd393a4242e81d2a58fb",
-      "mode": "mapped",
-      "catalog_key": "components.documentGrid.retryOcr",
-      "template": "只重试失败页",
-      "expression_bindings": []
-    },
-    {
       "id": "cf7b1598c4ced9fcc64de985",
       "mode": "classified",
       "reason": "compatibility_fallback"
@@ -4755,13 +2936,6 @@
       "expression_bindings": []
     },
     {
-      "id": "d05f8b322ba6bc6e23203d95",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelection.xhigh",
-      "template": "极高",
-      "expression_bindings": []
-    },
-    {
       "id": "d0ad8d8a67e486d1c30c780b",
       "mode": "mapped",
       "catalog_key": "errors.desktopFileImportAvailable",
@@ -4788,20 +2962,6 @@
       "reason": "compatibility_fallback"
     },
     {
-      "id": "d19b2c7535b85a2448ebd034",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.mindMapTitle",
-      "template": "🧠 思维导图",
-      "expression_bindings": []
-    },
-    {
-      "id": "d19c2d5bf400266542473cbc",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.maxOutputTokensValidation",
-      "template": "最大输出 Token 必须在 512 到 32768 之间。",
-      "expression_bindings": []
-    },
-    {
       "id": "d1b225fbf2fe485d7a1f3749",
       "mode": "classified",
       "reason": "compatibility_fallback"
@@ -4811,13 +2971,6 @@
       "mode": "mapped",
       "catalog_key": "pet.speech.failureRegroup",
       "template": "这次没有完成也没关系，我会陪你重新整理。",
-      "expression_bindings": []
-    },
-    {
-      "id": "d298cbac461b8af40910b568",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.errorCodeLabel",
-      "template": "错误码:",
       "expression_bindings": []
     },
     {
@@ -4861,13 +3014,6 @@
       "expression_bindings": []
     },
     {
-      "id": "d46d63ee734ab6590e74e937",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.modelProfileCreate",
-      "template": "新建模型配置",
-      "expression_bindings": []
-    },
-    {
       "id": "d472d7f79c9c90dbb92b0f72",
       "mode": "mapped",
       "catalog_key": "navigation.service.modelReady",
@@ -4889,18 +3035,6 @@
       "expression_bindings": []
     },
     {
-      "id": "d5cb27b30fbda89c3f442390",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileList.profileDeleteLocal",
-      "template": "删除“{name}”？加密凭据和本地配置会一并移除。",
-      "expression_bindings": [
-        {
-          "expression": "profile.label",
-          "placeholder": "name"
-        }
-      ]
-    },
-    {
       "id": "d60fe0fa8930e1ea60ea3c50",
       "mode": "mapped",
       "catalog_key": "views.modelSettings.modelConnection",
@@ -4912,20 +3046,6 @@
       "mode": "mapped",
       "catalog_key": "views.profile.restart",
       "template": "重新诊断",
-      "expression_bindings": []
-    },
-    {
-      "id": "d6d0f649cfb82cfc267b34d8",
-      "mode": "mapped",
-      "catalog_key": "common.actions.retry",
-      "template": "重试",
-      "expression_bindings": []
-    },
-    {
-      "id": "d6f898f8f01c99a6a79353f2",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.check",
-      "template": "认真检查",
       "expression_bindings": []
     },
     {
@@ -4943,23 +3063,9 @@
       "expression_bindings": []
     },
     {
-      "id": "d7738043aea9e06a83396d3b",
-      "mode": "mapped",
-      "catalog_key": "errors.mathematics",
-      "template": "数学",
-      "expression_bindings": []
-    },
-    {
       "id": "d7846e8b4b3b456be071aaca",
       "mode": "classified",
       "reason": "compatibility_fallback"
-    },
-    {
-      "id": "d7913823c3228d3e67ed6e42",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileList.cooldownStatus",
-      "template": "冷却中",
-      "expression_bindings": []
     },
     {
       "id": "d819cd3dfe30bf27988988a3",
@@ -4974,13 +3080,6 @@
       "expression_bindings": []
     },
     {
-      "id": "d87022e04f1d560b5dd5fcf5",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.voice",
-      "template": "语音鼓励",
-      "expression_bindings": []
-    },
-    {
       "id": "d8e0bc3b781481b48a727087",
       "mode": "mapped",
       "catalog_key": "views.agents.generateProfileProtocol",
@@ -4991,34 +3090,6 @@
       "id": "d9744fd205076cb37de0361d",
       "mode": "classified",
       "reason": "compatibility_fallback"
-    },
-    {
-      "id": "d9abf49f9ab81d642097d026",
-      "mode": "mapped",
-      "catalog_key": "common.actions.close",
-      "template": "关闭",
-      "expression_bindings": []
-    },
-    {
-      "id": "da0e76cc510e503c625d1e88",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.modelDescription",
-      "template": "模型 ID",
-      "expression_bindings": []
-    },
-    {
-      "id": "da56712dd655d906ac91c392",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.securitySave",
-      "template": "安全保存",
-      "expression_bindings": []
-    },
-    {
-      "id": "da718db2890c558ea5e972e7",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.idleAnimation",
-      "template": "安静陪伴",
-      "expression_bindings": []
     },
     {
       "id": "db6492535277250fcd4d8d31",
@@ -5049,20 +3120,6 @@
       "expression_bindings": []
     },
     {
-      "id": "dc1c92f509da421ef4809321",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileList.defaultTitle",
-      "template": "★ 默认",
-      "expression_bindings": []
-    },
-    {
-      "id": "dc222b8c2ec163bed583c6c5",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.version",
-      "template": "Anthropic 版本",
-      "expression_bindings": []
-    },
-    {
       "id": "dc510ad5c85e63c4c837a988",
       "mode": "mapped",
       "catalog_key": "desktop.modelConfig.originalProfileLabel",
@@ -5090,32 +3147,6 @@
       "id": "dd2c72061429b15f12466cc0",
       "mode": "classified",
       "reason": "compatibility_fallback"
-    },
-    {
-      "id": "ddd00939713fc86f3a472feb",
-      "mode": "mapped",
-      "catalog_key": "components.documentGrid.cancelImport",
-      "template": "取消 {name} 的导入",
-      "expression_bindings": [
-        {
-          "expression": "item.display_name",
-          "placeholder": "name"
-        }
-      ]
-    },
-    {
-      "id": "ddd773655cee6f49c8d04efb",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.formulaCheck",
-      "template": "公式与代入已检查",
-      "expression_bindings": []
-    },
-    {
-      "id": "de2a0adcfb9593bfa73b9ada",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.empty",
-      "template": "选一份资料，看看它被整理成了什么模样。",
-      "expression_bindings": []
     },
     {
       "id": "de2bc424efbee1cfc46c4eab",
@@ -5165,30 +3196,9 @@
       ]
     },
     {
-      "id": "e0b2c4fd7aa0b6efce169380",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelection.low",
-      "template": "轻量",
-      "expression_bindings": []
-    },
-    {
-      "id": "e0d85afc97f7fb9656b363e3",
-      "mode": "mapped",
-      "catalog_key": "components.textbookCatalog.title",
-      "template": "初高中数学教材",
-      "expression_bindings": []
-    },
-    {
       "id": "e0e1383661e923c4cb2d318d",
       "mode": "classified",
       "reason": "compatibility_fallback"
-    },
-    {
-      "id": "e17270ec553f854e1c5cc07a",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.displayName",
-      "template": "显示名",
-      "expression_bindings": []
     },
     {
       "id": "e1a09e778a3673358cac8b41",
@@ -5205,13 +3215,6 @@
       "expression_bindings": []
     },
     {
-      "id": "e2038279eda36a051bdb4031",
-      "mode": "mapped",
-      "catalog_key": "components.conversationRail.learner",
-      "template": "学习者",
-      "expression_bindings": []
-    },
-    {
       "id": "e251146030e4ed8e69b75090",
       "mode": "mapped",
       "catalog_key": "views.assessment.resourceQuality",
@@ -5222,13 +3225,6 @@
       "id": "e2916475f82fea98e78a939a",
       "mode": "classified",
       "reason": "compatibility_fallback"
-    },
-    {
-      "id": "e31257842b50982bff0868f4",
-      "mode": "mapped",
-      "catalog_key": "components.collectionRail.createCollection",
-      "template": "新建知识集合",
-      "expression_bindings": []
     },
     {
       "id": "e34255c6a50aca5d38cf97c0",
@@ -5245,34 +3241,6 @@
       "expression_bindings": []
     },
     {
-      "id": "e3e2f7058a5dd9676b358a7b",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelectionPopover.defaultGlobal",
-      "template": "跟随全局默认",
-      "expression_bindings": []
-    },
-    {
-      "id": "e3f66731687a0b15b53fb153",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.retrying",
-      "template": "重试中…",
-      "expression_bindings": []
-    },
-    {
-      "id": "e4166921d0583e4db3583ae8",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.settingsSaveFailure",
-      "template": "设置没有保存成功，请稍后再试。",
-      "expression_bindings": []
-    },
-    {
-      "id": "e4638b881512761cbded6d72",
-      "mode": "mapped",
-      "catalog_key": "views.modelSettings.profiles",
-      "template": "模型配置",
-      "expression_bindings": []
-    },
-    {
       "id": "e4b45365f19347a4fc3e8d1d",
       "mode": "mapped",
       "catalog_key": "views.dashboard.tutorOpen",
@@ -5280,48 +3248,10 @@
       "expression_bindings": []
     },
     {
-      "id": "e4c6a3bad1cc6da5305e2043",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.calmSpeedLabel",
-      "template": "{speed}× 舒缓",
-      "expression_bindings": [
-        {
-          "expression": "value",
-          "placeholder": "speed"
-        }
-      ]
-    },
-    {
-      "id": "e4f57c6c2b86ed811c0c866f",
-      "mode": "mapped",
-      "catalog_key": "components.documentGrid.failureReason",
-      "template": "失败原因：{code}",
-      "expression_bindings": [
-        {
-          "expression": "code",
-          "placeholder": "code"
-        }
-      ]
-    },
-    {
       "id": "e506c37cecbd66be82e0f698",
       "mode": "mapped",
       "catalog_key": "views.learningPath.retry",
       "template": "重新计算",
-      "expression_bindings": []
-    },
-    {
-      "id": "e50ff59f744157fbff4f2349",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.petMark",
-      "template": "墨",
-      "expression_bindings": []
-    },
-    {
-      "id": "e54c297ce0e0e98f00d73370",
-      "mode": "mapped",
-      "catalog_key": "components.deskPanel.start",
-      "template": "开始这一小步",
       "expression_bindings": []
     },
     {
@@ -5358,20 +3288,6 @@
       "expression_bindings": []
     },
     {
-      "id": "e7567b3b4744fdfc30caf633",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.modelNotice",
-      "template": "模型 ID 只能包含字母、数字、点、下划线、冒号和连字符。",
-      "expression_bindings": []
-    },
-    {
-      "id": "e77e1a64617132f639a9b912",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.apiUrl",
-      "template": "API 地址",
-      "expression_bindings": []
-    },
-    {
       "id": "e7e780ad31233b968668cb44",
       "mode": "mapped",
       "catalog_key": "views.knowledge.settingsTag",
@@ -5386,23 +3302,9 @@
       "expression_bindings": []
     },
     {
-      "id": "e82818460d75c6567a4c8b75",
-      "mode": "mapped",
-      "catalog_key": "components.textbookCatalog.textbookSelectSeniorHigh",
-      "template": "选择高中教材",
-      "expression_bindings": []
-    },
-    {
       "id": "e86846deb1419d9cc05588a3",
       "mode": "classified",
       "reason": "compatibility_fallback"
-    },
-    {
-      "id": "e86adb71d95cfe4ac8e3b382",
-      "mode": "mapped",
-      "catalog_key": "components.textbookCatalog.textbookSelectJuniorHigh",
-      "template": "选择初中教材",
-      "expression_bindings": []
     },
     {
       "id": "e8c7586733ce710853d726ea",
@@ -5412,50 +3314,10 @@
       "expression_bindings": []
     },
     {
-      "id": "e92bfab4bf82b48e91a4c0ec",
-      "mode": "mapped",
-      "catalog_key": "pet.name",
-      "template": "墨团",
-      "expression_bindings": []
-    },
-    {
-      "id": "e97ef85272e3082189d8b56a",
-      "mode": "mapped",
-      "catalog_key": "components.collectionRail.renameCollectionLabel",
-      "template": "重命名集合 {name}",
-      "expression_bindings": [
-        {
-          "expression": "item.name",
-          "placeholder": "name"
-        }
-      ]
-    },
-    {
       "id": "e9f0b10e49bbb9b2cff3cfd8",
       "mode": "mapped",
       "catalog_key": "views.knowledge.selectedLabel",
       "template": "已选",
-      "expression_bindings": []
-    },
-    {
-      "id": "ea450f38ee03bc953d67246e",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelectionPopover.apiKeySave",
-      "template": "这里只保存脱敏 ID 与档位，不保存密钥。",
-      "expression_bindings": []
-    },
-    {
-      "id": "ea523237b9ee4c07297f57e2",
-      "mode": "mapped",
-      "catalog_key": "common.actions.remove",
-      "template": "移除",
-      "expression_bindings": []
-    },
-    {
-      "id": "ea6d0cddbf8930877fd4e6fe",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.timeoutSeconds",
-      "template": "请求超时（秒）",
       "expression_bindings": []
     },
     {
@@ -5503,52 +3365,10 @@
       "expression_bindings": []
     },
     {
-      "id": "ed040f351ae495bfe13d9497",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.model",
-      "template": "例如 安静可靠的主模型",
-      "expression_bindings": []
-    },
-    {
-      "id": "ed331f051de85d4ba81b0cfb",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.apiKeyRequired",
-      "template": "需要 API Key",
-      "expression_bindings": []
-    },
-    {
-      "id": "edf1caf5acf03fa3e22ebea4",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelection.auto",
-      "template": "自动",
-      "expression_bindings": []
-    },
-    {
-      "id": "eeea1516ec78b0b79c91bc86",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.reasoningDescription",
-      "template": "不发送显式推理参数",
-      "expression_bindings": []
-    },
-    {
       "id": "ef1acea4ac4b44522f4be1b4",
       "mode": "mapped",
       "catalog_key": "views.knowledge.trashRetentionNotice",
       "template": "这份资料会移入回收站，可在 30 天内恢复。",
-      "expression_bindings": []
-    },
-    {
-      "id": "ef3ab6209d179efd942d51d8",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.collapse",
-      "template": "收起",
-      "expression_bindings": []
-    },
-    {
-      "id": "ef3b9cf02658b2b6839551a3",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelection.xhigh",
-      "template": "极高",
       "expression_bindings": []
     },
     {
@@ -5576,13 +3396,6 @@
       "expression_bindings": []
     },
     {
-      "id": "f0bc7e0d29877bb0af13589d",
-      "mode": "mapped",
-      "catalog_key": "navigation.session.switchSession",
-      "template": "切换会话",
-      "expression_bindings": []
-    },
-    {
       "id": "f0d1a98567e6e86e7ab0dfc5",
       "mode": "mapped",
       "catalog_key": "views.dashboard.sync",
@@ -5594,25 +3407,6 @@
       "mode": "mapped",
       "catalog_key": "views.knowledge.statusFilter",
       "template": "按状态筛选",
-      "expression_bindings": []
-    },
-    {
-      "id": "f0db6984e368f64c431185cf",
-      "mode": "mapped",
-      "catalog_key": "components.documentGrid.select",
-      "template": "选择 {name}",
-      "expression_bindings": [
-        {
-          "expression": "item.display_name",
-          "placeholder": "name"
-        }
-      ]
-    },
-    {
-      "id": "f125c5335e1be50b358a0e91",
-      "mode": "mapped",
-      "catalog_key": "components.documentGrid.documentTag",
-      "template": "资料标签",
       "expression_bindings": []
     },
     {
@@ -5635,18 +3429,6 @@
       "expression_bindings": []
     },
     {
-      "id": "f1824c09cdc01a47554fb0e6",
-      "mode": "mapped",
-      "catalog_key": "components.collectionRail.openCollectionLabel",
-      "template": "打开集合 {name}",
-      "expression_bindings": [
-        {
-          "expression": "item.name",
-          "placeholder": "name"
-        }
-      ]
-    },
-    {
       "id": "f1907aed6268b2bfcf0c4b88",
       "mode": "mapped",
       "catalog_key": "views.desktopSettings.exportCancel",
@@ -5654,28 +3436,9 @@
       "expression_bindings": []
     },
     {
-      "id": "f1ec4342c3a56ea8fa0f5e5f",
-      "mode": "mapped",
-      "catalog_key": "components.documentGrid.estimatedSeconds",
-      "template": "约 {etaSeconds} 秒",
-      "expression_bindings": [
-        {
-          "expression": "job.eta_seconds",
-          "placeholder": "etaSeconds"
-        }
-      ]
-    },
-    {
       "id": "f2640a1af9c52b491c7c37a6",
       "mode": "classified",
       "reason": "compatibility_fallback"
-    },
-    {
-      "id": "f2cb7f5ab38e0ee06359eced",
-      "mode": "mapped",
-      "catalog_key": "components.conversationRail.accountFeatureReserved",
-      "template": "账号功能预留",
-      "expression_bindings": []
     },
     {
       "id": "f368c0f0f42f8bb85509a6a9",
@@ -5716,13 +3479,6 @@
       "expression_bindings": []
     },
     {
-      "id": "f47737c6dafadc52c6bd75fd",
-      "mode": "mapped",
-      "catalog_key": "components.modelSelectionPopover.automaticFailover",
-      "template": "本空间自动备用",
-      "expression_bindings": []
-    },
-    {
       "id": "f5247c8b3d277b57af7d6481",
       "mode": "mapped",
       "catalog_key": "views.desktopSettings.backendUnavailable",
@@ -5748,13 +3504,6 @@
       "mode": "mapped",
       "catalog_key": "views.dashboard.profile",
       "template": "画像 v",
-      "expression_bindings": []
-    },
-    {
-      "id": "f6085243022b652ac556c15c",
-      "mode": "mapped",
-      "catalog_key": "components.petSettingsCard.soundAction",
-      "template": "动作音效",
       "expression_bindings": []
     },
     {
@@ -5784,18 +3533,6 @@
       "expression_bindings": []
     },
     {
-      "id": "f779e077a96e0d07f65ab181",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.modelAction",
-      "template": "模型 {index}",
-      "expression_bindings": [
-        {
-          "expression": "index",
-          "placeholder": "index"
-        }
-      ]
-    },
-    {
       "id": "f78a6bbe442d202bdadda734",
       "mode": "mapped",
       "catalog_key": "views.desktopSettings.noRuntimeLogs",
@@ -5817,24 +3554,10 @@
       "expression_bindings": []
     },
     {
-      "id": "f8ef402b40277b08dd78dad9",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.apiKeyRetentionHint",
-      "template": "留空会沿用原密钥；输入内容只在测试和保存时短暂使用。",
-      "expression_bindings": []
-    },
-    {
       "id": "f8f6ba90b4465e8a79cf0141",
       "mode": "mapped",
       "catalog_key": "views.knowledge.documentTitle",
       "template": "寻找一份记得的资料…",
-      "expression_bindings": []
-    },
-    {
-      "id": "f9518a1c0ac59fabfd82999f",
-      "mode": "mapped",
-      "catalog_key": "components.modelProfileEditor.profileIdExample",
-      "template": "例如 deepseek-main",
       "expression_bindings": []
     },
     {
@@ -5847,20 +3570,6 @@
       "mode": "mapped",
       "catalog_key": "views.agents.practice",
       "template": "进入练习",
-      "expression_bindings": []
-    },
-    {
-      "id": "fa0092677099c7922d5bd840",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.reviewPassed",
-      "template": "已通过",
-      "expression_bindings": []
-    },
-    {
-      "id": "fa40fd4ce19017623eb3a475",
-      "mode": "mapped",
-      "catalog_key": "components.documentInspector.parser",
-      "template": "解析器",
       "expression_bindings": []
     },
     {
@@ -5889,13 +3598,6 @@
       "mode": "mapped",
       "catalog_key": "desktop.startup.backendConnectionFailed",
       "template": "后端连接失败。",
-      "expression_bindings": []
-    },
-    {
-      "id": "fb4d5906dbe16d21a757641f",
-      "mode": "mapped",
-      "catalog_key": "components.safeMermaid.unavailableNotice",
-      "template": "⚠ Mermaid 渲染不可用，显示文本大纲",
       "expression_bindings": []
     },
     {
@@ -5939,13 +3641,6 @@
       "mode": "mapped",
       "catalog_key": "views.assessment.noQuestionsInCurrentSession",
       "template": "当前会话还没有可作答的练习题",
-      "expression_bindings": []
-    },
-    {
-      "id": "fe7d3fa7f2aa05ed1c4b658f",
-      "mode": "mapped",
-      "catalog_key": "components.resourceCard.copyMarkdown",
-      "template": "复制 Markdown",
       "expression_bindings": []
     },
     {

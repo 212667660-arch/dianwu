@@ -8,8 +8,8 @@
     @drop.prevent="$emit('drop', $event)"
   >
     <div v-if="!documents.length" class="document-empty">
-      <span>一页空白，也是一种邀请</span>
-      <strong>把讲义、笔记或表格放进来吧</strong>
+      <span>{{ t('components.documentGrid.empty') }}</span>
+      <strong>{{ t('components.documentGrid.notes') }}</strong>
     </div>
     <div v-else class="document-grid">
       <article
@@ -24,7 +24,7 @@
             class="check-control"
             role="checkbox"
             :aria-checked="selectedIds.includes(item.id)"
-            :aria-label="`选择 ${item.display_name}`"
+            :aria-label="t('components.documentGrid.select', { name: item.display_name })"
             :data-testid="`document-checkbox-${item.id}`"
             @click="$emit('toggle-selection', item.id)"
           >{{ selectedIds.includes(item.id) ? '✓' : '' }}</button>
@@ -34,7 +34,7 @@
             :class="{ active: item.favorite }"
             :disabled="favoritePendingIds.includes(item.id)"
             :aria-busy="favoritePendingIds.includes(item.id)"
-            :aria-label="`${item.favorite ? '取消收藏' : '收藏'} ${item.display_name}`"
+            :aria-label="t(item.favorite ? 'components.documentGrid.unfavorite' : 'components.documentGrid.favorite', { name: item.display_name })"
             :data-testid="`favorite-document-${item.id}`"
             @click="$emit('toggle-favorite', item.id, !item.favorite)"
           >{{ item.favorite ? '★' : '☆' }}</button>
@@ -42,7 +42,7 @@
         <button
           type="button"
           class="document-select"
-          :aria-label="`查看文档 ${item.display_name}`"
+          :aria-label="t('components.documentGrid.view', { name: item.display_name })"
           @click="$emit('select', item.id)"
           @keydown.enter.prevent="$emit('select', item.id)"
           @keydown.space.prevent="$emit('select', item.id)"
@@ -53,26 +53,26 @@
             <small>{{ statusLabel(item.status) }} · {{ sizeLabel(item.byte_size) }}</small>
           </span>
         </button>
-        <div v-if="item.tags?.length" class="document-tags" aria-label="资料标签">
+        <div v-if="item.tags?.length" class="document-tags" :aria-label="t('components.documentGrid.documentTag')">
           <span v-for="tag in item.tags" :key="tag">{{ tag }}</span>
         </div>
         <div v-if="activeJobFor(item.id)" class="import-progress">
           <div
             role="progressbar"
-            :aria-label="`${item.display_name} 导入进度`"
+            :aria-label="t('components.documentGrid.importProgressLabel', { name: item.display_name })"
             aria-valuemin="0"
             aria-valuemax="100"
             :aria-valuenow="activeJobFor(item.id)!.progress"
           ><i :style="{ width: `${activeJobFor(item.id)!.progress}%` }" /></div>
           <span>{{ progressLabel(activeJobFor(item.id)!) }}</span>
           <small v-if="activeJobFor(item.id)!.safe_error_code">{{ failureReason(activeJobFor(item.id)!.safe_error_code) }}</small>
-          <button type="button" :aria-label="`取消 ${item.display_name} 的导入`" @click="cancelJob(activeJobFor(item.id)!.id)">取消</button>
+          <button type="button" :aria-label="t('components.documentGrid.cancelImport', { name: item.display_name })" @click="cancelJob(activeJobFor(item.id)!.id)">{{ t('common.actions.cancel') }}</button>
         </div>
         <div v-else-if="failedOcrJobFor(item.id)" class="ocr-failure" role="status">
           <span>{{ failedOcrLabel(failedOcrJobFor(item.id)!) }}</span>
-          <small>{{ etaLabel(failedOcrJobFor(item.id)!) }} · 失败页：{{ failedOcrJobFor(item.id)!.failed_pages.join('、') }}</small>
+          <small>{{ etaLabel(failedOcrJobFor(item.id)!) }} · {{ t('components.documentGrid.failedPages', { pages: failedOcrJobFor(item.id)!.failed_pages.join('、') }) }}</small>
           <small>{{ failureReason(failedOcrJobFor(item.id)!.safe_error_code) }}</small>
-          <button type="button" :aria-label="`重试 ${item.display_name} 的失败 OCR 页面`" @click="retryJob?.(failedOcrJobFor(item.id)!.id)">只重试失败页</button>
+          <button type="button" :aria-label="t('components.documentGrid.pageFailure', { name: item.display_name })" @click="retryJob?.(failedOcrJobFor(item.id)!.id)">{{ t('components.documentGrid.retryOcr') }}</button>
         </div>
       </article>
     </div>
@@ -81,6 +81,14 @@
 
 <script setup lang="ts">
 import type { KnowledgeDocument, KnowledgeImportJob } from '@/api'
+import { KNOWLEDGE_IMPORT_STATUSES } from '@/api/types'
+import { useI18n } from 'vue-i18n'
+import { BackendApiError } from '@/api/transport'
+import { importStatusKey } from '@/i18n/display-maps'
+import { errorMessage } from '@/i18n/errors'
+import { formatNumber, formatPercent } from '@/i18n/formatters'
+
+const { t } = useI18n()
 
 const props = withDefaults(defineProps<{
   documents: KnowledgeDocument[]
@@ -109,38 +117,32 @@ function failedOcrJobFor(documentId: number) {
 }
 
 function progressLabel(job: KnowledgeImportJob) {
-  const page = job.current_page && job.page_count ? `第 ${job.current_page}/${job.page_count} 页 · ` : ''
-  return `${page}${job.progress}% · ${etaLabel(job)}`
+  const page = job.current_page && job.page_count ? `${t('components.documentGrid.pageProgress', { currentPage: formatNumber(job.current_page), pageCount: formatNumber(job.page_count) })} ` : ''
+  return `${page}${formatPercent(job.progress / 100, { maximumFractionDigits: 0 })} · ${etaLabel(job)}`
 }
 
 function etaLabel(job: KnowledgeImportJob) {
-  return job.eta_seconds === null ? '剩余时间计算中' : `约 ${job.eta_seconds} 秒`
+  return job.eta_seconds === null ? t('components.documentGrid.etaCalculating') : t('components.documentGrid.estimatedSeconds', { etaSeconds: formatNumber(job.eta_seconds) })
 }
 
 function failedOcrLabel(job: KnowledgeImportJob) {
-  return job.current_page && job.page_count ? `第 ${job.current_page}/${job.page_count} 页识别后需要处理` : '部分页面识别失败'
+  return job.current_page && job.page_count ? t('components.documentGrid.recognition', { currentPage: formatNumber(job.current_page), pageCount: formatNumber(job.page_count) }) : t('components.documentGrid.pageRecognitionFailure')
 }
 
 function failureReason(code: string | null) {
   if (!code) return ''
-  return ({
-    KNOWLEDGE_OCR_PAGE_FAILED: '页面图像未能可靠识别，可只重试失败页',
-    KNOWLEDGE_OCR_PACK_REQUIRED: '离线 OCR 组件不可用',
-    KNOWLEDGE_FILE_SIGNATURE_MISMATCH: '文件内容与扩展名不一致',
-    KNOWLEDGE_PARSE_FAILED: '解析器未能读取这份资料',
-  } as Record<string, string>)[code] || `失败原因：${code}`
+  return errorMessage(new BackendApiError(0, code, '', true))
 }
 
 function sizeLabel(bytes: number) {
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  if (bytes < 1024 * 1024) return `${formatNumber(Math.max(1, Math.round(bytes / 1024)))} KB`
+  return `${formatNumber(bytes / 1024 / 1024, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} MB`
 }
 
-function statusLabel(status: string) {
-  return ({
-    COMPLETED: '已整理', PARSING: '正在阅读', INDEXING: '正在编目', OCR_RUNNING: '正在逐页识别',
-    OCR_REQUIRED: '等待 OCR', FAILED: '需要处理', QUEUED: '等待导入', VALIDATING: '正在校验',
-  } as Record<string, string>)[status] || status
+function statusLabel(status: KnowledgeDocument['status']) {
+  return (KNOWLEDGE_IMPORT_STATUSES as readonly string[]).includes(status)
+    ? t(importStatusKey(status as KnowledgeImportJob['status']))
+    : status
 }
 </script>
 

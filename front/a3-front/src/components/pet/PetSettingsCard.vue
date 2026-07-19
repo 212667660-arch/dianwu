@@ -1,48 +1,48 @@
 <template>
   <section class="pet-card" data-test="pet-settings-card">
     <header>
-      <div class="pet-orb" aria-hidden="true">墨</div>
-      <div><small>桌面学习伙伴</small><strong>{{ snapshot.pet?.displayName || '墨团' }}</strong></div>
-      <span class="pet-state" :class="{ offline: !snapshot.available }">{{ snapshot.available ? stateLabel : '仅桌面端' }}</span>
+      <div class="pet-orb" aria-hidden="true">{{ t('components.petSettings.petMark') }}</div>
+      <div><small>{{ t('components.petSettings.learningPartnerDesktop') }}</small><strong>{{ snapshot.pet?.displayName || t('components.petSettings.defaultName') }}</strong></div>
+      <span class="pet-state" :class="{ offline: !snapshot.available }">{{ snapshot.available ? stateLabel : t('components.petSettings.desktop') }}</span>
     </header>
-    <p>{{ snapshot.available ? (snapshot.pet?.description || '在桌边陪你学习。') : '请在 Electron 桌面应用中使用显示、拖动与动画控制。' }}</p>
+    <p>{{ snapshot.available ? (snapshot.pet?.description || t('components.petSettings.petCompanionDescription')) : t('components.petSettings.desktopAnimationApplication') }}</p>
     <div class="pet-actions">
-      <button data-test="pet-import" type="button" :disabled="busy || !snapshot.available" @click="chooseCharacter">导入角色包</button>
-      <button data-test="pet-reset" type="button" :disabled="busy || !snapshot.available" @click="resetCharacter">恢复墨团</button>
+      <button data-test="pet-import" type="button" :disabled="busy || !snapshot.available" @click="chooseCharacter">{{ t('components.petSettings.importCharacterPack') }}</button>
+      <button data-test="pet-reset" type="button" :disabled="busy || !snapshot.available" @click="resetCharacter">{{ t('components.petSettings.petRestore') }}</button>
     </div>
     <div class="pet-control visible-control">
-      <label for="pet-visible">显示伙伴</label>
+      <label for="pet-visible">{{ t('components.petSettings.showCompanion') }}</label>
       <input id="pet-visible" data-test="pet-visible" type="checkbox" :checked="snapshot.settings.visible" :disabled="busy || !snapshot.available" @change="changeVisible">
     </div>
     <div class="pet-control visible-control">
-      <label for="pet-always-on-top">始终置顶</label>
+      <label for="pet-always-on-top">{{ t('components.petSettings.alwaysOnTop') }}</label>
       <input id="pet-always-on-top" data-test="pet-always-on-top" type="checkbox" :checked="snapshot.settings.alwaysOnTop" :disabled="busy || !snapshot.available" @change="changeAlwaysOnTop">
     </div>
     <div class="preview-block">
-      <small>动作预览</small>
-      <div><button v-for="item in previewStates" :key="item.state" :data-test="`pet-preview-${item.state}`" type="button" :disabled="busy || !snapshot.available" @click="preview(item.state)">{{ item.label }}</button></div>
+      <small>{{ t('components.petSettings.action') }}</small>
+      <div><button v-for="item in previewStates" :key="item.state" :data-test="`pet-preview-${item.state}`" type="button" :disabled="busy || !snapshot.available" @click="preview(item.state)">{{ t(item.labelKey) }}</button></div>
     </div>
     <div class="audio-block">
-      <div class="pet-control"><label for="pet-sound-enabled">动作音效</label><input id="pet-sound-enabled" data-test="pet-sound-enabled" type="checkbox" :checked="snapshot.settings.soundEnabled" :disabled="busy || !snapshot.available" @change="changeSoundEnabled"></div>
+      <div class="pet-control"><label for="pet-sound-enabled">{{ t('components.petSettings.soundAction') }}</label><input id="pet-sound-enabled" data-test="pet-sound-enabled" type="checkbox" :checked="snapshot.settings.soundEnabled" :disabled="busy || !snapshot.available" @change="changeSoundEnabled"></div>
       <select data-test="pet-sound-volume" :value="snapshot.settings.soundVolume" :disabled="busy || !snapshot.available || !snapshot.settings.soundEnabled" @change="changeSoundVolume">
-        <option v-for="value in volumes" :key="`sound-${value}`" :value="value">音量 {{ Math.round(value * 100) }}%</option>
+        <option v-for="value in volumes" :key="`sound-${value}`" :value="value">{{ t('components.petSettings.volume') }} {{ formatPercent(value, { maximumFractionDigits: 0 }) }}</option>
       </select>
     </div>
     <div class="audio-block">
-      <div class="pet-control"><label for="pet-voice-enabled">语音鼓励</label><input id="pet-voice-enabled" data-test="pet-voice-enabled" type="checkbox" :checked="snapshot.settings.voiceEnabled" :disabled="busy || !snapshot.available" @change="changeVoiceEnabled"></div>
+      <div class="pet-control"><label for="pet-voice-enabled">{{ t('components.petSettings.voiceEncouragement') }}</label><input id="pet-voice-enabled" data-test="pet-voice-enabled" type="checkbox" :checked="snapshot.settings.voiceEnabled" :disabled="busy || !snapshot.available" @change="changeVoiceEnabled"></div>
       <select data-test="pet-voice-volume" :value="snapshot.settings.voiceVolume" :disabled="busy || !snapshot.available || !snapshot.settings.voiceEnabled" @change="changeVoiceVolume">
-        <option v-for="value in volumes" :key="`voice-${value}`" :value="value">音量 {{ Math.round(value * 100) }}%</option>
+        <option v-for="value in volumes" :key="`voice-${value}`" :value="value">{{ t('components.petSettings.volume') }} {{ formatPercent(value, { maximumFractionDigits: 0 }) }}</option>
       </select>
-      <small>使用系统本地语音，不上传文字或音频。</small>
+      <small>{{ t('components.petSettings.voiceLocal') }}</small>
     </div>
     <div class="pet-control-grid">
-      <label>大小
+      <label>{{ t('components.petSettings.sizeLabel') }}
         <select data-test="pet-scale" :value="snapshot.settings.scale" :disabled="busy || !snapshot.available" @change="changeScale">
-          <option v-for="value in scales" :key="value" :value="value">{{ Math.round(value * 100) }}%</option>
+          <option v-for="value in scales" :key="value" :value="value">{{ formatPercent(value, { maximumFractionDigits: 0 }) }}</option>
         </select>
-        <small>也可以拖动墨团四角等比例缩放；点击只播放动作。</small>
+        <small>{{ t('components.petSettings.petAction') }}</small>
       </label>
-      <label>动画
+      <label>{{ t('components.petSettings.animation') }}
         <select data-test="pet-speed" :value="snapshot.settings.speed" :disabled="busy || !snapshot.available" @change="changeSpeed">
           <option v-for="value in speeds" :key="value" :value="value">{{ speedLabel(value) }}</option>
         </select>
@@ -54,7 +54,12 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { backendApi, type PetSettings, type PetSnapshot, type PetVolume } from '@/api'
+import { errorMessage } from '@/i18n/errors'
+import { formatNumber, formatPercent } from '@/i18n/formatters'
+
+const { t } = useI18n()
 
 const scales: PetSettings['scale'][] = [1, 1.25, 1.5, 2, 3]
 const speeds: PetSettings['speed'][] = [0.5, 0.75, 1, 1.25, 1.5, 2]
@@ -66,15 +71,15 @@ const snapshot = reactive<PetSnapshot>({
 })
 const busy = ref(false)
 const message = ref('')
-const stateLabel = computed(() => ({ idle: '安静陪伴', running: '正在努力', waiting: '等你回来', review: '认真检查', failed: '需要安慰' }[snapshot.state]))
+const stateLabel = computed(() => t({ idle: 'components.petSettings.idleAnimation', running: 'components.petSettings.inProgress', waiting: 'components.petSettings.waitingAnimation', review: 'components.petSettings.check', failed: 'components.petSettings.encouragementAnimation' }[snapshot.state]))
 const previewStates = [
-  { state: 'idle', label: '休息' }, { state: 'running', label: '学习' }, { state: 'waiting', label: '等待' },
-  { state: 'review', label: '复核' }, { state: 'failed', label: '鼓励' },
+  { state: 'idle', labelKey: 'components.petSettings.rest' }, { state: 'running', labelKey: 'components.petSettings.learn' }, { state: 'waiting', labelKey: 'components.petSettings.wait' },
+  { state: 'review', labelKey: 'components.petSettings.review' }, { state: 'failed', labelKey: 'components.petSettings.encourage' },
 ] as const
 
 onMounted(async () => {
   try { applySnapshot(await backendApi.pet()) }
-  catch { message.value = '桌宠设置暂时无法读取。' }
+  catch (error) { message.value = errorMessage(error) }
 })
 function changeVisible(event: Event) { void update({ visible: (event.target as HTMLInputElement).checked }) }
 function changeAlwaysOnTop(event: Event) { void update({ alwaysOnTop: (event.target as HTMLInputElement).checked }) }
@@ -90,21 +95,21 @@ async function preview(state: typeof previewStates[number]['state']) {
   busy.value = true
   message.value = ''
   try { snapshot.state = await backendApi.setPetTaskState(state) }
-  catch { message.value = '动作预览暂时不可用。' }
+  catch (error) { message.value = errorMessage(error) }
   finally { busy.value = false }
 }
 async function runAction(action: () => Promise<PetSnapshot>) {
   busy.value = true
   message.value = ''
   try { applySnapshot(await action()) }
-  catch { message.value = '角色包没有应用，请检查文件规格。' }
+  catch (error) { message.value = errorMessage(error) }
   finally { busy.value = false }
 }
 async function update(patch: Partial<PetSettings>) {
   busy.value = true
   message.value = ''
   try { applySnapshot(await backendApi.updatePetSettings(patch)) }
-  catch { message.value = '设置没有保存成功，请稍后再试。' }
+  catch (error) { message.value = errorMessage(error) }
   finally { busy.value = false }
 }
 function applySnapshot(value: PetSnapshot) {
@@ -114,17 +119,17 @@ function applySnapshot(value: PetSnapshot) {
   snapshot.state = value.state
 }
 function speedLabel(value: number) {
-  if (value < 1) return `${value}× 舒缓`
-  if (value === 1) return '1× 自然'
-  return `${value}× 轻快`
+  if (value < 1) return t('components.petSettings.calmSpeedLabel', { speed: formatNumber(value) })
+  if (value === 1) return t('components.petSettings.naturalSpeedLabel')
+  return t('components.petSettings.livelySpeedLabel', { speed: formatNumber(value) })
 }
 </script>
 
 <style scoped lang="scss">
-.pet-card { margin-top: 18px; padding: 14px; color: #665c52; background: linear-gradient(145deg, #f1f7f3, #fffaf0); border: 1px solid #dfe9e2; border-radius: 16px; box-shadow: 0 10px 28px rgba(43, 82, 79, .06); }
+.pet-card { min-width: 0; margin-top: 18px; padding: 14px; color: #665c52; background: linear-gradient(145deg, #f1f7f3, #fffaf0); border: 1px solid #dfe9e2; border-radius: 16px; box-shadow: 0 10px 28px rgba(43, 82, 79, .06); }
 .pet-card header { display: grid; grid-template-columns: 38px 1fr auto; align-items: center; gap: 9px; }
 .pet-orb { display: grid; width: 38px; height: 38px; place-items: center; color: #fff3d2; font-family: Georgia, serif; font-size: 15px; background: #315f62; border: 3px solid #d9ebe2; border-radius: 50% 48% 46% 52%; }
-.pet-card header small, .pet-card header strong { display: block; }
+.pet-card header > div { min-width: 0; }.pet-card header small, .pet-card header strong { display: block; overflow-wrap: anywhere; }
 .pet-card header small { color: #96a49e; font-size: 9px; letter-spacing: .08em; }
 .pet-card header strong { margin-top: 2px; color: #456e70; font-size: 14px; }
 .pet-state { padding: 3px 7px; color: #668b82; font-size: 9px; background: #e2efe8; border-radius: 999px; }

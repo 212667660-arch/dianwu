@@ -139,7 +139,7 @@ describe('built-in zh-CN catalog contract', () => {
     expect(placeholdersFor(flat['errors.unknownWithReference'])).toEqual(['code', 'requestId'])
     expect(flat['errors.UNKNOWN']).toBeUndefined()
     expect(flat['errors.UNKNOWN_WITH_REFERENCE']).toBeUndefined()
-    expect(flat['components.knowledgeSourceList.normalizedPageReplacement']).toBeUndefined()
+    expect(flat['components.knowledgeSources.normalizedPageReplacement']).toBeUndefined()
     expect(Object.values(flat)).not.toContain('第$1页')
   })
 
@@ -149,9 +149,9 @@ describe('built-in zh-CN catalog contract', () => {
     expect(flat['components.collectionRail.documentCountSuffix']).toBe('份资料 ·')
     expect(flat['components.safeMermaid.unavailableNotice']).toContain('Mermaid 渲染不可用')
     expect(flat['components.safeMermaid.outlineUnavailableTitle']).toBe('大纲不可用')
-    expect(flat['components.petSettingsCard.settingsLoadFailure']).toContain('无法读取')
-    expect(flat['components.petSettingsCard.actionPreviewUnavailable']).toContain('不可用')
-    expect(flat['components.petSettingsCard.settingsSaveFailure']).toContain('没有保存成功')
+    expect(flat['components.petSettings.settingsLoadFailure']).toContain('无法读取')
+    expect(flat['components.petSettings.actionPreviewUnavailable']).toContain('不可用')
+    expect(flat['components.petSettings.settingsSaveFailure']).toContain('没有保存成功')
     expect(flat['components.resourceCard.securityReviewUnavailable']).toContain('审核暂时不可用')
     expect(flat['components.documentGrid.offlineOcrUnavailable']).toContain('OCR 组件不可用')
   })
@@ -276,7 +276,7 @@ describe('built-in zh-CN catalog contract', () => {
     expect(buildBaseCatalogPayload()).toBe(payload)
     expect(BASE_CATALOG_HASH).toMatch(/^[A-F0-9]{64}$/)
     expect(BASE_CATALOG_HASH).toBe(independentHash)
-    expect(BASE_CATALOG_HASH).toBe('5EBFA77D46306E309084D189A3BEDA854877C292BCC8AFB238EB713DDD3CF3FC')
+    expect(BASE_CATALOG_HASH).toBe('A9BECF23E6CDAFFFFB6C942F69D26F1E714978E72C42F62ADD327CE93D2F15E9')
   })
 
   it('deep-freezes every built-in namespace without changing the digest', () => {

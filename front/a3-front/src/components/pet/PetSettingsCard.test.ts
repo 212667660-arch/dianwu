@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { activateLocale, installLocaleMessages } from '@/i18n'
 
 const apiMock = vi.hoisted(() => ({
   pet: vi.fn(),
@@ -111,5 +112,16 @@ describe('PetSettingsCard', () => {
     await wrapper.get('[data-test="pet-reset"]').trigger('click')
     await flushPromises()
     expect(apiMock.resetPetCharacter).toHaveBeenCalledOnce()
+  })
+
+  it('renders injected English pet labels without changing character metadata', async () => {
+    installLocaleMessages('en-US', { components: { petSettings: { learningPartnerDesktop: 'Desktop learning companion', showCompanion: 'Show companion' } } })
+    activateLocale('en-US')
+    const wrapper = mount(PetSettingsCard)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Desktop learning companion')
+    expect(wrapper.text()).toContain('Show companion')
+    expect(wrapper.text()).toContain('墨团')
   })
 })

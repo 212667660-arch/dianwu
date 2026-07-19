@@ -1,18 +1,18 @@
 <template>
-  <section class="textbook-catalog" aria-label="官方数学教材目录">
+  <section class="textbook-catalog" :aria-label="t('components.textbookCatalog.textbookDirectoryMathematics')">
     <div class="catalog-heading">
-      <div><span>OFFICIAL TEXTBOOKS</span><strong>初高中数学教材</strong></div>
+      <div><span>OFFICIAL TEXTBOOKS</span><strong>{{ t('components.textbookCatalog.title') }}</strong></div>
       <div class="stage-tabs">
-        <button type="button" aria-label="选择初中教材" :class="{ active: stage === '初中' }" @click="stage = '初中'">初中</button>
-        <button type="button" aria-label="选择高中教材" :class="{ active: stage === '高中' }" @click="stage = '高中'">高中</button>
+        <button type="button" :aria-label="t('components.textbookCatalog.textbookSelectJuniorHigh')" :class="{ active: stage === JUNIOR_STAGE }" @click="stage = JUNIOR_STAGE">{{ t('components.textbookCatalog.junior') }}</button>
+        <button type="button" :aria-label="t('components.textbookCatalog.textbookSelectSeniorHigh')" :class="{ active: stage === SENIOR_STAGE }" @click="stage = SENIOR_STAGE">{{ t('components.textbookCatalog.senior') }}</button>
       </div>
     </div>
     <div class="catalog-list">
       <article v-for="item in visibleItems" :key="item.source_id">
         <div><small>{{ item.publisher }} · {{ item.edition }}</small><h2>{{ item.title }}</h2><p>{{ item.grade }} · {{ item.semester }}</p></div>
-        <div class="catalog-action"><button type="button" :disabled="!desktopAvailable" :aria-label="`在线阅读 ${item.title}`" @click="$emit('open', item)">人教社官方在线阅读</button><span>{{ item.license_note }}</span></div>
+        <div class="catalog-action"><button type="button" :disabled="!desktopAvailable" :aria-label="t('components.textbookCatalog.onlineReading', { name: item.title })" @click="$emit('open', item)">{{ t('components.textbookCatalog.onlineReadingTitle') }}</button><span>{{ item.license_note }}</span></div>
       </article>
-      <p v-if="!visibleItems.length" class="catalog-empty">当前筛选下暂无已核验教材来源。</p>
+      <p v-if="!visibleItems.length" class="catalog-empty">{{ t('components.textbookCatalog.empty') }}</p>
     </div>
   </section>
 </template>
@@ -20,14 +20,20 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { TextbookCatalogItem } from '@/api'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = withDefaults(defineProps<{ items: TextbookCatalogItem[]; desktopAvailable?: boolean }>(), {
   desktopAvailable: true,
 })
 defineEmits<{ (event: 'open', item: TextbookCatalogItem): void }>()
 
-const stage = ref<'初中' | '高中'>('初中')
-const visibleItems = computed(() => props.items.filter(item => item.stage === stage.value && item.subject === '数学'))
+const JUNIOR_STAGE = String.fromCodePoint(0x521d, 0x4e2d) as TextbookCatalogItem['stage']
+const SENIOR_STAGE = String.fromCodePoint(0x9ad8, 0x4e2d) as TextbookCatalogItem['stage']
+const MATH_SUBJECT = String.fromCodePoint(0x6570, 0x5b66) as TextbookCatalogItem['subject']
+const stage = ref<TextbookCatalogItem['stage']>(JUNIOR_STAGE)
+const visibleItems = computed(() => props.items.filter(item => item.stage === stage.value && item.subject === MATH_SUBJECT))
 </script>
 
 <style scoped lang="scss">

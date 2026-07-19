@@ -12,29 +12,29 @@
       <span class="chevron">⌄</span>
     </button>
 
-    <div v-if="open" class="selection-popover" role="dialog" aria-label="选择本空间模型与思考强度">
+    <div v-if="open" class="selection-popover" role="dialog" :aria-label="t('components.modelSelection.selectionTitle')">
       <header>
-        <div><span>LEARNING SPACE</span><strong>本空间的思考方式</strong></div>
-        <button type="button" aria-label="关闭模型选择" @click="open = false">×</button>
+        <div><span>LEARNING SPACE</span><strong>{{ t('components.modelSelection.reasoningTitle') }}</strong></div>
+        <button type="button" :aria-label="t('components.modelSelection.modelCloseSelect')" @click="open = false">×</button>
       </header>
 
       <label>
-        <span>模型配置</span>
+        <span>{{ t('components.modelSelection.profile') }}</span>
         <select data-testid="profile-selection" :value="draftProfileValue" @change="changeProfile(($event.target as HTMLSelectElement).value)">
-          <option value="__auto__">跟随全局默认</option>
+          <option value="__auto__">{{ t('components.modelSelection.defaultGlobal') }}</option>
           <option v-for="profile in enabledProfiles" :key="profile.id" :value="profile.id">{{ profile.label }}</option>
         </select>
       </label>
 
       <label>
-        <span>模型</span>
+        <span>{{ t('components.modelSelection.modelLabel') }}</span>
         <select v-model="draft.model_id" data-testid="model-selection" :disabled="draft.profile_mode === 'auto'">
           <option v-for="model in selectedProfile?.models || []" :key="model.id" :value="model.id">{{ model.label }}</option>
         </select>
       </label>
 
       <fieldset>
-        <legend>思考强度</legend>
+        <legend>{{ t('components.modelSelection.reasoning') }}</legend>
         <label v-for="effort in efforts" :key="effort.value" :class="{ disabled: !supportsEffort(effort.value) }">
           <input
             v-model="draft.reasoning_effort"
@@ -48,15 +48,15 @@
       </fieldset>
 
       <fieldset class="failover-choice">
-        <legend>本空间自动备用</legend>
-        <label><input v-model="draft.failover_override" type="radio" value="inherit"> 跟随全局</label>
-        <label><input v-model="draft.failover_override" type="radio" value="on"> 开启</label>
-        <label><input v-model="draft.failover_override" type="radio" value="off"> 关闭</label>
+        <legend>{{ t('components.modelSelection.automaticFailover') }}</legend>
+        <label><input v-model="draft.failover_override" type="radio" value="inherit"> {{ t('components.modelSelection.global') }}</label>
+        <label><input v-model="draft.failover_override" type="radio" value="on"> {{ t('components.modelSelection.enabledOption') }}</label>
+        <label><input v-model="draft.failover_override" type="radio" value="off"> {{ t('components.modelSelection.off') }}</label>
       </fieldset>
 
       <footer>
-        <span>这里只保存脱敏 ID 与档位，不保存密钥。</span>
-        <button type="button" data-testid="model-selection-save" :disabled="busy" @click="save">应用到本空间</button>
+        <span>{{ t('components.modelSelection.apiKeySave') }}</span>
+        <button type="button" data-testid="model-selection-save" :disabled="busy" @click="save">{{ t('components.modelSelection.applyToWorkspace') }}</button>
       </footer>
     </div>
   </div>
@@ -64,7 +64,11 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { ModelProfilePolicy, ModelProfileSummary, ReasoningEffort, SessionModelPreference, SessionModelPreferenceInput } from '@/api'
+import { reasoningEffortKey } from '@/i18n/display-maps'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   profiles: ModelProfileSummary[]
@@ -79,14 +83,14 @@ const emit = defineEmits<{ save: [input: SessionModelPreferenceInput] }>()
 const open = ref(false)
 const draft = reactive<SessionModelPreferenceInput>(defaultPreference())
 
-const efforts: Array<{ value: ReasoningEffort; label: string; note: string }> = [
-  { value: 'auto', label: '自动', note: '交给模型决定' },
-  { value: 'off', label: '关闭', note: '不发送显式推理参数' },
-  { value: 'low', label: '轻量', note: '更快回应' },
-  { value: 'medium', label: '标准', note: '速度与深度平衡' },
-  { value: 'high', label: '深入', note: '适合复杂问题' },
-  { value: 'xhigh', label: '极高', note: '只在模型明确支持时使用' },
-]
+const efforts = computed<Array<{ value: ReasoningEffort; label: string; note: string }>>(() => [
+  { value: 'auto', label: t(reasoningEffortKey('auto')), note: t('components.modelSelection.autoNote') },
+  { value: 'off', label: t(reasoningEffortKey('off')), note: t('components.modelSelection.offNote') },
+  { value: 'low', label: t(reasoningEffortKey('low')), note: t('components.modelSelection.lowNote') },
+  { value: 'medium', label: t(reasoningEffortKey('medium')), note: t('components.modelSelection.mediumNote') },
+  { value: 'high', label: t(reasoningEffortKey('high')), note: t('components.modelSelection.highNote') },
+  { value: 'xhigh', label: t(reasoningEffortKey('xhigh')), note: t('components.modelSelection.xhighNote') },
+])
 const effortOrder: ReasoningEffort[] = ['off', 'low', 'medium', 'high', 'xhigh']
 const enabledProfiles = computed(() => props.profiles.filter(profile => profile.enabled))
 const selectedProfile = computed(() => {
@@ -99,7 +103,7 @@ const selectedModel = computed(() => {
     || selectedProfile.value?.models.find(model => model.id === selectedProfile.value?.default_model_id)
 })
 const effectiveEffort = computed(() => props.effectiveReasoningEffort || clampEffort(draft.reasoning_effort, selectedModel.value?.supported_reasoning_efforts || ['auto']))
-const triggerLabel = computed(() => `${selectedModel.value?.label || '选择模型'} · ${effortLabel(effectiveEffort.value)}`)
+const triggerLabel = computed(() => t('components.modelSelection.modelAndEffortSummary', { modelLabel: selectedModel.value?.label || t('components.modelSelection.select'), effectiveEffortValue: effortLabel(effectiveEffort.value) }))
 const draftProfileValue = computed(() => draft.profile_mode === 'auto' ? '__auto__' : (draft.preferred_profile_id || '__auto__'))
 
 watch(() => props.preference, value => {
@@ -143,7 +147,7 @@ function clampEffort(requested: ReasoningEffort, supported: ReasoningEffort[]): 
 }
 
 function effortLabel(effort: ReasoningEffort) {
-  return efforts.find(item => item.value === effort)?.label || effort
+  return efforts.value.find(item => item.value === effort)?.label || effort
 }
 
 function save() {
@@ -160,11 +164,11 @@ function save() {
 
 <style scoped lang="scss">
 .model-selection { position: relative; }
-.selection-trigger { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 4px 9px; border: 1px solid #ddd4c9; border-radius: 999px; color: #6f807c; background: rgba(250, 248, 244, .92); cursor: pointer; font-size: 10px; }
+.selection-trigger { display: inline-flex; align-items: center; gap: 6px; min-width: 0; min-height: 28px; padding: 4px 9px; overflow-wrap: anywhere; border: 1px solid #ddd4c9; border-radius: 999px; color: #6f807c; background: rgba(250, 248, 244, .92); cursor: pointer; font-size: 10px; }
 .selection-dot { width: 6px; height: 6px; border-radius: 50%; background: #72a394; box-shadow: 0 0 0 3px rgba(114, 163, 148, .12); }
 .chevron { color: #a39588; }
 .selection-popover { position: absolute; z-index: 20; left: 0; bottom: calc(100% + 9px); width: min(380px, calc(100vw - 38px)); padding: 17px; border: 1px solid #ded2c5; border-radius: 16px; background: #fffaf4; box-shadow: 0 20px 55px rgba(66, 51, 36, .18); }
-header, footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+header, footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
 header div { display: grid; gap: 3px; } header span { color: #719592; font-size: 9px; letter-spacing: .15em; } header strong { font-family: Georgia, "Microsoft YaHei", serif; font-size: 16px; }
 header button { border: 0; color: #9b8c7e; background: transparent; cursor: pointer; font-size: 19px; }
 .selection-popover > label { display: grid; gap: 5px; margin-top: 12px; color: var(--muted); font-size: 10px; }
@@ -174,9 +178,9 @@ legend { padding: 0 5px; color: var(--muted); font-size: 10px; }
 fieldset label { display: flex; align-items: flex-start; gap: 6px; font-size: 10px; }
 fieldset label span { display: grid; gap: 2px; } fieldset small { color: var(--muted); font-size: 8px; line-height: 1.4; }
 fieldset label.disabled { opacity: .42; }
-.failover-choice { grid-template-columns: repeat(3, auto); }
+.failover-choice { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 footer { margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--line); }
-footer span { max-width: 190px; color: var(--muted); font-size: 8px; line-height: 1.5; }
+footer span { min-width: 0; overflow-wrap: anywhere; color: var(--muted); font-size: 8px; line-height: 1.5; }
 footer button { min-height: 32px; padding: 0 12px; border: 0; border-radius: 9px; color: #fff; background: #668f93; cursor: pointer; font-size: 10px; }
 button:disabled, select:disabled { cursor: not-allowed; opacity: .48; }
 @media (max-width: 560px) { .selection-popover { position: fixed; left: 12px; right: 12px; bottom: 88px; width: auto; } }

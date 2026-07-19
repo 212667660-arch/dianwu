@@ -6,20 +6,21 @@
       <span class="card-status">
         {{ artifact.status === 'SUCCEEDED' ? '✅' : artifact.status === 'FAILED' ? '❌' : '⏹' }}
       </span>
-      <span class="card-score">质量: {{ artifact.quality_score }}</span>
-      <span v-if="answerReview" class="review-badge" :class="answerReview.status.toLowerCase()">答案复核：{{ reviewLabel }}</span>
-      <span v-if="answerReview?.formula_checked && answerReview?.substitution_checked" class="review-detail">公式与代入已检查</span>
-      <button class="card-toggle">{{ expanded ? '收起' : '展开' }}</button>
+      <span class="card-score">{{ t('components.resourceCard.quality') }} {{ formatPercent(artifact.quality_score / 100) }}</span>
+      <span v-if="answerReview" class="review-badge" :class="answerReview.status.toLowerCase()">{{ t('components.resourceCard.answer') }}{{ reviewLabel }}</span>
+      <span v-if="answerReview?.formula_checked && answerReview?.substitution_checked" class="review-detail">{{ t('components.resourceCard.formulaCheck') }}</span>
+      <button class="card-toggle">{{ t(expanded ? 'components.resourceCard.collapse' : 'components.resourceCard.expand') }}</button>
     </div>
     <div v-if="expanded" class="card-body">
       <div v-if="artifact.status !== 'SUCCEEDED'" class="card-error">
         <p v-if="publicSafetyMessage" class="safety-message">{{ publicSafetyMessage }}</p>
         <template v-else>
-          <p>错误码: {{ artifact.error_code }}</p>
-          <p v-if="artifact.quality_issues.length">问题: {{ artifact.quality_issues.join(', ') }}</p>
+          <p>{{ failureMessage }}</p>
+          <p>{{ t('components.resourceCard.errorCodeLabel') }} {{ artifact.error_code }}</p>
+          <p v-if="artifact.quality_issues.length">{{ t('components.resourceCard.questionLabel') }} {{ artifact.quality_issues.join(', ') }}</p>
         </template>
         <button v-if="artifact.retryable" class="retry-btn" :disabled="retrying" @click.stop="$emit('retry', artifact.artifact_id)">
-          {{ retrying ? '重试中…' : '重试' }}
+          {{ t(retrying ? 'components.resourceCard.retrying' : 'components.resourceBundle.retry') }}
         </button>
       </div>
       <div v-else class="card-content">
@@ -31,7 +32,7 @@
         <SafeMarkdown v-else :content="artifact.body" />
       </div>
       <div v-if="artifact.status === 'SUCCEEDED' && artifact.body" class="card-actions">
-        <button @click.stop="copyContent" class="copy-btn">复制 Markdown</button>
+        <button @click.stop="copyContent" class="copy-btn">{{ t('components.resourceCard.copyMarkdown') }}</button>
       </div>
     </div>
   </div>
@@ -39,7 +40,12 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import type { ResourceArtifact } from "@/api/types";
+import { BackendApiError } from "@/api/transport";
+import { resourceTypeKey } from "@/i18n/display-maps";
+import { errorMessage } from "@/i18n/errors";
+import { formatPercent } from "@/i18n/formatters";
 import SafeMarkdown from "./SafeMarkdown.vue";
 import SafeMermaid from "./SafeMermaid.vue";
 
@@ -47,30 +53,23 @@ const props = defineProps<{
   artifact: ResourceArtifact;
   retrying?: boolean;
 }>();
+const { t } = useI18n();
 
 defineEmits<{ retry: [artifactId: string] }>();
 
 const expanded = ref(false);
 
-const typeLabels: Record<string, string> = {
-  course_explanation: "📖 课程讲解",
-  mind_map: "🧠 思维导图",
-  question_bank: "📝 题库",
-  extended_reading: "📚 延伸阅读",
-  adaptive_practice: "🔬 自适应练习",
-};
-
-const typeLabel = computed(() => typeLabels[props.artifact.type] || props.artifact.type);
+const typeLabel = computed(() => t(resourceTypeKey(props.artifact.type)));
 
 const publicSafetyMessage = computed(() => {
   switch (props.artifact.error_code) {
     case "CONTENT_ARTIFACT_BLOCKED":
     case "CONTENT_CITATION_NOT_ALLOWED":
-      return "内容未通过安全检查，请修改请求后重试。";
+      return t('components.resourceCard.securityContentCheck');
     case "SAFETY_REVIEW_UNAVAILABLE":
-      return "内容安全审核暂时不可用，请稍后重试。";
+      return t('components.resourceCard.securityReviewUnavailable');
     case "UNSAFE_RENDER_PAYLOAD":
-      return "内容包含不安全的展示结构，已停止渲染。";
+      return t('components.resourceCard.securityContentStructure');
     default:
       return "";
   }
@@ -80,6 +79,9 @@ const mindMapOutline = computed(() => {
   const outline = props.artifact.type_specific_data?.outline;
   return typeof outline === "string" ? outline : undefined;
 });
+const failureMessage = computed(() => props.artifact.error_code
+  ? errorMessage(new BackendApiError(0, props.artifact.error_code, '', props.artifact.retryable))
+  : t('errors.unknown'));
 
 const answerReview = computed(() => {
   const value = props.artifact.type_specific_data?.answer_review
@@ -92,7 +94,7 @@ const answerReview = computed(() => {
     substitution_checked: item.substitution_checked === true,
   }
 })
-const reviewLabel = computed(() => ({ PASSED: '已通过', REPAIRED: '已修正', WARNING: '需人工核对' }[answerReview.value?.status || 'PASSED']))
+const reviewLabel = computed(() => t({ PASSED: 'components.resourceCard.reviewPassed', REPAIRED: 'components.resourceCard.reviewCorrected', WARNING: 'components.resourceCard.manualReviewRequired' }[answerReview.value?.status || 'PASSED']))
 
 function toggle() {
   expanded.value = !expanded.value;

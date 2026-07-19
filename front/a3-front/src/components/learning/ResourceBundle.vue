@@ -2,8 +2,8 @@
   <div class="resource-bundle">
     <div class="bundle-header">
       <h3 class="bundle-topic">{{ bundle.topic }}</h3>
-      <span class="bundle-status" :class="bundle.status">{{ bundle.status }}</span>
-      <span class="bundle-quality">综合质量: {{ bundle.aggregate_quality }}</span>
+      <span class="bundle-status" :class="bundle.status">{{ t(bundleStatusKey(bundle.status)) }}</span>
+      <span class="bundle-quality">{{ t('components.resourceBundle.quality') }} {{ formatPercent(bundle.aggregate_quality / 100) }}</span>
     </div>
     <div class="bundle-artifacts">
       <ResourceCard
@@ -20,6 +20,11 @@
 <script setup lang="ts">
 import ResourceCard from "./ResourceCard.vue";
 import type { ArtifactType, ResourceBundle } from "@/api/types";
+import { useI18n } from "vue-i18n";
+import { bundleStatusKey } from "@/i18n/display-maps";
+import { formatPercent } from "@/i18n/formatters";
+
+const { t } = useI18n();
 
 withDefaults(defineProps<{
   bundle: ResourceBundle;
