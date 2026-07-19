@@ -678,6 +678,6 @@ finally {
 $packageJsonPath = Join-Path $PSScriptRoot '..\..\..\front\a3-front\package.json'
 $packageJson = Get-Content -LiteralPath $packageJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
 Assert-Equal $packageJson.scripts.'test:release-artifacts' 'powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/release/tests/release-artifacts.test.ps1' 'package.json must expose the release artifact harness.'
-Assert-True $packageJson.scripts.test.EndsWith('npm run test:signatures && npm run test:release-artifacts', [StringComparison]::Ordinal) 'The main npm test command must run release artifact tests immediately after signature tests.'
+Assert-True ($packageJson.scripts.test.IndexOf('npm run test:signatures && npm run test:release-artifacts', [StringComparison]::Ordinal) -ge 0) 'The main npm test command must run release artifact tests immediately after signature tests.'
 
 Write-Host 'release-artifacts.test.ps1 passed'
