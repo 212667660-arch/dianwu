@@ -29,12 +29,18 @@ const VISIBLE_SOURCE_INVENTORY = [
 ] as const
 
 describe('built-in zh-CN catalog contract', () => {
+  it('uses stable ASCII semantic catalog key segments', () => {
+    const keys = Object.keys(flattenMessages(BUILT_IN_MESSAGES))
+    const forbiddenSegment = /^(?:动态文案|displayText.*|vueStaticAttribute|vueText|stringLiteral|templateExpression|source|message\d+|[a-f0-9]{16,}|\d+)$/i
+    expect(keys.filter(key => key.split('.').some(segment => !/^[a-z][A-Za-z0-9]*$/.test(segment)))).toEqual([])
+    expect(keys.filter(key => key.split('.').some(segment => forbiddenSegment.test(segment)))).toEqual([])
+  })
   it('publishes the versioned required catalog keys', () => {
     expect(CATALOG_VERSION).toBe(1)
     const flat = flattenMessages(BUILT_IN_MESSAGES)
     expect(flat['navigation.dashboard']).toBeTruthy()
     expect(flat['views.desktopSettings.language.title']).toBeTruthy()
-    expect(flat['errors.BACKEND_UNAVAILABLE']).toBeTruthy()
+    expect(flat['errors.backendUnavailable']).toBeTruthy()
     expect(flat['desktop.tray.quit']).toBeTruthy()
   })
 
@@ -107,7 +113,7 @@ describe('built-in zh-CN catalog contract', () => {
     expect(buildBaseCatalogPayload()).toBe(payload)
     expect(BASE_CATALOG_HASH).toMatch(/^[A-F0-9]{64}$/)
     expect(BASE_CATALOG_HASH).toBe(independentHash)
-    expect(BASE_CATALOG_HASH).toBe('E4B579B8FC379D84D006D24FCEF543A70F7B83D40EFBD0D535B79DF28A058138')
+    expect(BASE_CATALOG_HASH).toBe('551F069FF87E6C7DB31C3CF824374C63475E8CD986BD9D32CD648E003028A91F')
   })
 
   it('deep-freezes every built-in namespace without changing the digest', () => {

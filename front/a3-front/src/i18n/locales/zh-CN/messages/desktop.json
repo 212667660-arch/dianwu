@@ -1,8 +1,44 @@
 {
-  "tray": { "showMain": "显示主窗口", "showPet": "显示墨团", "hidePet": "隐藏墨团", "pauseAi": "暂停 AI", "resumeAi": "恢复 AI", "quit": "完全退出" },
-  "dialog": { "confirmQuitTitle": "退出智学协作台", "confirmQuitMessage": "确定要停止本地学习服务并完全退出吗？", "chooseImportFiles": "选择要导入的学习资料", "saveDiagnostics": "保存诊断日志", "languagePack": "选择离线语言包" },
-  "diagnostics": { "running": "正在检查桌面环境…", "ready": "诊断完成", "exported": "已导出 {fileName}", "backendStopped": "本地学习服务已停止，请重启桌面应用。", "redacted": "敏感信息已移除" },
-  "import": { "preparing": "正在准备导入…", "validating": "正在校验文件…", "complete": "导入完成", "cancelled": "导入已取消" },
-  "startup": { "startingBackend": "正在启动本地学习服务…", "backendReady": "本地学习服务已就绪", "backendFailed": "本地学习服务启动失败", "openingWindow": "正在打开学习空间…" },
-  "updater": { "check": "检查更新", "checking": "正在检查更新…", "available": "发现新版本 {version}", "current": "当前已是最新版本", "offlineBuild": "此离线构建不执行在线更新检查。", "failed": "暂时无法检查更新。" }
+  "tray": {
+    "showMain": "显示主窗口",
+    "showPet": "显示墨团",
+    "hidePet": "隐藏墨团",
+    "pauseAi": "暂停 AI",
+    "resumeAi": "恢复 AI",
+    "quit": "完全退出"
+  },
+  "dialog": {
+    "confirmQuitTitle": "退出智学协作台",
+    "confirmQuitMessage": "确定要停止本地学习服务并完全退出吗？",
+    "chooseImportFiles": "选择要导入的学习资料",
+    "saveDiagnostics": "保存诊断日志",
+    "languagePack": "选择离线语言包"
+  },
+  "diagnostics": {
+    "running": "正在检查桌面环境…",
+    "ready": "诊断完成",
+    "exported": "已导出 {fileName}",
+    "backendStopped": "本地学习服务已停止，请重启桌面应用。",
+    "redacted": "敏感信息已移除"
+  },
+  "import": {
+    "preparing": "正在准备导入…",
+    "validating": "正在校验文件…",
+    "complete": "导入完成",
+    "cancelled": "导入已取消"
+  },
+  "startup": {
+    "startingBackend": "正在启动本地学习服务…",
+    "backendReady": "本地学习服务已就绪",
+    "backendFailed": "本地学习服务启动失败",
+    "openingWindow": "正在打开学习空间…"
+  },
+  "updater": {
+    "check": "检查更新",
+    "checking": "正在检查更新…",
+    "available": "发现新版本 {version}",
+    "current": "当前已是最新版本",
+    "offlineBuild": "此离线构建不执行在线更新检查。",
+    "failed": "暂时无法检查更新。"
+  }
 }

@@ -217,8 +217,8 @@ describe('renderer production source inventory', () => {
     const classifiedEntries = inventory.entries.filter((entry: InventoryEntry) => entry.mode === 'classified')
 
     expect(candidates).toHaveLength(752)
-    expect(mappedEntries).toHaveLength(746)
-    expect(classifiedEntries).toHaveLength(6)
+    expect(mappedEntries).toHaveLength(745)
+    expect(classifiedEntries).toHaveLength(7)
     expect(inventory.entries.map((entry: InventoryEntry) => entry.id)).toEqual(
       inventory.entries.map((entry: InventoryEntry) => entry.id).sort(),
     )
@@ -226,10 +226,24 @@ describe('renderer production source inventory', () => {
     expect(classifiedEntries.map((entry: InventoryEntry) => ({
       source: candidateById.get(entry.id)?.source,
       reason: entry.mode === 'classified' ? entry.reason : undefined,
-    }))).toEqual(Array.from({ length: 6 }, () => ({ source: 'src/api/types.ts', reason: 'canonical_enum' })))
+    }))).toEqual(expect.arrayContaining([
+      ...Array.from({ length: 6 }, () => ({ source: 'src/api/types.ts', reason: 'canonical_enum' })),
+      { source: 'src/components/knowledge/KnowledgeSourceList.vue', reason: 'compatibility_fallback' },
+    ]))
+    expect(mappedEntries.filter((entry: InventoryEntry) => entry.mode === 'mapped'
+      && (entry.template.includes('{value}') || entry.expression_bindings.some(binding => binding.placeholder === 'value'))
+    ).map((entry: InventoryEntry) => entry.id)).toEqual([])
     expect(mappedEntries.filter((entry: InventoryEntry & { catalog_key?: string }) =>
       !/^(?:common(?:\.|$)|navigation(?:\.|$)|views\.|components\.|statuses(?:\.|$)|errors(?:\.|$)|pet(?:\.|$))/.test(entry.catalog_key ?? ''),
     ).map((entry: InventoryEntry) => entry.id)).toEqual([])
+    for (const prefix of [
+      'views.dashboard', 'views.profile', 'views.agents', 'views.learningPath', 'views.tutor', 'views.assessment',
+      'views.knowledge', 'views.modelSettings', 'views.desktopSettings', 'views.onboarding',
+      'components.collectionRail', 'components.documentGrid', 'components.documentInspector', 'components.knowledgeSourceList',
+      'components.textbookCatalog', 'components.resourceBundle', 'components.resourceCard', 'components.resourceMenu',
+      'components.safeMermaid', 'components.modelProfileEditor', 'components.modelProfileList', 'components.modelSelectionPopover',
+      'components.petSettingsCard', 'components.conversationRail', 'components.deskPanel',
+    ]) expect(mappedEntries.some((entry: InventoryEntry) => entry.mode === 'mapped' && entry.catalog_key.startsWith(`${prefix}.`)), prefix).toBe(true)
 
     expect({
       complete: result.complete,
