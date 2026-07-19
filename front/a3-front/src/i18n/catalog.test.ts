@@ -1,6 +1,8 @@
 import { bytesToHex } from '@noble/hashes/utils'
 import { sha256 } from '@noble/hashes/sha256'
 import canonicalize from 'canonicalize'
+import { readFileSync, readdirSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -13,6 +15,56 @@ import {
 } from './catalog'
 
 const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
+const TYPES_SOURCE = readFileSync(resolve(process.cwd(), 'src/api/types.ts'), 'utf8')
+
+function quotedLiterals(source: string): string[] {
+  return [...source.matchAll(/'([^']+)'/g)].map(match => match[1])
+}
+
+function typeAliasLiterals(name: string): string[] {
+  const match = TYPES_SOURCE.match(new RegExp(`export type ${name} = ([^\\n]+)`))
+  if (!match) throw new Error(`Missing type alias ${name}`)
+  return quotedLiterals(match[1])
+}
+
+function interfaceFieldLiterals(interfaceName: string, fieldName: string): string[] {
+  const body = TYPES_SOURCE.match(new RegExp(`export interface ${interfaceName} \\{([\\s\\S]*?)\\n\\}`))?.[1]
+  const field = body?.match(new RegExp(`${fieldName}\\??: ([^\\n;]+)`))?.[1]
+  if (!field) throw new Error(`Missing ${interfaceName}.${fieldName}`)
+  return quotedLiterals(field)
+}
+
+function pythonEnumLiterals(path: string, enumName: string): string[] {
+  const source = readFileSync(resolve(process.cwd(), path), 'utf8')
+  const body = source.match(new RegExp(`class ${enumName}\\([^)]*\\):\\n([\\s\\S]*?)(?=\\n\\S|$)`))?.[1]
+  if (!body) throw new Error(`Missing Python enum ${enumName}`)
+  return [...body.matchAll(/^\s+[A-Z][A-Z0-9_]*\s*=\s*["']([^"']+)["']/gm)].map(match => match[1])
+}
+
+function publicRuntimeErrorCodes(): string[] {
+  const roots = [resolve(process.cwd(), '../../backend'), resolve(process.cwd(), 'electron'), resolve(process.cwd(), 'src/api')]
+  const files: string[] = []
+  const walk = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (entry.name === 'tests' || entry.name === '__pycache__') continue
+      const path = resolve(directory, entry.name)
+      if (entry.isDirectory()) walk(path)
+      else if (/\.(?:py|mjs|ts)$/.test(entry.name) && !entry.name.includes('.test.')) files.push(path)
+    }
+  }
+  roots.forEach(walk)
+  const patterns = [
+    /(?:super\(\)\.__init__|AppError|ResourceNotFoundError|DomainStateError|ProtocolValidationError)\(\s*["']([A-Z][A-Z0-9_]+)["']/g,
+    /(?:desktopError|importError)\(\s*["']([A-Z][A-Z0-9_]+)["']/g,
+    /new BackendApiError\(\s*\d+\s*,\s*["']([A-Z][A-Z0-9_]+)["']/g,
+  ]
+  const codes = new Set<string>()
+  for (const path of files) {
+    const source = readFileSync(path, 'utf8')
+    for (const pattern of patterns) for (const match of source.matchAll(pattern)) codes.add(match[1])
+  }
+  return [...codes].sort()
+}
 const VISIBLE_SOURCE_INVENTORY = [
   '智学协作台', '给学习留一点温度', '学习总览', '学习画像', '智能体协作', '学习路径',
   '学习助手', '练习评估', '知识库', '模型设置', '桌面设置', '首次启动', '打开导航',
@@ -36,7 +88,7 @@ describe('built-in zh-CN catalog contract', () => {
       const isStableErrorCode = segments[0] === 'errors' && index === segments.length - 1
         && /^[A-Z][A-Z0-9_]+$/.test(segment)
       const isCanonicalStatus = segments[0] === 'statuses' && index === segments.length - 1
-        && /^[A-Z][A-Z0-9_]+$/.test(segment)
+        && /^(?:[A-Z][A-Z0-9_]+|[a-z][a-z0-9]*(?:_[a-z0-9]+)*)$/.test(segment)
       return !isStableErrorCode && !isCanonicalStatus && !/^[a-z][A-Za-z0-9]*$/.test(segment)
     }))).toEqual([])
     expect(keys.filter(key => key.split('.').some(segment => forbiddenSegment.test(segment)))).toEqual([])
@@ -52,27 +104,28 @@ describe('built-in zh-CN catalog contract', () => {
 
   it('preserves stable backend error codes and canonical status enums exactly', () => {
     const flat = flattenMessages(BUILT_IN_MESSAGES)
-    expect(Object.keys(BUILT_IN_MESSAGES.errors).filter(key => /^[A-Z][A-Z0-9_]+$/.test(key))).toEqual([
-      'BACKEND_UNAVAILABLE', 'DESKTOP_BACKEND_UNAVAILABLE', 'DESKTOP_BRIDGE_UNAVAILABLE', 'DESKTOP_ONLY',
-      'MODEL_NOT_CONFIGURED', 'MODEL_AUTHENTICATION_ERROR', 'MODEL_RATE_LIMITED', 'MODEL_REQUEST_FAILED',
-      'MODEL_PROFILE_DEFAULT_MODEL_INVALID', 'STREAM_INVALID', 'STREAM_CANCELLED',
-      'KNOWLEDGE_FILE_SIGNATURE_MISMATCH', 'KNOWLEDGE_PARSE_FAILED', 'KNOWLEDGE_OCR_PACK_REQUIRED',
-      'KNOWLEDGE_OCR_PAGE_FAILED', 'IMPORT_FAILED', 'EXPORT_FAILED', 'LANGUAGE_PACK_INVALID',
-      'LANGUAGE_PACK_INCOMPATIBLE', 'LANGUAGE_PACK_SIGNATURE_INVALID',
-    ])
-    expect(Object.keys(BUILT_IN_MESSAGES.statuses.session)).toEqual(['NEW', 'DIAGNOSING', 'PROFILED', 'GENERATING', 'PRACTICING', 'REVIEWING', 'COMPLETED'])
-    expect(Object.keys(BUILT_IN_MESSAGES.statuses.mastery)).toEqual(['UNASSESSED', 'WEAK', 'LEARNING', 'PROFICIENT', 'MASTERED'])
-    expect(Object.keys(BUILT_IN_MESSAGES.statuses.document)).toEqual(['QUEUED', 'VALIDATING', 'PARSING', 'OCR_REQUIRED', 'OCR_RUNNING', 'INDEXING', 'COMPLETED', 'FAILED'])
-    expect(Object.keys(BUILT_IN_MESSAGES.statuses.resource)).toEqual(['PENDING', 'GENERATING', 'COMPLETED', 'FAILED'])
-    expect(Object.keys(BUILT_IN_MESSAGES.statuses.update)).toEqual(['CHECKING', 'AVAILABLE', 'CURRENT', 'OFFLINE_BUILD', 'ERROR'])
+    const catalogErrorCodes = new Set(Object.keys(BUILT_IN_MESSAGES.errors).filter(key => /^[A-Z][A-Z0-9_]+$/.test(key)))
+    expect(publicRuntimeErrorCodes().filter(code => !catalogErrorCodes.has(code))).toEqual([])
+    expect(Object.keys(BUILT_IN_MESSAGES.statuses.session)).toEqual(pythonEnumLiterals('../../backend/services/db.py', 'SessionState'))
+    expect(Object.keys(BUILT_IN_MESSAGES.statuses.mastery)).toEqual(interfaceFieldLiterals('KnowledgePoint', 'mastery_label'))
+    expect(Object.keys(BUILT_IN_MESSAGES.statuses.importStatus)).toEqual(pythonEnumLiterals('../../backend/knowledge/models.py', 'ImportJobStatus'))
+    expect(Object.keys(BUILT_IN_MESSAGES.statuses.updateStatus)).toEqual(interfaceFieldLiterals('DesktopInfo', 'update_status'))
+    expect(Object.keys(BUILT_IN_MESSAGES.statuses.artifactStatus)).toEqual(interfaceFieldLiterals('ResourceArtifact', 'status'))
+    expect(Object.keys(BUILT_IN_MESSAGES.statuses.bundleStatus)).toEqual(interfaceFieldLiterals('ResourceBundle', 'status'))
+    expect(Object.keys(BUILT_IN_MESSAGES.statuses.accessMode)).toEqual(typeAliasLiterals('TextbookAccessMode'))
+    expect(Object.keys(BUILT_IN_MESSAGES.statuses.privacyMode)).toEqual(interfaceFieldLiterals('KnowledgeBinding', 'privacy_mode'))
+    expect(Object.keys(BUILT_IN_MESSAGES.statuses.reasoningEffort)).toEqual(typeAliasLiterals('ReasoningEffort'))
+    expect(BUILT_IN_MESSAGES.statuses.catalogStatus).toEqual({ checking: '正在检查' })
+    expect(BUILT_IN_MESSAGES.statuses.masteryDisplay).toEqual({ unassessed: '未评估' })
     expect(flat['errors.KNOWLEDGE_PARSE_FAILED']).toBe('解析器未能读取这份资料。')
-    expect(flat['statuses.document.OCR_REQUIRED']).toBe('等待 OCR')
+    expect(flat['statuses.importStatus.OCR_REQUIRED']).toBe('等待 OCR')
   })
 
   it('keeps generic error fallbacks semantic and excludes internal replacement literals', () => {
     const flat = flattenMessages(BUILT_IN_MESSAGES)
     expect(flat['errors.unknown']).toBe('请求失败，请稍后重试。')
-    expect(flat['errors.unknownWithReference']).toBe('请求失败，请稍后重试。参考编号：{referenceId}')
+    expect(flat['errors.unknownWithReference']).toBe('请求失败（错误码：{code}）。参考编号：{requestId}')
+    expect(placeholdersFor(flat['errors.unknownWithReference'])).toEqual(['code', 'requestId'])
     expect(flat['errors.UNKNOWN']).toBeUndefined()
     expect(flat['errors.UNKNOWN_WITH_REFERENCE']).toBeUndefined()
     expect(flat['components.knowledgeSourceList.normalizedPageReplacement']).toBeUndefined()
@@ -171,7 +224,7 @@ describe('built-in zh-CN catalog contract', () => {
     expect(buildBaseCatalogPayload()).toBe(payload)
     expect(BASE_CATALOG_HASH).toMatch(/^[A-F0-9]{64}$/)
     expect(BASE_CATALOG_HASH).toBe(independentHash)
-    expect(BASE_CATALOG_HASH).toBe('41B286ECB33CB107452B2DCFC530A123ED26500B79BE4FEE881D9F94EBAE5ADC')
+    expect(BASE_CATALOG_HASH).toBe('F23EF1E53DE3522C67E94F4195E3194AB4A765738FC54E83ADFE310B29BF2CDE')
   })
 
   it('deep-freezes every built-in namespace without changing the digest', () => {

@@ -2,20 +2,18 @@
   "session": {
     "NEW": "尚未开始",
     "DIAGNOSING": "诊断中",
+    "PROFILE_READY": "画像准备完成",
     "PROFILED": "画像已完成",
     "GENERATING": "生成中",
-    "PRACTICING": "练习中",
-    "REVIEWING": "复习中",
-    "COMPLETED": "已完成"
+    "FAILED": "未完成"
   },
   "mastery": {
-    "UNASSESSED": "未评估",
     "WEAK": "薄弱",
     "LEARNING": "学习中",
     "PROFICIENT": "较熟练",
     "MASTERED": "已掌握"
   },
-  "document": {
+  "importStatus": {
     "QUEUED": "等待导入",
     "VALIDATING": "正在校验",
     "PARSING": "正在阅读",
@@ -23,20 +21,49 @@
     "OCR_RUNNING": "正在逐页识别",
     "INDEXING": "正在编目",
     "COMPLETED": "已整理",
-    "FAILED": "需要处理"
+    "FAILED": "需要处理",
+    "CANCELLED": "已取消",
+    "INTERRUPTED": "已中断"
   },
-  "resource": {
-    "PENDING": "等待生成",
-    "GENERATING": "生成中",
+  "updateStatus": {
+    "offline_build": "离线构建",
+    "available": "发现新版本",
+    "current": "已是最新版本",
+    "error": "检查失败"
+  },
+  "artifactStatus": {
+    "SUCCEEDED": "已完成",
+    "FAILED": "生成失败",
+    "CANCELLED": "已取消"
+  },
+  "bundleStatus": {
     "COMPLETED": "已完成",
-    "FAILED": "生成失败"
+    "PARTIAL": "部分完成",
+    "FAILED": "生成失败",
+    "CANCELLED": "已取消"
   },
-  "update": {
-    "CHECKING": "正在检查",
-    "AVAILABLE": "发现新版本",
-    "CURRENT": "已是最新版本",
-    "OFFLINE_BUILD": "离线构建",
-    "ERROR": "检查失败"
+  "accessMode": {
+    "OFFICIAL_READER": "官方阅读器",
+    "LICENSED_DOWNLOAD": "授权下载",
+    "EXTERNAL_CATALOG": "外部目录"
+  },
+  "privacyMode": {
+    "allow_model_context": "允许模型参考相关片段",
+    "local_search_only": "仅本机检索"
+  },
+  "reasoningEffort": {
+    "auto": "自动",
+    "off": "关闭",
+    "low": "轻量",
+    "medium": "标准",
+    "high": "深入",
+    "xhigh": "极高"
+  },
+  "catalogStatus": {
+    "checking": "正在检查"
+  },
+  "masteryDisplay": {
+    "unassessed": "未评估"
   },
   "practiceStart": "开始练习",
   "diagnosisWaiting": "等待诊断"

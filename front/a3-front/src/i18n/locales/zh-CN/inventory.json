@@ -1920,7 +1920,7 @@
     {
       "id": "5820df68151f24fc0ee31915",
       "mode": "mapped",
-      "catalog_key": "statuses.document.OCR_RUNNING",
+      "catalog_key": "statuses.importStatus.OCR_RUNNING",
       "template": "正在逐页识别",
       "expression_bindings": []
     },
@@ -2212,7 +2212,7 @@
     {
       "id": "650d2f20b899ae9358c04e4a",
       "mode": "mapped",
-      "catalog_key": "statuses.document.VALIDATING",
+      "catalog_key": "statuses.importStatus.VALIDATING",
       "template": "正在校验",
       "expression_bindings": []
     },
@@ -2434,7 +2434,7 @@
     {
       "id": "719d46aa5c54a369fbdab1c4",
       "mode": "mapped",
-      "catalog_key": "statuses.document.INDEXING",
+      "catalog_key": "statuses.importStatus.INDEXING",
       "template": "正在编目",
       "expression_bindings": []
     },
@@ -3097,7 +3097,7 @@
     {
       "id": "920634348a76236cccf32ba8",
       "mode": "mapped",
-      "catalog_key": "statuses.document.OCR_REQUIRED",
+      "catalog_key": "statuses.importStatus.OCR_REQUIRED",
       "template": "等待 OCR",
       "expression_bindings": []
     },
@@ -3167,7 +3167,7 @@
     {
       "id": "96be95e677840a286f4dac77",
       "mode": "mapped",
-      "catalog_key": "statuses.document.QUEUED",
+      "catalog_key": "statuses.importStatus.QUEUED",
       "template": "等待导入",
       "expression_bindings": []
     },
@@ -3447,7 +3447,7 @@
     {
       "id": "a288a9e9dfbd265f43d40daa",
       "mode": "mapped",
-      "catalog_key": "statuses.document.PARSING",
+      "catalog_key": "statuses.importStatus.PARSING",
       "template": "正在阅读",
       "expression_bindings": []
     },
@@ -3884,7 +3884,7 @@
     {
       "id": "b5bab10915532d49da719734",
       "mode": "mapped",
-      "catalog_key": "statuses.document.FAILED",
+      "catalog_key": "statuses.importStatus.FAILED",
       "template": "需要处理",
       "expression_bindings": []
     },
@@ -4015,7 +4015,7 @@
     {
       "id": "bd52faad14d88d1483b045f7",
       "mode": "mapped",
-      "catalog_key": "statuses.document.FAILED",
+      "catalog_key": "statuses.importStatus.FAILED",
       "template": "需要处理",
       "expression_bindings": []
     },
@@ -4064,7 +4064,7 @@
     {
       "id": "bf858164aa4af054424dfa81",
       "mode": "mapped",
-      "catalog_key": "statuses.mastery.UNASSESSED",
+      "catalog_key": "statuses.masteryDisplay.unassessed",
       "template": "未评估",
       "expression_bindings": []
     },
@@ -4303,7 +4303,7 @@
     {
       "id": "c7169238c1fe6c7d32e3ed7a",
       "mode": "mapped",
-      "catalog_key": "statuses.document.COMPLETED",
+      "catalog_key": "statuses.importStatus.COMPLETED",
       "template": "已整理",
       "expression_bindings": []
     },
