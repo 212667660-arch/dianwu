@@ -166,6 +166,9 @@
 
 ## 八、当前执行顺序
 
+> 当前对话的完整任务锚点、设计思路、已完成/进行中/待实现任务和恢复边界见：`codex/当前对话任务锚点.md`。后续恢复必须先读取该文件，再读取本节与对应实施计划。
+> Git 校正：当前已推送且本地/远端一致的锚点 HEAD 为 `0464dfb`；下段中的 `258f184` 是 Task 2 完成时的上一检查点，仅保留为历史上下文。
+
 Sol 暂停于 S-043 Task 3。工作树为 `E:\软件杯\.worktrees\s022-s026-remediation`、分支 `codex/s041-signing-i18n-design`，已推送 HEAD 为 `258f184`，本地与远端一致。未提交改动：`front/a3-front/src/layouts/AppLayout.vue`、`AppLayout.test.ts`、`src/router/index.ts`、`src/utils/protocol.ts`；未跟踪新文件：`src/i18n/coverage.test.ts`、`src/i18n/display-maps.ts`。已完成 route meta `title`→`titleKey`、AppLayout 品牌/会话/书桌/服务状态与 backend-exit 文案的部分 `t()` 迁移、action/mastery label 改由 i18n 获取，以及 difficulty/stage/subject/mastery/resource/bundle/artifact/evidence/provider/reasoning/import/access/privacy/nextAction 的 display-map 草案。当前只确认 `git diff --check` 通过；聚焦测试、inventory closure、`vue-tsc`、完整 Vitest/`npm test`、规格/质量审查均尚未运行，因此不得声称 Task 3 完成。恢复顺序：先运行 `npx vitest run src/i18n/coverage.test.ts src/layouts/AppLayout.test.ts src/router/history.test.ts` 定位 RED；补齐缺失 catalog keys、display-map 类型与 protocol import/边界；同步中文 inventory；聚焦 GREEN 后运行 `vue-tsc -b` 与阶段性 `npm test`；完成规格/质量双审，再更新队列、提交并推送。S-042 继续仅因 Azure 外部资源与 formal workflow 阻塞；`.tmp/`、`dist-s033/`、`dist-s033-diag/`、`dist-s033-fixed/` 均保留。
 
 ### 历史执行轨迹（仅供追溯，不代表当前状态）
