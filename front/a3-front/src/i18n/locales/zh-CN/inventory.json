@@ -1962,6 +1962,13 @@
       ]
     },
     {
+      "id": "4ea5a996d227207975ed8e82",
+      "mode": "mapped",
+      "catalog_key": "pet.character.displayName",
+      "template": "墨团",
+      "expression_bindings": []
+    },
+    {
       "id": "4f33d6f005c069999778e566",
       "mode": "mapped",
       "catalog_key": "views.knowledge.collectionRequiredForTutor",
@@ -2234,6 +2241,13 @@
       "mode": "mapped",
       "catalog_key": "views.desktopSettings.versionUpdate",
       "template": "版本与更新",
+      "expression_bindings": []
+    },
+    {
+      "id": "5b1e4892de02640bcbe15cbd",
+      "mode": "mapped",
+      "catalog_key": "pet.native.interactionHint",
+      "template": "单击挥手，双击跳跃，拖动可以移动",
       "expression_bindings": []
     },
     {
@@ -2863,6 +2877,13 @@
       "mode": "mapped",
       "catalog_key": "components.petSettingsCard.action",
       "template": "动作预览",
+      "expression_bindings": []
+    },
+    {
+      "id": "74ee6871a9ccd8ef39d71ac9",
+      "mode": "mapped",
+      "catalog_key": "pet.native.ariaLabel",
+      "template": "桌面学习伙伴",
       "expression_bindings": []
     },
     {
@@ -3597,6 +3618,13 @@
       "mode": "mapped",
       "catalog_key": "components.modelProfileEditor.timeoutValidation",
       "template": "请求超时必须在 5 到 300 秒之间。",
+      "expression_bindings": []
+    },
+    {
+      "id": "991e39bcbb20dc1b132e64c8",
+      "mode": "mapped",
+      "catalog_key": "pet.native.windowTitle",
+      "template": "学习伙伴",
       "expression_bindings": []
     },
     {
@@ -5054,6 +5082,13 @@
       "mode": "mapped",
       "catalog_key": "views.assessment.noMistakeRecords",
       "template": "暂无错题记录",
+      "expression_bindings": []
+    },
+    {
+      "id": "d36b36bc24a5802a141fa3fb",
+      "mode": "mapped",
+      "catalog_key": "pet.character.description",
+      "template": "住在书页边缘的青墨学习精灵，会陪你等待、创作与复核。",
       "expression_bindings": []
     },
     {

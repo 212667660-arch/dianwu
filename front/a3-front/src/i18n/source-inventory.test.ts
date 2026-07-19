@@ -88,6 +88,29 @@ describe('source inventory extraction', () => {
     expect(candidates[6].expressions).toEqual(['current', 'total'])
   })
 
+  it('extracts visible text and static accessibility attributes from the allowlisted pet HTML without script or style text', () => {
+    const source = `<!doctype html><html><head><title>伙伴标题</title><style>.x::after{content:'样式中文'}</style></head>
+      <body><main aria-label="伙伴标签" title="操作提示"><span>可见说明</span><img alt="伙伴图片" /></main>
+      <script>const hidden = '脚本中文'</script></body></html>`
+    const candidates = extractSourceCandidates('electron/pet/index.html', source)
+    expect(candidates.map(candidate => candidate.raw)).toEqual(['伙伴标题', '伙伴标签', '操作提示', '可见说明', '伙伴图片'])
+    expect(candidates.map(candidate => candidate.kind)).toEqual([
+      'html_text', 'html_static_attribute', 'html_static_attribute', 'html_text', 'html_static_attribute',
+    ])
+  })
+
+  it('extracts Simplified Chinese JSON string leaves with stable JSON pointers', () => {
+    const source = '{\n  "displayName": "墨团",\n  "description": "学习精灵",\n  "animations": { "idle": "internal-token" }\n}'
+    const first = extractSourceCandidates('electron/pets/motuan/pet.json', source)
+    const repeated = extractSourceCandidates('electron/pets/motuan/pet.json', source)
+    expect(first).toEqual(repeated)
+    expect(first.map(candidate => ({ raw: candidate.raw, kind: candidate.kind, pointer: candidate.json_pointer }))).toEqual([
+      { raw: '墨团', kind: 'json_string', pointer: '/displayName' },
+      { raw: '学习精灵', kind: 'json_string', pointer: '/description' },
+    ])
+    expect(first[0]).toMatchObject({ line: 2, column: 19 })
+  })
+
   it('produces stable location-sensitive ids and source coordinates', () => {
     const first = extractSourceCandidates('src/a.ts', "const a = '甲文案'\nconst b = '乙文案'")
     const repeated = extractSourceCandidates('src/a.ts', "const a = '甲文案'\nconst b = '乙文案'")
@@ -111,7 +134,12 @@ describe('source inventory extraction', () => {
 
   it('filters tests, generated output, and locale catalogs', () => {
     expect(shouldScanSource('src/App.vue')).toBe(true)
-    for (const path of ['src/App.test.ts', 'dist/app.js', 'generated/messages.ts', 'src/i18n/locales/zh-CN/a.json']) {
+    expect(shouldScanSource('electron/pet/index.html')).toBe(true)
+    expect(shouldScanSource('electron/pets/motuan/pet.json')).toBe(true)
+    for (const path of [
+      'src/App.test.ts', 'dist/app.js', 'generated/messages.ts', 'src/i18n/locales/zh-CN/a.json',
+      'package.json', 'electron/random.html', 'electron/pet/config.json', 'electron/pets/motuan/other.json',
+    ]) {
       expect(shouldScanSource(path), path).toBe(false)
     }
   })
@@ -223,9 +251,9 @@ describe('repository production source inventory', () => {
     const classifiedEntries = inventory.entries.filter((entry: InventoryEntry) => entry.mode === 'classified')
 
     expect(rendererCandidates).toHaveLength(752)
-    expect(electronCandidates).toHaveLength(115)
-    expect(candidates).toHaveLength(867)
-    expect(mappedEntries).toHaveLength(795)
+    expect(electronCandidates).toHaveLength(120)
+    expect(candidates).toHaveLength(872)
+    expect(mappedEntries).toHaveLength(800)
     expect(classifiedEntries).toHaveLength(72)
     expect(inventory.entries.map((entry: InventoryEntry) => entry.id)).toEqual(
       inventory.entries.map((entry: InventoryEntry) => entry.id).sort(),
@@ -243,8 +271,11 @@ describe('repository production source inventory', () => {
     const electronIds = new Set(electronCandidates.map(candidate => candidate.id))
     const electronMapped = mappedEntries.filter((entry: InventoryEntry) => electronIds.has(entry.id))
     const electronClassified = classifiedEntries.filter((entry: InventoryEntry) => electronIds.has(entry.id))
-    expect(electronMapped).toHaveLength(51)
+    expect(electronMapped).toHaveLength(56)
     expect(electronClassified).toHaveLength(64)
+    expect(new Set(electronCandidates.filter(candidate => /(?:index\.html|pet\.json)$/.test(candidate.source)).map(candidate => candidate.source))).toEqual(new Set([
+      'electron/pet/index.html', 'electron/pets/motuan/pet.json',
+    ]))
     expect(new Set(electronClassified.map((entry: InventoryEntry) => entry.mode === 'classified' ? entry.reason : undefined))).toEqual(
       new Set(['compatibility_fallback', 'static_markup_template']),
     )

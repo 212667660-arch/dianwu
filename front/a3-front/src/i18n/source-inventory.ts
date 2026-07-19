@@ -1,6 +1,6 @@
 import { bytesToHex } from '@noble/hashes/utils'
 import { sha256 } from '@noble/hashes/sha256'
-import { NodeTypes, parse as parseTemplate, type RootNode, type TemplateChildNode } from '@vue/compiler-dom'
+import { NodeTypes, baseParse as parseHtml, parse as parseTemplate, type RootNode, type TemplateChildNode } from '@vue/compiler-dom'
 import { parse as parseSfc } from '@vue/compiler-sfc'
 import ts from 'typescript'
 
@@ -10,6 +10,9 @@ export type CandidateKind =
   | 'template_expression'
   | 'vue_text'
   | 'vue_static_attribute'
+  | 'html_text'
+  | 'html_static_attribute'
+  | 'json_string'
 
 export interface SourceCandidate {
   id: string
@@ -20,6 +23,7 @@ export interface SourceCandidate {
   static_parts: string[]
   line: number
   column: number
+  json_pointer?: string
 }
 
 export const CLASSIFIED_REASONS = [
@@ -46,14 +50,79 @@ export interface InventoryValidation {
 }
 
 const HAN = /\p{Script=Han}/u
-const STATIC_ATTRIBUTES = new Set(['aria-label', 'aria-description', 'title', 'placeholder'])
+const STATIC_ATTRIBUTES = new Set(['aria-label', 'aria-description', 'title', 'placeholder', 'alt'])
 
 export function shouldScanSource(path: string): boolean {
   const normalized = path.replaceAll('\\', '/')
-  return /\.(?:vue|ts|tsx|js|jsx|mjs|cjs)$/.test(normalized)
+  const allowlistedAsset = normalized === 'electron/pet/index.html'
+    || /^electron\/pets\/[^/]+\/pet\.json$/.test(normalized)
+  return (allowlistedAsset || /\.(?:vue|ts|tsx|js|jsx|mjs|cjs)$/.test(normalized))
     && !/(?:^|\/)(?:dist|release|generated|locales)(?:\/|$)/.test(normalized)
     && !/(?:^|\/)(?:tests?|__tests__)(?:\/|$)/.test(normalized)
     && !/\.(?:test|spec)\.[^/]+$/.test(normalized)
+}
+
+function extractHtml(source: string, text: string): SourceCandidate[] {
+  const result: SourceCandidate[] = []
+  const add = (kind: CandidateKind, raw: string, line: number, column: number): void => {
+    const candidate = makeCandidate(source, kind, raw, [], [raw], line, column)
+    if (candidate) result.push(candidate)
+  }
+  const visit = (node: RootNode | TemplateChildNode): void => {
+    if (node.type === NodeTypes.TEXT) add('html_text', node.content, node.loc.start.line, node.loc.start.column)
+    if (node.type === NodeTypes.ELEMENT) {
+      if (node.tag === 'script' || node.tag === 'style') return
+      for (const prop of node.props) {
+        if (prop.type === NodeTypes.ATTRIBUTE && prop.value && STATIC_ATTRIBUTES.has(prop.name)) {
+          add('html_static_attribute', prop.value.content, prop.value.loc.start.line, prop.value.loc.start.column)
+        }
+      }
+      for (const child of node.children) visit(child)
+    } else if (node.type === NodeTypes.ROOT) {
+      for (const child of node.children) visit(child)
+    }
+  }
+  visit(parseHtml(text))
+  return result.sort((left, right) => left.line - right.line || left.column - right.column || left.id.localeCompare(right.id))
+}
+
+function extractJson(source: string, text: string): SourceCandidate[] {
+  const value = JSON.parse(text) as unknown
+  const result: SourceCandidate[] = []
+  let searchFrom = 0
+  const escapePointer = (segment: string): string => segment.replaceAll('~', '~0').replaceAll('/', '~1')
+  const visit = (current: unknown, pointer: string): void => {
+    if (typeof current === 'string') {
+      const normalized = current.replace(/\s+/g, ' ').trim()
+      if (!HAN.test(normalized)) return
+      const encoded = JSON.stringify(current)
+      let offset = text.indexOf(encoded, searchFrom)
+      if (offset < 0) offset = text.indexOf(encoded)
+      if (offset < 0) throw new SyntaxError(`Unable to locate JSON string at ${pointer}`)
+      searchFrom = offset + encoded.length
+      const before = text.slice(0, offset + 1)
+      const lines = before.split('\n')
+      result.push({
+        id: digest([source, 'json_string', pointer, normalized].join('\0')),
+        source,
+        kind: 'json_string',
+        raw: normalized,
+        expressions: [],
+        static_parts: [current],
+        line: lines.length,
+        column: lines.at(-1)!.length + 1,
+        json_pointer: pointer,
+      })
+      return
+    }
+    if (Array.isArray(current)) {
+      current.forEach((child, index) => visit(child, `${pointer}/${index}`))
+    } else if (current && typeof current === 'object') {
+      for (const [key, child] of Object.entries(current)) visit(child, `${pointer}/${escapePointer(key)}`)
+    }
+  }
+  visit(value, '')
+  return result
 }
 
 function digest(value: string): string {
@@ -147,6 +216,8 @@ function walkVueTemplate(source: string, root: RootNode, lineOffset: number, col
 
 export function extractSourceCandidates(source: string, text: string): SourceCandidate[] {
   if (!shouldScanSource(source)) return []
+  if (source.endsWith('.html')) return extractHtml(source, text)
+  if (source.endsWith('.json')) return extractJson(source, text)
   if (!source.endsWith('.vue')) return extractScript(source, text)
   const { descriptor } = parseSfc(text, { filename: source })
   const result: SourceCandidate[] = []

@@ -25,6 +25,13 @@
     "review": "复核",
     "encourage": "鼓励",
     "dragHint": "拖动墨团可以调整位置",
-    "resizeHint": "拖动边角可以等比例调整大小"
+    "resizeHint": "拖动边角可以等比例调整大小",
+    "windowTitle": "学习伙伴",
+    "ariaLabel": "桌面学习伙伴",
+    "interactionHint": "单击挥手，双击跳跃，拖动可以移动"
+  },
+  "character": {
+    "displayName": "墨团",
+    "description": "住在书页边缘的青墨学习精灵，会陪你等待、创作与复核。"
   }
 }
