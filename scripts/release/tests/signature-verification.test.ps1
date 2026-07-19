@@ -510,6 +510,44 @@ try {
             Remove-PSDrive -Name 'A3SDK' -Force -ErrorAction SilentlyContinue
         }
 
+        $physicalDriveLetters = @(
+            [IO.DriveInfo]::GetDrives() |
+                ForEach-Object { $_.Name.Substring(0, 1).ToUpperInvariant() }
+        )
+        $existingFileSystemDriveNames = @(
+            Get-PSDrive -PSProvider FileSystem |
+                ForEach-Object { $_.Name.ToUpperInvariant() }
+        )
+        $singleLetterPsDriveName = @(
+            90..68 |
+                ForEach-Object { [char]$_ } |
+                Where-Object {
+                    $letter = $_.ToString()
+                    $physicalDriveLetters -notcontains $letter -and
+                        $existingFileSystemDriveNames -notcontains $letter
+                }
+        ) | Select-Object -First 1
+        if ($null -eq $singleLetterPsDriveName) {
+            throw 'The test requires one unused drive letter.'
+        }
+        $singleLetterPsDriveName = $singleLetterPsDriveName.ToString()
+        New-PSDrive -Name $singleLetterPsDriveName -PSProvider FileSystem -Root $sdkRoot | Out-Null
+        try {
+            $singleLetterPsDriveRoot = "${singleLetterPsDriveName}:\"
+            $singleLetterPsDriveRootProvider = {
+                return $singleLetterPsDriveRoot
+            }.GetNewClosure()
+            Assert-ThrowsCode {
+                & $module {
+                    param($SdkRootProvider)
+                    Find-A3SignToolCore -SdkRootProvider $SdkRootProvider
+                } $singleLetterPsDriveRootProvider
+            } 'A3_WINDOWS_SDK_ROOT_INVALID' | Out-Null
+        }
+        finally {
+            Remove-PSDrive -Name $singleLetterPsDriveName -Force -ErrorAction SilentlyContinue
+        }
+
         foreach ($nonDosSdkRoot in @(
             "FileSystem::$sdkRoot"
             "\\?\$sdkRoot"

@@ -36,6 +36,13 @@ namespace A3 {
             IntPtr fileHandle,
             out ByHandleFileInformation fileInformation
         );
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        public static extern uint QueryDosDevice(
+            string deviceName,
+            StringBuilder targetPath,
+            uint maxLength
+        );
     }
 }
 '@
@@ -508,6 +515,42 @@ function Get-A3WindowsSdkRootFromRegistry {
     throw (New-A3SignatureError 'A3_WINDOWS_SDK_ROOT_INVALID' 'The Windows SDK root could not be obtained from the installed-roots registry.')
 }
 
+function Test-A3PersistentLocalFixedDrive {
+    param([Parameter(Mandatory)] [string]$DriveLetter)
+
+    $normalizedDriveLetter = $DriveLetter.ToUpperInvariant()
+    $expectedRoot = "${normalizedDriveLetter}:\"
+    $fileSystemDrives = @(
+        Get-PSDrive -Name $normalizedDriveLetter -PSProvider FileSystem -ErrorAction SilentlyContinue
+    )
+    if ($fileSystemDrives.Count -ne 1 -or
+        [string]$fileSystemDrives[0].Root -ine $expectedRoot) {
+        return $false
+    }
+
+    $fixedDrives = @(
+        [IO.DriveInfo]::GetDrives() |
+            Where-Object {
+                $_.Name -ieq $expectedRoot -and $_.DriveType -eq [IO.DriveType]::Fixed
+            }
+    )
+    if ($fixedDrives.Count -ne 1) {
+        return $false
+    }
+
+    $targetBuilder = [Text.StringBuilder]::new(4096)
+    $targetLength = [A3.SignatureNativeMethods]::QueryDosDevice(
+        "${normalizedDriveLetter}:",
+        $targetBuilder,
+        [uint32]$targetBuilder.Capacity
+    )
+    if ($targetLength -eq 0) {
+        return $false
+    }
+    $deviceTarget = ($targetBuilder.ToString() -split [char]0)[0]
+    return $deviceTarget.StartsWith('\Device\HarddiskVolume', [StringComparison]::OrdinalIgnoreCase)
+}
+
 function Resolve-A3WindowsSdkRoot {
     param([Parameter(Mandatory)] [scriptblock]$SdkRootProvider)
 
@@ -519,7 +562,16 @@ function Resolve-A3WindowsSdkRoot {
         if ($providedRoot -notmatch '\A[A-Za-z]:[\\/]') {
             throw [InvalidOperationException]::new('The SDK root must be an absolute local DOS path.')
         }
+        $driveLetter = $providedRoot.Substring(0, 1)
+        if (-not (Test-A3PersistentLocalFixedDrive -DriveLetter $driveLetter)) {
+            throw [InvalidOperationException]::new('The SDK root drive is not a persistent local fixed volume.')
+        }
         $sdkRoot = Resolve-A3FileSystemPath -Path $providedRoot
+        $expectedDriveRoot = "{0}:\" -f $driveLetter.ToUpperInvariant()
+        $resolvedDriveRoot = [IO.Path]::GetPathRoot($sdkRoot).Replace('/', '\')
+        if ($resolvedDriveRoot -ine $expectedDriveRoot) {
+            throw [InvalidOperationException]::new('The SDK root drive identity changed during resolution.')
+        }
         if (-not (Test-Path -LiteralPath $sdkRoot -PathType Container)) {
             throw [InvalidOperationException]::new('Missing SDK root.')
         }
