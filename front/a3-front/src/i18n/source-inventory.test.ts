@@ -1,6 +1,11 @@
+import { readFileSync, readdirSync } from 'node:fs'
+import { relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
+import { BUILT_IN_MESSAGES, flattenMessages } from './catalog'
+
 import {
+  CLASSIFIED_REASONS,
   extractSourceCandidates,
   shouldScanSource,
   validateInventory,
@@ -8,6 +13,24 @@ import {
   type InventoryEntry,
   type SourceCandidate,
 } from './source-inventory'
+
+function rendererProductionCandidates(): SourceCandidate[] {
+  const root = resolve(process.cwd(), 'src')
+  const files: string[] = []
+  const walk = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = resolve(directory, entry.name)
+      if (entry.isDirectory()) walk(path)
+      else files.push(path)
+    }
+  }
+  walk(root)
+  return files
+    .map(path => relative(process.cwd(), path).replaceAll('\\', '/'))
+    .filter(shouldScanSource)
+    .sort()
+    .flatMap(source => extractSourceCandidates(source, readFileSync(resolve(process.cwd(), source), 'utf8')))
+}
 
 describe('source inventory extraction', () => {
   it('extracts only real TS and JS string nodes without crossing syntax boundaries', () => {
@@ -92,13 +115,23 @@ describe('source inventory extraction', () => {
 })
 
 describe('source inventory validation', () => {
+  it('uses the reviewed closed renderer classification reasons', () => {
+    expect(CLASSIFIED_REASONS).toEqual([
+      'canonical_enum',
+      'protocol_token',
+      'compatibility_fallback',
+      'internal_log',
+      'developer_diagnostic',
+      'non_user_data',
+    ])
+  })
   const candidate = (overrides: Partial<SourceCandidate> = {}): SourceCandidate => ({
     id: 'candidate-1', source: 'src/a.ts', kind: 'template_expression', raw: '进度 ${current}/${total}',
     expressions: ['current', 'total'], static_parts: ['进度 ', '/', ''], line: 1, column: 1, ...overrides,
   })
 
   it('reports both missing candidates and extra entries', () => {
-    const result = validateInventory([candidate()], [{ id: 'stale', mode: 'classified', reason: 'not_user_visible' }], {})
+    const result = validateInventory([candidate()], [{ id: 'stale', mode: 'classified', reason: 'canonical_enum' }], {})
     expect(result.missing.map(item => item.id)).toEqual(['candidate-1'])
     expect(result.extra.map(item => item.id)).toEqual(['stale'])
   })
@@ -171,5 +204,38 @@ describe('source inventory validation', () => {
     const result = validateRepositoryInventory([candidate()], { version: 1, entries: [] }, {})
     expect(result.missing).toHaveLength(1)
     expect(result.complete).toBe(false)
+  })
+})
+
+describe('renderer production source inventory', () => {
+  it('completely maps or classifies every Simplified Chinese AST candidate', () => {
+    const candidates = rendererProductionCandidates()
+    const inventory = JSON.parse(readFileSync(resolve(process.cwd(), 'src/i18n/locales/zh-CN/inventory.json'), 'utf8'))
+    const catalog = flattenMessages(BUILT_IN_MESSAGES)
+    const result = validateRepositoryInventory(candidates, inventory, catalog)
+    const mappedEntries = inventory.entries.filter((entry: InventoryEntry) => entry.mode === 'mapped')
+    const classifiedEntries = inventory.entries.filter((entry: InventoryEntry) => entry.mode === 'classified')
+
+    expect(candidates).toHaveLength(752)
+    expect(mappedEntries).toHaveLength(746)
+    expect(classifiedEntries).toHaveLength(6)
+    expect(inventory.entries.map((entry: InventoryEntry) => entry.id)).toEqual(
+      inventory.entries.map((entry: InventoryEntry) => entry.id).sort(),
+    )
+    const candidateById = new Map(candidates.map(candidate => [candidate.id, candidate]))
+    expect(classifiedEntries.map((entry: InventoryEntry) => ({
+      source: candidateById.get(entry.id)?.source,
+      reason: entry.mode === 'classified' ? entry.reason : undefined,
+    }))).toEqual(Array.from({ length: 6 }, () => ({ source: 'src/api/types.ts', reason: 'canonical_enum' })))
+    expect(mappedEntries.filter((entry: InventoryEntry & { catalog_key?: string }) =>
+      !/^(?:common(?:\.|$)|navigation(?:\.|$)|views\.|components\.|statuses(?:\.|$)|errors(?:\.|$)|pet(?:\.|$))/.test(entry.catalog_key ?? ''),
+    ).map((entry: InventoryEntry) => entry.id)).toEqual([])
+
+    expect({
+      complete: result.complete,
+      missing: result.missing.map(candidate => `${candidate.id} ${candidate.source}:${candidate.line} ${candidate.raw}`),
+      extra: result.extra.map(entry => entry.id),
+      issues: result.issues,
+    }).toEqual({ complete: true, missing: [], extra: [], issues: [] })
   })
 })

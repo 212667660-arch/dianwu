@@ -22,7 +22,14 @@ export interface SourceCandidate {
   column: number
 }
 
-export const CLASSIFIED_REASONS = ['not_user_visible', 'developer_diagnostic', 'proper_noun', 'external_protocol'] as const
+export const CLASSIFIED_REASONS = [
+  'canonical_enum',
+  'protocol_token',
+  'compatibility_fallback',
+  'internal_log',
+  'developer_diagnostic',
+  'non_user_data',
+] as const
 export type ClassifiedReason = typeof CLASSIFIED_REASONS[number]
 
 export type InventoryEntry =

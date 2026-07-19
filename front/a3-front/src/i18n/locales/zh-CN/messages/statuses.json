@@ -1,7 +1,43 @@
 {
-  "session": { "NEW": "尚未开始", "DIAGNOSING": "诊断中", "PROFILED": "画像已完成", "GENERATING": "生成中", "PRACTICING": "练习中", "REVIEWING": "复习中", "COMPLETED": "已完成" },
-  "mastery": { "UNASSESSED": "未评估", "WEAK": "薄弱", "LEARNING": "学习中", "PROFICIENT": "较熟练", "MASTERED": "已掌握" },
-  "document": { "QUEUED": "等待导入", "VALIDATING": "正在校验", "PARSING": "正在阅读", "OCR_REQUIRED": "等待 OCR", "OCR_RUNNING": "正在逐页识别", "INDEXING": "正在编目", "COMPLETED": "已整理", "FAILED": "需要处理" },
-  "resource": { "PENDING": "等待生成", "GENERATING": "生成中", "COMPLETED": "已完成", "FAILED": "生成失败" },
-  "update": { "checking": "正在检查", "available": "发现新版本", "current": "已是最新版本", "offline_build": "离线构建", "error": "检查失败" }
+  "session": {
+    "NEW": "尚未开始",
+    "DIAGNOSING": "诊断中",
+    "PROFILED": "画像已完成",
+    "GENERATING": "生成中",
+    "PRACTICING": "练习中",
+    "REVIEWING": "复习中",
+    "COMPLETED": "已完成"
+  },
+  "mastery": {
+    "UNASSESSED": "未评估",
+    "WEAK": "薄弱",
+    "LEARNING": "学习中",
+    "PROFICIENT": "较熟练",
+    "MASTERED": "已掌握"
+  },
+  "document": {
+    "QUEUED": "等待导入",
+    "VALIDATING": "正在校验",
+    "PARSING": "正在阅读",
+    "OCR_REQUIRED": "等待 OCR",
+    "OCR_RUNNING": "正在逐页识别",
+    "INDEXING": "正在编目",
+    "COMPLETED": "已整理",
+    "FAILED": "需要处理"
+  },
+  "resource": {
+    "PENDING": "等待生成",
+    "GENERATING": "生成中",
+    "COMPLETED": "已完成",
+    "FAILED": "生成失败"
+  },
+  "update": {
+    "checking": "正在检查",
+    "available": "发现新版本",
+    "current": "已是最新版本",
+    "offline_build": "离线构建",
+    "error": "检查失败"
+  },
+  "开始练习": "开始练习",
+  "等待诊断": "等待诊断"
 }

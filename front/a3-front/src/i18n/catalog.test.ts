@@ -107,7 +107,7 @@ describe('built-in zh-CN catalog contract', () => {
     expect(buildBaseCatalogPayload()).toBe(payload)
     expect(BASE_CATALOG_HASH).toMatch(/^[A-F0-9]{64}$/)
     expect(BASE_CATALOG_HASH).toBe(independentHash)
-    expect(BASE_CATALOG_HASH).toBe('6E2D91CD6D3230CB472082AF083FF0501A6FE497971942E409FE0FAB939EA8DF')
+    expect(BASE_CATALOG_HASH).toBe('E4B579B8FC379D84D006D24FCEF543A70F7B83D40EFBD0D535B79DF28A058138')
   })
 
   it('deep-freezes every built-in namespace without changing the digest', () => {

@@ -1,3 +1,50 @@
 {
-  "title": "桌面设置", "subtitle": "管理桌面应用、墨团和本地服务。", "language": { "title": "语言", "interface": "界面语言", "content": "学习内容语言", "builtIn": "内置", "downloadable": "可下载", "system": "跟随系统", "restartNotice": "部分桌面文字会在重新启动后更新。" }, "application": { "title": "应用信息", "version": "应用版本", "apiVersion": "桌面接口版本", "offlineBuild": "离线构建", "checkUpdates": "检查更新" }, "startup": { "title": "启动设置", "launchAtLogin": "开机时启动", "openMainWindow": "启动后显示主窗口" }, "diagnostics": { "title": "诊断与日志", "run": "运行诊断", "export": "导出诊断日志", "privacy": "导出内容会移除密钥、请求正文和本地绝对路径。" }
+  "title": "桌面设置",
+  "subtitle": "管理桌面应用、墨团和本地服务。",
+  "language": {
+    "title": "语言",
+    "interface": "界面语言",
+    "content": "学习内容语言",
+    "builtIn": "内置",
+    "downloadable": "可下载",
+    "system": "跟随系统",
+    "restartNotice": "部分桌面文字会在重新启动后更新。"
+  },
+  "application": {
+    "title": "应用信息",
+    "version": "应用版本",
+    "apiVersion": "桌面接口版本",
+    "offlineBuild": "离线构建",
+    "checkUpdates": "检查更新"
+  },
+  "startup": {
+    "title": "启动设置",
+    "launchAtLogin": "开机时启动",
+    "openMainWindow": "启动后显示主窗口"
+  },
+  "diagnostics": {
+    "title": "诊断与日志",
+    "run": "运行诊断",
+    "export": "导出诊断日志",
+    "privacy": "导出内容会移除密钥、请求正文和本地绝对路径。"
+  },
+  "桌面运行与墨团设置": "桌面运行与墨团设置",
+  "查看版本检查运行状态导出脱敏日志并调整学习伙伴": "查看版本、检查运行状态、导出脱敏日志，并调整学习伙伴。",
+  "版本与更新": "版本与更新",
+  "后端协议": "后端协议",
+  "本地后端": "本地后端",
+  "已就绪": "已就绪",
+  "不可用": "不可用",
+  "离线OCR": "离线 OCR",
+  "可用": "可用 {value}",
+  "一键诊断": "一键诊断",
+  "报告会自动移除密钥令牌学习正文和本地绝对路径": "报告会自动移除密钥、令牌、学习正文和本地绝对路径。",
+  "生成诊断": "生成诊断",
+  "导出日志": "导出日志",
+  "暂无运行日志": "暂无运行日志",
+  "桌面操作失败": "桌面操作失败。",
+  "诊断报告已生成": "诊断报告已生成。",
+  "已导出": "已导出 {fileName}",
+  "已取消导出": "已取消导出。",
+  "离线构建": "离线构建：{message}"
 }
