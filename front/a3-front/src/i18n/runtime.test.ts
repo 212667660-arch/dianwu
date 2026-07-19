@@ -3,7 +3,13 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { BackendApiError } from '@/api/transport'
 import { BUILT_IN_LOCALE, BUILT_IN_MESSAGES } from './catalog'
 import { errorMessage } from './errors'
-import { formatDate, formatNumber } from './formatters'
+import {
+  formatDate,
+  formatDateTime,
+  formatNumber,
+  formatPercent,
+  formatRelativeTime,
+} from './formatters'
 import { activateLocale, i18n, installLocaleMessages } from './index'
 
 const fixedUtcDate = new Date('2026-07-19T08:15:30.000Z')
@@ -41,6 +47,50 @@ describe('renderer localization runtime', () => {
     expect(formatDate(fixedUtcDate, { timeZone: 'UTC' })).toBe(new Intl.DateTimeFormat('zh-CN', {
       year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'UTC',
     }).format(fixedUtcDate))
+  })
+
+  it('allows every formatter to override the active locale explicitly', () => {
+    activateLocale('zh-CN')
+    const dateOptions = { timeZone: 'UTC' } satisfies Intl.DateTimeFormatOptions
+    const numberOptions = { style: 'unit', unit: 'kilometer' } satisfies Intl.NumberFormatOptions
+    const percentOptions = { maximumFractionDigits: 1 } satisfies Intl.NumberFormatOptions
+
+    const explicit = [
+      formatDate(fixedUtcDate, dateOptions, 'en-US'),
+      formatDateTime(fixedUtcDate, dateOptions, 'en-US'),
+      formatNumber(12345.6, numberOptions, 'en-US'),
+      formatPercent(0.1234, percentOptions, 'en-US'),
+      formatRelativeTime(-1, 'day', {}, 'en-US'),
+    ]
+    const chinese = [
+      formatDate(fixedUtcDate, dateOptions, 'zh-CN'),
+      formatDateTime(fixedUtcDate, dateOptions, 'zh-CN'),
+      formatNumber(12345.6, numberOptions, 'zh-CN'),
+      formatPercent(0.1234, percentOptions, 'zh-CN'),
+      formatRelativeTime(-1, 'day', {}, 'zh-CN'),
+    ]
+
+    expect(explicit).toEqual([
+      new Intl.DateTimeFormat('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', ...dateOptions }).format(fixedUtcDate),
+      new Intl.DateTimeFormat('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', ...dateOptions }).format(fixedUtcDate),
+      new Intl.NumberFormat('en-US', numberOptions).format(12345.6),
+      new Intl.NumberFormat('en-US', { style: 'percent', ...percentOptions }).format(0.1234),
+      new Intl.RelativeTimeFormat('en-US', { numeric: 'auto' }).format(-1, 'day'),
+    ])
+    ;[0, 1, 2, 4].forEach(index => expect(explicit[index]).not.toBe(chinese[index]))
+  })
+
+  it('defaults every formatter to the current global locale', () => {
+    installLocaleMessages('en-US', { common: { state: { unknown: 'Unknown' } } })
+    activateLocale('en-US')
+    const dateOptions = { timeZone: 'UTC' } satisfies Intl.DateTimeFormatOptions
+    const numberOptions = { style: 'unit', unit: 'kilometer' } satisfies Intl.NumberFormatOptions
+
+    expect(formatDate(fixedUtcDate, dateOptions)).toBe(formatDate(fixedUtcDate, dateOptions, 'en-US'))
+    expect(formatDateTime(fixedUtcDate, dateOptions)).toBe(formatDateTime(fixedUtcDate, dateOptions, 'en-US'))
+    expect(formatNumber(12345.6, numberOptions)).toBe(formatNumber(12345.6, numberOptions, 'en-US'))
+    expect(formatPercent(0.1234)).toBe(formatPercent(0.1234, {}, 'en-US'))
+    expect(formatRelativeTime(-1, 'day')).toBe(formatRelativeTime(-1, 'day', {}, 'en-US'))
   })
 
   it('maps known backend error codes to built-in messages', () => {

@@ -7,28 +7,45 @@ const dateTimeDefaults: Intl.DateTimeFormatOptions = {
   year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
 }
 
-export function formatDate(value: DateInput, options: Intl.DateTimeFormatOptions = {}): string {
-  return new Intl.DateTimeFormat(activeLocale(), { ...dateDefaults, ...options }).format(toDate(value))
+export function formatDate(
+  value: DateInput,
+  options: Intl.DateTimeFormatOptions = {},
+  locale: string = activeLocale(),
+): string {
+  return new Intl.DateTimeFormat(locale, { ...dateDefaults, ...options }).format(toDate(value))
 }
 
-export function formatDateTime(value: DateInput, options: Intl.DateTimeFormatOptions = {}): string {
-  return new Intl.DateTimeFormat(activeLocale(), { ...dateTimeDefaults, ...options }).format(toDate(value))
+export function formatDateTime(
+  value: DateInput,
+  options: Intl.DateTimeFormatOptions = {},
+  locale: string = activeLocale(),
+): string {
+  return new Intl.DateTimeFormat(locale, { ...dateTimeDefaults, ...options }).format(toDate(value))
 }
 
-export function formatNumber(value: number, options: Intl.NumberFormatOptions = {}): string {
-  return new Intl.NumberFormat(activeLocale(), options).format(value)
+export function formatNumber(
+  value: number,
+  options: Intl.NumberFormatOptions = {},
+  locale: string = activeLocale(),
+): string {
+  return new Intl.NumberFormat(locale, options).format(value)
 }
 
-export function formatPercent(value: number, options: Intl.NumberFormatOptions = {}): string {
-  return new Intl.NumberFormat(activeLocale(), { style: 'percent', maximumFractionDigits: 1, ...options }).format(value)
+export function formatPercent(
+  value: number,
+  options: Intl.NumberFormatOptions = {},
+  locale: string = activeLocale(),
+): string {
+  return new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 1, ...options }).format(value)
 }
 
 export function formatRelativeTime(
   value: number,
   unit: Intl.RelativeTimeFormatUnit,
   options: Intl.RelativeTimeFormatOptions = {},
+  locale: string = activeLocale(),
 ): string {
-  return new Intl.RelativeTimeFormat(activeLocale(), { numeric: 'auto', ...options }).format(value, unit)
+  return new Intl.RelativeTimeFormat(locale, { numeric: 'auto', ...options }).format(value, unit)
 }
 
 function activeLocale(): string {
