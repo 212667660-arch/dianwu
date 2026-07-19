@@ -2,7 +2,7 @@
 
 > 项目：基于大模型的个性化资源生成与学习多智能体系统开发
 > 队列位置：E:\软件杯\codex\AI模型任务队列.md
-> 当前模型批次：Sol（S-043 Task 4 已完成并推送；当前进入 Task 5 全部 views 与语言设置外壳本地化）
+> 当前模型批次：Sol（S-043 Task 5 基本可用里程碑已完成，正在收尾推送；Task 6--17 暂缓）
 > 最后审视日期：2026-07-19
 
 ## 一、使用规则
@@ -89,7 +89,7 @@
 | S-040 | P0 | 完成 | 收敛最新功能分支、任务队列与 GitHub 远端状态 | S-039、`codex/s022-five-resource-bundle` 旧同步分支、`origin/main` | 已以 `codex/s022-s026-remediation` 为唯一功能基线完成目录、文档、测试、队列、`origin/main` 和 GitHub 远端收敛；证据见 S-040-COMPLETE |
 | S-041 | P0 | 完成 | 设计 Windows 代码签名与默认中文、可下载语言包总体架构 | S-040、现有 Windows 发布包、桌面设置与安全边界 | 已确定 Azure Trusted Signing 受保护发布链、签名顺序/验证，以及内置 zh-CN、公开 Releases、Ed25519 数据包、原子安装/回滚和 content locale 契约；证据见 S-041-DESIGN |
 | S-042 | P0 | 阻塞 | 实现 Windows 可信代码签名与签名发布验收 | S-041；唯一 blocker：创建/配置 Azure Trusted Signing account/profile/service principal/protected GitHub Environment，随后运行 formal workflow | Task 1--8 的本地实现、文档和确定性验证均已完成；签名路径缺少受保护配置时在构建前以 `A3_SIGNED_RELEASE_REQUIRED` fail closed，未启动 `build:desktop` 或 electron-builder；unsigned `desktop:dist` 成功并生成 1.0.0 安装器，开发路径确认为 `NotSigned`。不得声称真实 Azure 签名完成；待外部资源就绪后执行 Task 9 formal workflow、隔离安装验签和发布验收。 |
-| S-043 | P0 | 进行中 | 实现默认中文、其他语言可下载的语言包系统 | S-041 | Task 1--4 已完成并通过双审。Task 4 提交 `9753b89` 与规格修复 `4e6db42` 完成 15 个 knowledge/learning/model/pet/workspace 组件本地化、5 组 en-US 注入测试、组件 Han 门和长英文布局保护；最终 Node 196、Vitest 208、四套 PowerShell、`vue-tsc`、`git diff --check` 通过，inventory 528/457/71，catalog hash `299D304D0F0F0F9B2D8220A78D72273C334F2E2749CD61AFDF89EFB0359F7A72`。规格复审 compliant，质量审查 Critical/Important/Minor 0。当前进入 Task 5。 |
+| S-043 | P0 | 保留 | 实现默认中文、其他语言可下载的语言包系统 | S-041 | 基本可用里程碑完成：Task 1--5 已实现完整内置简体中文、renderer runtime、router/shell、15 个共享组件、10 个 views 与 `LanguageSettingsCard` 展示外壳；Task 5 提交 `21fd82e`、`98d12b9`、`0c8ad3e`，规格复审 compliant。最终代码验证为 Node 196、Vitest 214、四套 PowerShell、`vue-tsc -b`、`build:desktop` 通过；inventory 130=10 renderer+120 Electron，56 mapped+74 classified，catalog hash `F97C54D52620B3B4A6CB0F5B6270D82099C1581A6C621D5FFF203B6B776DFEAE`。Task 6--17 因时间边界暂缓，不得声称已完成可下载语言包。Task 6 测试草案保存在 `stash@{0}`。 |
 | S-044 | P0 | 阻塞 | 对照 `Claude code finds.md` 与软件杯官方赛题要求复核、优化并完成全端发布验收 | S-042、S-043、`E:\软件杯\Claude code finds.md`、官方赛题页 | 逐条复现/驳回审查发现，修复中文路径/XML/时间语义等有效问题，核对赛题功能矩阵，形成“GPT 修改”方法文档，并完成前端、后端、Electron、PyInstaller、安装包和真实桌面生命周期验收 |
 | T-033 | P0 | 完成 | 实现多 API 配置、高可用切换、模型选择与推理强度控制 | S-017 | 版本 2 加密多配置、原子热应用与回滚、3 次/2 配置预算、Retry-After/熔断、普通与流式故障边界、全局/学习空间模型和思考强度选择、兼容迁移、真实桌面 5/5 连接及完整打包回归 |
 | T-035 | P0 | 完成 | 实现本地知识库与安全文件导入 | S-018 | 已完成文件选择/拖放、七格式与限额校验、隔离解析 worker、SQLite 元数据/FTS/可选语义索引、可追溯引用、学习助手绑定与隐私模式、删除/重建、恶意文件/性能/打包测试及 Windows 桌面安装包验收 |
@@ -167,9 +167,9 @@
 ## 八、当前执行顺序
 
 > 当前对话的完整任务锚点、设计思路、已完成/进行中/待实现任务和恢复边界见：`codex/当前对话任务锚点.md`。后续恢复必须先读取该文件，再读取本节与对应实施计划。
-> Git 校正：Task 4 最终代码提交 `4e6db42` 已推送；当前状态文档提交完成后以新的 `git HEAD` 为准。此前 `9753b89`、`f64b158`、`1478c52` 等均为历史检查点。
+> Git 校正：Task 5 代码提交 `21fd82e`、`98d12b9`、`0c8ad3e` 已完成；当前状态文档提交并推送后以新的远端 `git HEAD` 为准。
 
-Sol 已完成 S-043 Task 4，当前进入 Task 5。工作树为 `E:\软件杯\.worktrees\s022-s026-remediation`、分支 `codex/s041-signing-i18n-design`。Task 4 以 6 个预期 RED（5 组 en-US 注入 + components Han gate）开始，批量迁移 15 个共享组件；规格审查发现 ResourceCard key ownership 与两个英文 kicker 硬编码，共 3 项一次性修复后复审 compliant；质量审查 Critical/Important/Minor 0。最终代码提交为 `9753b89`、`4e6db42`，统一验证 Node 196、Vitest 208、四套 PowerShell、`vue-tsc`、`git diff --check` 全部通过；inventory 528=408 renderer+120 Electron，457 mapped+71 classified；catalog hash `299D304D0F0F0F9B2D8220A78D72273C334F2E2749CD61AFDF89EFB0359F7A72`。Task 5 将批量迁移全部 views、新增 LanguageSettingsCard 外壳，并把 Han coverage 扩成最终全生产门；按用户最新要求，同一任务先批量完成全部修改，再统一测试和修复。生成目录继续保留，S-042 仍只受 Azure 外部资源阻塞。
+Sol 已完成 S-043 Task 5 的基本可用里程碑。10 个 views、全部生产 renderer 文案与 `LanguageSettingsCard` 展示外壳已本地化；数字、单位和前后缀已改为完整参数化消息。代码提交为 `21fd82e`、`98d12b9`、`0c8ad3e`；规格复审 compliant。最终代码验证为 Node 196、Vitest 214、四套 PowerShell、`vue-tsc -b`、`build:desktop` 通过；inventory 130=10 renderer+120 Electron，56 mapped+74 classified；catalog hash `F97C54D52620B3B4A6CB0F5B6270D82099C1581A6C621D5FFF203B6B776DFEAE`。本次在此收尾，不扩展 Task 6--17；真正可下载语言包仍未实现。Task 6 两份测试草案保存在 `stash@{0}`。生成目录继续保留，S-042 真实 Azure Trusted Signing 仍受外部资源阻塞。
 
 ### 历史执行轨迹（仅供追溯，不代表当前状态）
 
