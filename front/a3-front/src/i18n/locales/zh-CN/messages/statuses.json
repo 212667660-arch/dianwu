@@ -1,5 +1,17 @@
 {
-  "session": {
+  "difficulty": {
+    "basic": "基础",
+    "advanced": "提高",
+    "challenge": "挑战"
+  },
+  "stage": {
+    "middleSchool": "初中",
+    "highSchool": "高中"
+  },
+  "subject": {
+    "math": "数学"
+  },
+  "sessionState": {
     "NEW": "尚未开始",
     "DIAGNOSING": "诊断中",
     "PROFILE_READY": "画像准备完成",
@@ -12,6 +24,13 @@
     "LEARNING": "学习中",
     "PROFICIENT": "较熟练",
     "MASTERED": "已掌握"
+  },
+  "resourceType": {
+    "courseExplanation": "课程讲解",
+    "mindMap": "知识导图",
+    "questionBank": "题库",
+    "extendedReading": "拓展阅读",
+    "adaptivePractice": "自适应练习"
   },
   "importStatus": {
     "QUEUED": "等待导入",
@@ -42,6 +61,15 @@
     "FAILED": "生成失败",
     "CANCELLED": "已取消"
   },
+  "evidenceStatus": {
+    "grounded": "教材证据充分",
+    "insufficient": "教材证据不足",
+    "unavailable": "教材证据不可用"
+  },
+  "provider": {
+    "openai": "OpenAI",
+    "anthropic": "Anthropic"
+  },
   "accessMode": {
     "OFFICIAL_READER": "官方阅读器",
     "LICENSED_DOWNLOAD": "授权下载",
@@ -58,6 +86,15 @@
     "medium": "标准",
     "high": "深入",
     "xhigh": "极高"
+  },
+  "nextAction": {
+    "DIAGNOSE": "完成诊断",
+    "REVIEW": "到期复习",
+    "START_PRACTICE": "开始练习",
+    "REMEDIATE": "基础纠错",
+    "PRACTICE": "渐进练习",
+    "CONSOLIDATE": "综合巩固",
+    "CHALLENGE": "挑战迁移"
   },
   "catalogStatus": {
     "checking": "正在检查"

@@ -106,7 +106,8 @@ describe('built-in zh-CN catalog contract', () => {
     const flat = flattenMessages(BUILT_IN_MESSAGES)
     const catalogErrorCodes = new Set(Object.keys(BUILT_IN_MESSAGES.errors).filter(key => /^[A-Z][A-Z0-9_]+$/.test(key)))
     expect(publicRuntimeErrorCodes().filter(code => !catalogErrorCodes.has(code))).toEqual([])
-    expect(Object.keys(BUILT_IN_MESSAGES.statuses.session)).toEqual(pythonEnumLiterals('../../backend/services/db.py', 'SessionState'))
+    expect(Object.keys(BUILT_IN_MESSAGES.statuses.sessionState)).toEqual(pythonEnumLiterals('../../backend/services/db.py', 'SessionState'))
+    expect(BUILT_IN_MESSAGES.statuses).not.toHaveProperty('session')
     expect(Object.keys(BUILT_IN_MESSAGES.statuses.mastery)).toEqual(interfaceFieldLiterals('KnowledgePoint', 'mastery_label'))
     expect(Object.keys(BUILT_IN_MESSAGES.statuses.importStatus)).toEqual(pythonEnumLiterals('../../backend/knowledge/models.py', 'ImportJobStatus'))
     expect(Object.keys(BUILT_IN_MESSAGES.statuses.updateStatus)).toEqual(interfaceFieldLiterals('DesktopInfo', 'update_status'))
@@ -275,7 +276,7 @@ describe('built-in zh-CN catalog contract', () => {
     expect(buildBaseCatalogPayload()).toBe(payload)
     expect(BASE_CATALOG_HASH).toMatch(/^[A-F0-9]{64}$/)
     expect(BASE_CATALOG_HASH).toBe(independentHash)
-    expect(BASE_CATALOG_HASH).toBe('62B013BCAB8742E38B5E22D34D942452567AB213017BFC77C503A2D193F0ED9E')
+    expect(BASE_CATALOG_HASH).toBe('5EBFA77D46306E309084D189A3BEDA854877C292BCC8AFB238EB713DDD3CF3FC')
   })
 
   it('deep-freezes every built-in namespace without changing the digest', () => {

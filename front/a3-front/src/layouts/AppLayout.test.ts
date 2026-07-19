@@ -88,7 +88,7 @@ describe('AppLayout backend lifecycle', () => {
 
     expect(backendMock.live).toBe(false)
     expect(backendMock.ready).toBe(false)
-    expect(backendMock.lastError).toContain('本地学习服务已停止')
+    expect(backendMock.lastError).toBe('本地学习服务暂时不可用。')
     expect(wrapper.text()).not.toContain('127.0.0.1')
     expect(wrapper.text()).not.toContain('桌面令牌')
     wrapper.unmount()
@@ -123,6 +123,8 @@ describe('AppLayout backend lifecycle', () => {
     expect(wrapper.find('[data-test="conversation-rail"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="desk-panel"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="desk-toggle"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('智学协作台')
+    expect(wrapper.text()).toContain('模型就绪')
   })
 
   it('maps global loading transactions to a nested pet running task', async () => {

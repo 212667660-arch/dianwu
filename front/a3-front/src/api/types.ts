@@ -34,7 +34,7 @@ export interface KnowledgeStatus { fts: CapabilityStatus; worker: CapabilityStat
 export interface KnowledgeCollection { id: number; name: string; description: string; color: string; document_count: number; bound_session_count: number; created_at: string; updated_at: string }
 export interface KnowledgeCollectionInput { name: string; description: string; color: string }
 export interface KnowledgeDocument { id: number; sha256: string; display_name: string; extension: string; mime_type: string; byte_size: number; status: string; page_count: number | null; slide_count: number | null; sheet_count: number | null; text_characters: number; chunk_count: number; parser_version: string | null; safe_error_code: string | null; favorite?: boolean; deleted_at?: string | null; collection_ids?: number[]; tags?: string[]; created_at: string; updated_at: string }
-export interface KnowledgeImportJob { id: number; document_id: number; status: string; progress: number; stage: string; retryable: boolean; safe_error_code: string | null; cancel_requested: boolean; current_page: number | null; page_count: number | null; eta_seconds: number | null; failed_pages: number[]; version: number; created_at: string; updated_at: string }
+export interface KnowledgeImportJob { id: number; document_id: number; status: KnowledgeImportStatus; progress: number; stage: string; retryable: boolean; safe_error_code: string | null; cancel_requested: boolean; current_page: number | null; page_count: number | null; eta_seconds: number | null; failed_pages: number[]; version: number; created_at: string; updated_at: string }
 export interface KnowledgeBinding { session_id: string; collection_ids: number[]; privacy_mode: 'allow_model_context' | 'local_search_only' }
 export interface KnowledgeDuplicateImport { document_id: number; display_name: string; collection_ids: number[]; action: 'linked_existing' | 'already_present' }
 export interface KnowledgeImportBatch { jobs: KnowledgeImportJob[]; duplicates?: KnowledgeDuplicateImport[] }
@@ -419,3 +419,9 @@ export interface PetSnapshot {
   settings: PetSettings
   state: PetTaskState
 }
+
+export const KNOWLEDGE_IMPORT_STATUSES = [
+  'QUEUED', 'VALIDATING', 'PARSING', 'OCR_REQUIRED', 'OCR_RUNNING',
+  'INDEXING', 'COMPLETED', 'FAILED', 'CANCELLED', 'INTERRUPTED',
+] as const
+export type KnowledgeImportStatus = typeof KNOWLEDGE_IMPORT_STATUSES[number]

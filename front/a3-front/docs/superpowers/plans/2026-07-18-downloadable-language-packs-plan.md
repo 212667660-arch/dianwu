@@ -215,7 +215,7 @@ git commit -m "feat: bootstrap renderer localization runtime"
 
 - [ ] **Step 1: Write route-title and coverage tests**
 
-Assert every route meta has `titleKey`, no route meta has `title`, and `titleKey` resolves in the built-in catalog. Assert `AppLayout` renders localized brand/navigation state. Add a source scan that rejects Han characters in production Vue/TypeScript files except:
+Assert every route meta has `titleKey`, no route meta has `title`, and `titleKey` resolves in the built-in catalog. Assert `AppLayout` renders localized brand/navigation state. Add the first phased source scan over the Task 3 router, `AppLayout` shell, and shared display-map production surface. The scan rejects Han characters there except for the canonical literals checked separately in:
 
 ```text
 src/api/types.ts
@@ -322,7 +322,7 @@ For label/value grids and buttons, add `min-width: 0`, `overflow-wrap: anywhere`
 npx vitest run src/components src/tests/components src/i18n/coverage.test.ts
 ```
 
-Expected: all pass and the Han-character scan reports no new non-allowlisted production literals.
+Expected: all pass. Expand the phased Han-character gate to include every production Vue/TypeScript file under `src/components`, while retaining the exact `src/api/types.ts`, `src/utils/protocol.ts`, and `src/i18n/locales/zh-CN/**` allowlist contracts.
 
 - [ ] **Step 5: Commit the component migration**
 
@@ -373,6 +373,8 @@ interface Props {
 Emit `refresh`, `download(locale)`, `activate(locale)`, `remove(locale)`, and `import`. At this task the parent supplies built-in zh-CN only; Electron behavior is added after the pack controller exists.
 
 - [ ] **Step 4: Run view tests and the coverage scan**
+
+Expand the phased Han-character gate to include `src/views`, then enforce it across all production Vue/TypeScript files. Only `src/api/types.ts`, `src/utils/protocol.ts`, and `src/i18n/locales/zh-CN/**` remain allowlisted, with the two code files constrained to their exact canonical enum/protocol literals.
 
 ```powershell
 npx vitest run src/views src/components/language src/i18n/coverage.test.ts

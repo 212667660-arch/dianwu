@@ -1,3 +1,6 @@
+import { i18n } from '@/i18n'
+import { isMastery, isNextAction, masteryKey, nextActionKey } from '@/i18n/display-maps'
+
 export function protocolFields(text?: string | null): Record<string, string> {
   if (!text) return {}
   const fields: Record<string, string> = {}
@@ -10,16 +13,11 @@ export function protocolFields(text?: string | null): Record<string, string> {
 }
 
 export function actionLabel(action?: string | null): string {
-  const labels: Record<string, string> = {
-    DIAGNOSE: '完成诊断', REVIEW: '到期复习', START_PRACTICE: '开始练习',
-    REMEDIATE: '基础纠错', PRACTICE: '渐进练习', CONSOLIDATE: '综合巩固', CHALLENGE: '挑战迁移',
-  }
-  return action ? labels[action] || action : '等待诊断'
+  if (!action) return i18n.global.t('statuses.diagnosisWaiting')
+  return isNextAction(action) ? i18n.global.t(nextActionKey(action)) : action
 }
 
 export function masteryLabel(label?: string): string {
-  const labels: Record<string, string> = {
-    WEAK: '薄弱', LEARNING: '学习中', PROFICIENT: '较熟练', MASTERED: '已掌握',
-  }
-  return label ? labels[label] || label : '未评估'
+  if (!label) return i18n.global.t('statuses.masteryDisplay.unassessed')
+  return isMastery(label) ? i18n.global.t(masteryKey(label)) : label
 }
