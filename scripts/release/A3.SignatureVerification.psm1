@@ -516,6 +516,9 @@ function Resolve-A3WindowsSdkRoot {
         if ($providedRoot -isnot [string] -or [string]::IsNullOrWhiteSpace($providedRoot)) {
             throw [InvalidOperationException]::new('Missing SDK root.')
         }
+        if ($providedRoot -notmatch '\A[A-Za-z]:[\\/]') {
+            throw [InvalidOperationException]::new('The SDK root must be an absolute local DOS path.')
+        }
         $sdkRoot = Resolve-A3FileSystemPath -Path $providedRoot
         if (-not (Test-Path -LiteralPath $sdkRoot -PathType Container)) {
             throw [InvalidOperationException]::new('Missing SDK root.')

@@ -496,6 +496,38 @@ try {
         } $sdkRootProvider $olderSignTool
         Assert-Equal $explicitlyResolved ([IO.Path]::GetFullPath($olderSignTool)) 'SDK-root discovery must accept an explicit canonical SDK x64 path.'
 
+        New-PSDrive -Name 'A3SDK' -PSProvider FileSystem -Root $sdkRoot | Out-Null
+        try {
+            $customPsDriveRootProvider = { return 'A3SDK:\' }
+            Assert-ThrowsCode {
+                & $module {
+                    param($SdkRootProvider)
+                    Find-A3SignToolCore -SdkRootProvider $SdkRootProvider
+                } $customPsDriveRootProvider
+            } 'A3_WINDOWS_SDK_ROOT_INVALID' | Out-Null
+        }
+        finally {
+            Remove-PSDrive -Name 'A3SDK' -Force -ErrorAction SilentlyContinue
+        }
+
+        foreach ($nonDosSdkRoot in @(
+            "FileSystem::$sdkRoot"
+            "\\?\$sdkRoot"
+            '\\server\share\Windows Kits\10'
+            '\\.\C:\Windows Kits\10'
+            'relative-sdk-root'
+        )) {
+            $nonDosSdkRootProvider = {
+                return $nonDosSdkRoot
+            }.GetNewClosure()
+            Assert-ThrowsCode {
+                & $module {
+                    param($SdkRootProvider)
+                    Find-A3SignToolCore -SdkRootProvider $SdkRootProvider
+                } $nonDosSdkRootProvider
+            } 'A3_WINDOWS_SDK_ROOT_INVALID' | Out-Null
+        }
+
         foreach ($invalidSdkRootProvider in @(
             { return $null }
             { return 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE' }
